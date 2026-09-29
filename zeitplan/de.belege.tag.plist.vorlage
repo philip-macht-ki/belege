@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>de.belege.tag</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>__STUNDE__</integer>
+    <key>Minute</key>
+    <integer>__MINUTE__</integer>
+  </dict>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd "__REPO__" &amp;&amp; PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin "__UV__" run belege tag --echt</string>
+  </array>
+  <key>StandardOutPath</key>
+  <string>__REPO__/arbeit/logs/launchd-tag.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/arbeit/logs/launchd-tag.log</string>
+</dict>
+</plist>

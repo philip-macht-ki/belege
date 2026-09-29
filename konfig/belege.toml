@@ -1,0 +1,75 @@
+# Deine Einstellungen. Dein Claude trägt sie mit dir ein (einrichten.md).
+zeitzone = "Europe/Berlin"
+
+[betrieb]
+# So heißt dein Betrieb auf Rechnungen. Alle Schreibweisen, unter denen
+# Rechnungen an dich kommen, gehören in `namen`.
+name = "Studio Beispiel"
+namen = ["Studio Beispiel", "Mara Beispiel"]
+taetigkeit = "Grafikdesign"
+ust_id = ""
+
+[ablage]
+# Ein Ordner, der sich mit der Cloud abgleicht (Google Drive, iCloud, Dropbox).
+ordner = "~/Belege"
+bereich_betrieb = "Betrieb"
+bereich_privat = "Privat"
+privat = true
+
+# Ein Block je Postfach. Das erste wird nach Belegen durchsucht.
+# weg = "a" (App-Passwort, Standard) | "b" (eigenes Google-Projekt) | "ordner" (Musterpostfach)
+[[konto]]
+name = "geschaeft"
+weg = "ordner"
+adresse = "mara@studio-beispiel.example"
+ordner = "beispiel/erzeugt/postfach"
+imap_server = ""
+smtp_server = ""
+belege = true
+waechter = true
+
+[postfach]
+erste_tage = 30
+laufend_tage = 3
+label = "Beleg"
+
+[quellen]
+handy_ordner = "~/Belege/Eingang"
+downloads = "~/Downloads"
+downloads_an = true
+
+[texterkennung]
+claude = true
+
+[senden]
+# Nur an diese Adressen darf automatisch gesendet werden. An alle anderen
+# entsteht ein Entwurf, den du selbst abschickst.
+erlaubt = []
+
+[bericht]
+# Leer = die Adresse des ersten Postfachs.
+an = ""
+leer_senden = true
+
+[uebergabe]
+# "mail" an eine Adresse (Steuerberater, DATEV Upload Mail, Lexware Office,
+# sevDesk) oder "ordner" (ein freigegebener Ordner).
+weg = "mail"
+adresse = ""
+ordner = ""
+tag = 3
+nur_pdf_tif = false
+max_mb = 20
+max_anhaenge = 50
+
+[monat]
+# Hier legst du die Kontoauszüge als CSV ab, ein Monat je Datei.
+auszuege = "~/Belege/Kontoauszuege"
+
+[takt]
+minuten = 15
+tag_uhrzeit = "21:00"
+
+[urteil]
+backend = "claude"
+modell = "sonnet"

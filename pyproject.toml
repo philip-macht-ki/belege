@@ -1,0 +1,37 @@
+[project]
+name = "belege"
+version = "0.1.0"
+description = "Belege sortieren sich selbst: Postfach, Handy und Downloads in einen sauberen Ordner, Monatsabgleich, Übergabe an den Steuerberater."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "fpdf2>=2.7",
+    "pillow>=10",
+    "factur-x>=3.0",
+    "mcp>=1.2,<2",  # 2.x hat FastMCP umbenannt; Umstieg erst mit eigenem Test
+    "google-api-python-client>=2.100",
+    "google-auth-oauthlib>=1.2",
+    "google-auth-httplib2>=0.2",
+    "ocrmac>=1.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Vision>=10; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
+]
+
+# Alles oben ist fest dabei: `uv run` entfernt bei jedem Aufruf Pakete, die nur
+# über --extra kamen. Ein Postfach-Server, der nach dem nächsten Lauf fehlt,
+# versteht niemand.
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+belege = "belege.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["belege"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

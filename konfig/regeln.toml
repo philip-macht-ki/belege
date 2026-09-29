@@ -1,0 +1,19 @@
+# Feste Regeln. Sie gelten vor jedem Modellurteil. Erste passende gewinnt.
+
+# Absender, deren Anhänge nie Belege sind (Newsletter, Infobriefe).
+ausschluss = []
+
+# [[absender]]
+# muster = "@pixelwerk.example"   # Teil der Absenderadresse, des Anzeigenamens oder des Dateinamens
+# lieferant = "Pixelwerk"
+# bereich = "betrieb"             # optional: betrieb | privat
+# art = "eingang"                 # optional: eingang | ausgang | sonstige
+# beschreibung = "Software-Abo"   # optional
+
+[zahlungsabwickler]
+# Bei diesen Absendern steht der eigentliche Anbieter im Anzeigenamen.
+domains = ["stripe.com", "paypal.com", "paypal.de", "paddle.com", "lemonsqueezy.com", "fastspring.com", "gumroad.com"]
+
+[monat]
+# Buchungen, zu denen es keinen Beleg gibt.
+ohne_beleg = ["Finanzamt", "Gehalt", "Lohn", "Umbuchung", "Privatentnahme", "Sparen", "Tilgung"]
