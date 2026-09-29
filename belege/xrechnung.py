@@ -154,7 +154,7 @@ def sicht_pdf(daten: dict, xml_datei: Path, ziel: Path) -> None:
     pdf.ln(5)
     text = sichttext(daten) if eurozeichen else sichttext(daten).replace("€", "EUR")
     for zeile in text.split(". "):
-        pdf.multi_cell(0, 7, zeile, new_x="LMARGIN", new_y="NEXT", wrapmode="CHAR")
+        pdf.multi_cell(0, 7, zeile.rstrip("."), new_x="LMARGIN", new_y="NEXT", wrapmode="CHAR")
     ziel.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(ziel))
 
