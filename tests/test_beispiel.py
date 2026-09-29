@@ -87,7 +87,7 @@ def test_bons_sind_per_vision_mit_summe_lesbar(repo):
     pytest.importorskip("Vision")
     assert befehl(object()) == 0
     basis = repo / "beispiel" / "erzeugt"
-    for name, summe in (("bon-cafe.jpg", "18.40"), ("bon-papeterie.jpg", "12.49")):
+    for name, summe in (("bon-cafe.jpg", "18,40"), ("bon-papeterie.jpg", "12,49")):
         erkannt = auslesen(basis / "handy" / name)
         assert erkannt.stufe == "vision"
         assert summe in erkannt.text

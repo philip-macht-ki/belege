@@ -237,11 +237,11 @@ def _rechnung(
         pdf.set_xy(15, y0)
         pdf.cell(20, 7, position.menge, fill=zeile_hell)
         pdf.cell(95, 7, position.beschreibung, fill=zeile_hell)
-        pdf.cell(32, 7, f"{position.einzelpreis:.2f} EUR", align="R", fill=zeile_hell)
+        pdf.cell(32, 7, f"{_de(position.einzelpreis)} €", align="R", fill=zeile_hell)
         pdf.cell(
             33,
             7,
-            f"{gesamt:.2f} EUR",
+            f"{_de(gesamt)} €",
             align="R",
             fill=zeile_hell,
             new_x="LMARGIN",
@@ -257,7 +257,7 @@ def _rechnung(
     pdf.cell(
         53,
         6,
-        f"Netto:  {netto_gesamt:.2f} EUR",
+        f"Netto:  {_de(netto_gesamt)} €",
         align="R",
         new_x="LMARGIN",
         new_y="NEXT",
@@ -269,7 +269,7 @@ def _rechnung(
         pdf.cell(
             53,
             6,
-            f"USt. {satz} %:  {betrag:.2f} EUR",
+            f"USt. {satz} %:  {_de(betrag)} €",
             align="R",
             new_x="LMARGIN",
             new_y="NEXT",
@@ -287,7 +287,7 @@ def _rechnung(
     pdf.set_x(127)
     _schrift(pdf, fett=True, groesse=12)
     pdf.cell(
-        53, 8, f"Brutto:  {brutto:.2f} EUR", align="R", new_x="LMARGIN", new_y="NEXT"
+        53, 8, f"Brutto:  {_de(brutto)} €", align="R", new_x="LMARGIN", new_y="NEXT"
     )
 
     faellig = rechnungsdatum + timedelta(days=zahlbar_tage)
@@ -443,17 +443,17 @@ def _bon(
         netto = position.einzelpreis / (1 + position.mwst / 100)
         netto_je_satz[position.mwst] = netto_je_satz.get(position.mwst, 0.0) + netto
         beschreibung = f"{position.menge}x {position.beschreibung}".ljust(spalte - 8)
-        zeilen.append((f"{beschreibung}{position.einzelpreis:>8.2f}", False))
+        zeilen.append((f"{beschreibung}{_de(position.einzelpreis, 8)}", False))
     summe = sum(p.einzelpreis for p in positionen)
     zeilen += [
         ("-" * spalte, False),
-        (f"{'SUMME':<18}{summe:>8.2f}", True),
+        (f"{'SUMME':<18}{_de(summe, 8)}", True),
         ("", False),
         (f"{'MwSt':<8}{'Netto':>7}{'MwSt':>6}{'Brutto':>7}", False),
     ]
     for satz, netto in sorted(netto_je_satz.items()):
         mwst_betrag = netto * satz / 100
-        zeile = f"{str(satz) + ' %':<8}{netto:>7.2f}{mwst_betrag:>6.2f}{netto + mwst_betrag:>7.2f}"
+        zeile = f"{str(satz) + ' %':<8}{_de(netto, 7)}{_de(mwst_betrag, 6)}{_de(netto + mwst_betrag, 7)}"
         zeilen.append((zeile, False))
     zeilen += [
         ("", False),
@@ -543,6 +543,12 @@ def _mail(ziel: Path, betreff: str, von: str, text: str, anhaenge=()):
         )
         m.add_attachment(p.read_bytes(), maintype=typ, subtype=sub, filename=p.name)
     ziel.write_bytes(m.as_bytes())
+
+
+def _de(betrag: float, breite: int = 0) -> str:
+    """Deutsches Zahlformat: 1234.5 → "1.234,50" (rechtsbündig auf breite)."""
+    text = f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return text.rjust(breite) if breite else text
 
 
 def _xrechnung(ziel: Path, datum: date):
@@ -694,9 +700,9 @@ def befehl(args) -> int:
         "Frühjahrsangebote",
         "Entdecken Sie unsere Frühjahrsangebote für Büro und Atelier – jetzt für kurze Zeit reduziert.",
         [
-            "– Druckerpapier 80g, 5×500 Blatt: 19,99 EUR statt 26,90 EUR",
-            "– Tintenset Farbe: 24,50 EUR statt 32,00 EUR",
-            "– Ordner-Set (10 Stück): 14,90 EUR statt 21,00 EUR",
+            "Druckerpapier 80g, 5×500 Blatt: 19,99 € statt 26,90 €",
+            "Tintenset Farbe: 24,50 € statt 32,00 €",
+            "Ordner-Set (10 Stück): 14,90 € statt 21,00 €",
             "",
             "Angebote gültig bis Monatsende, solange der Vorrat reicht.",
         ],
