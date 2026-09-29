@@ -112,17 +112,25 @@ def lesen(datei: Path) -> dict:
     }
 
 
+def _euro(betrag, waehrung: str = "EUR") -> str:
+    """47.6 → "47,60 €" (deutsches Format; andere Währungen mit ihrem Kürzel)."""
+    text = f"{float(betrag or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{text} €" if waehrung in ("EUR", "", None) else f"{text} {waehrung}"
+
+
 def sichttext(daten: dict) -> str:
     """Baut aus E-Rechnungsfeldern einen lesbaren Text ohne Modellaufruf."""
+    waehrung = daten.get("waehrung", "EUR")
     positionen = ", ".join(
-        f"{position.get('text', 'Position')} {position.get('betrag', 0):.2f} EUR"
+        f"{position.get('text', 'Position')} {_euro(position.get('betrag', 0), waehrung)}"
         for position in daten.get("positionen", [])
     )
+    datum = daten.get("datum", "")
+    datum_text = datum.strftime("%d.%m.%Y") if hasattr(datum, "strftime") else str(datum)
     return (
-        f"E-Rechnung Nummer {daten.get('nummer', '')}. Datum: {daten.get('datum', '')}. "
+        f"E-Rechnung Nummer {daten.get('nummer', '')}. Datum: {datum_text}. "
         f"Verkäufer: {daten.get('verkaeufer', '')}. Käufer: {daten.get('kaeufer', '')}. "
-        f"Positionen: {positionen}. Gesamtbetrag: {daten.get('betrag', 0):.2f} "
-        f"{daten.get('waehrung', 'EUR')}."
+        f"Positionen: {positionen}. Gesamtbetrag: {_euro(daten.get('betrag', 0), waehrung)}."
     )
 
 
@@ -132,12 +140,20 @@ def sicht_pdf(daten: dict, xml_datei: Path, ziel: Path) -> None:
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", size=11)
+    arial = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
+    if arial.exists():
+        pdf.add_font("Arial", "", str(arial))
+        pdf.set_font("Arial", size=11)
+        eurozeichen = True
+    else:  # ohne Unicode-Schrift kann die eingebaute Helvetica kein €
+        pdf.set_font("Helvetica", size=11)
+        eurozeichen = False
     sha = hashlib.sha256(Path(xml_datei).read_bytes()).hexdigest()
     kopf = f"Lesefassung einer E-Rechnung. Original: {Path(xml_datei).name}, SHA-256 {sha}."
     pdf.multi_cell(0, 6, kopf, wrapmode="CHAR")
     pdf.ln(5)
-    for zeile in sichttext(daten).split(". "):
+    text = sichttext(daten) if eurozeichen else sichttext(daten).replace("€", "EUR")
+    for zeile in text.split(". "):
         pdf.multi_cell(0, 7, zeile, new_x="LMARGIN", new_y="NEXT", wrapmode="CHAR")
     ziel.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(ziel))
