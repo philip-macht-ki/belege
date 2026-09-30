@@ -30,6 +30,10 @@ BEFEHLE = {
     "waechter": ("waechter", "befehl", "Neue Mails gegen deine Wächter-Regeln prüfen"),
     "uebung": ("beispiel", "befehl_uebung", "Übungsordner mit Musterbelegen anlegen"),
     "vergleich": ("text", "befehl_vergleich", "Datei als PDF gegen Text: was kostet mehr?"),
+    "jahr": ("jahr", "befehl", "Jahresabgleich, Lücken und Paket für den Steuerberater"),
+    "dokumente": ("dokumente", "befehl", "Verträge, Versicherungen und Briefe einordnen und ablegen"),
+    "fristen": ("dokumente", "befehl_fristen", "Fristen aus Verträgen zeigen und für den Kalender ausgeben"),
+    "notfall": ("notfall", "befehl", "Notfallordner erstellen"),
 }
 
 
@@ -50,6 +54,8 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--anfragen", action="store_true")
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
+    argumente.add_argument("--jahr")
+    argumente.add_argument("--paket", action="store_true")
     return argumente
 
 

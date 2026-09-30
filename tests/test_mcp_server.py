@@ -1,5 +1,40 @@
+import json
 from email.message import EmailMessage
 from belege import mcp_server
+
+
+def test_dokumente_suchen_findet_text(repo):
+    """Die MCP-Suche findet ein Dokument über seinen gespeicherten Volltext."""
+    eintrag = {
+        "abc123": {
+            "pfad": (
+                "Dokumente/Vertrag/Hausverwaltung-Beispiel/"
+                "2024-01-15_Mietvertrag.pdf"
+            ),
+            "art": "vertrag",
+            "bereich": "betrieb",
+            "gegenueber": "Hausverwaltung Beispiel",
+            "titel": "Mietvertrag-Buero",
+            "datum": "2024-01-15",
+            "fristen": [
+                {
+                    "art": "ablauf", "datum": "2027-12-31",
+                    "text": "Läuft bis 31.12.2027.",
+                },
+            ],
+            "text": "Mietvertrag über Geschäftsräume, Laufzeit bis 31.12.2027.",
+            "abgelegt": True,
+        }
+    }
+    ziel = repo / "arbeit" / "dokumente.json"
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    ziel.write_text(json.dumps(eintrag), encoding="utf-8")
+
+    treffer = mcp_server.dokumente_suchen("Geschäftsräume")
+    assert treffer and treffer[0]["gegenueber"] == "Hausverwaltung Beispiel"
+
+    ergebnis = mcp_server.fristen(3650)
+    assert ergebnis["kommend"] or ergebnis["pruefen"]
 
 
 def test_werkzeuge_gegen_ordnerpostfach_und_fremd_ist_entwurf(repo):
@@ -34,7 +69,8 @@ def test_server_antwortet_ueber_stdio():
     ]
     prozess = subprocess.Popen(
         [sys.executable, "-m", "belege.cli", "mcp"],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True,
     )
     for n in nachrichten:
         prozess.stdin.write(json.dumps(n) + "\n")
@@ -50,4 +86,7 @@ def test_server_antwortet_ueber_stdio():
             namen = [w["name"] for w in antwort["result"]["tools"]]
             break
     prozess.kill()
-    assert set(namen) == {"konten", "suchen", "lesen", "anhaenge_speichern", "entwurf", "senden"}
+    assert set(namen) == {
+        "konten", "suchen", "lesen", "anhaenge_speichern", "entwurf", "senden",
+        "dokumente_suchen", "fristen",
+    }

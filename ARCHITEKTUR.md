@@ -364,3 +364,94 @@ Test „erst trocken (nichts passiert), dann echt“.
   Apple Vision. Am 29.09.2026 verworfen: Das System läuft wegen Zeitplan,
   Mitteilungen und Bildumwandlung ohnehin nur auf dem Mac, und dort ist Apple
   Vision da. Ein Windows-Ersatz nur für die Texterkennung hilft niemandem.
+
+## Jahresende (`belege jahr`, Modul bh7)
+
+```
+belege jahr [--jahr JJJJ] [--anfragen] [--paket] [--uebergabe] [--echt]
+```
+
+- Jahr ohne Angabe: im Januar und Februar das Vorjahr, sonst das laufende Jahr.
+- Kontoauszüge: **alle** CSV-Dateien im Ordner `[monat].auszuege` (auch eine
+  einzige Jahres-CSV). Je Monat werden die Buchungen aller Dateien über
+  `monat.buchungen()` gelesen und doppelte Zeilen (gleiches Datum, Betrag,
+  Name, Zweck) nur einmal gezählt. Monate ohne Buchung heißen „Kontoauszug fehlt“,
+  sie werden nie als „alles da“ gezählt.
+- Je Monat mit Buchungen: `monat.abgleichen()` und dieselben Ausgaben wie
+  `belege monat` unter `arbeit/monat/<JJJJ-MM>/`.
+- Jahresausgaben unter `arbeit/jahr/<JJJJ>/`: `uebersicht.md` (eine Zeile je
+  Monat: Buchungen, zugeordnet, prüfen, fehlt, Betrag fehlt, oder
+  „Kontoauszug fehlt“), `fehlt_noch.csv` und `fehlt_noch.md` (alle Monate),
+  `klaerung.md` (alle „prüfen“ und „privat bezahlt“), `jahr.json` (Rohdaten).
+  Diese Dateien schreibt auch der Trockenlauf (nur lesen und rechnen, wie `monat`).
+- Ausgabezeile: `ok: 2026: 12 Monate, 9 mit Kontoauszug, 104 Buchungen,
+  88 zugeordnet, 6 prüfen, 7 fehlen noch (312,40 €), 3 ohne Kontoauszug`.
+- `--anfragen`: für jede fehlende Ausgabe des Jahres ein Entwurf wie bei
+  `monat --anfragen`, nie eine Sendung.
+- `--paket`: `arbeit/jahr/<JJJJ>/paket/<MM>/` mit den Belegen je Monat über
+  `monat.paket_packen()`, dazu die Jahresausgaben im Paketordner. Nur mit `--echt`.
+- `--uebergabe`: Bei `[uebergabe].weg = "ordner"` wird das Paket mit `--echt`
+  nach `<ordner>/<JJJJ>/` kopiert. Bei `weg = "mail"` entsteht **immer nur ein
+  Entwurf** an die Übergabeadresse mit der Übersicht im Text und dem Hinweis,
+  wo das Paket liegt (ein Jahr passt in keine Mail). Einmal je Jahr, Wiederholung
+  mit `belege jahr nochmal --uebergabe --echt` (Merker `gesehen.json` →
+  `uebergabe_jahr`).
+
+## Ablage für Dokumente (`belege dokumente`, `belege fristen`, `belege notfall`, Modul bh8)
+
+Dokumente sind alles, was kein Beleg ist: Verträge, Versicherungen,
+Kundenunterlagen, Briefe von Behörden und Bank, Gesundheit, Sonstiges.
+
+```
+belege dokumente [datei …] [--echt]      Eingangsordner (oder die Dateien) einordnen und ablegen
+belege fristen [--tage N] [--echt]       kommende Fristen zeigen; --echt schreibt fristen.ics
+belege notfall [--echt]                  Notfallordner schreiben
+```
+
+Konfiguration in `konfig/belege.toml`:
+
+```toml
+[dokumente]
+eingang = "~/Belege/Dokumente-Eingang"   # hier landen Scans und PDFs
+ordner = "Dokumente"                     # Unterordner in [ablage].ordner
+erinnern_tage = 28                       # so viele Tage vor einer Frist erinnert der Kalender
+```
+
+- Texte über dieselbe Kaskade wie Belege (`text.py`), Urteil über
+  `urteil.frage(zweck="dokument")` mit `vorlagen/prompts/dokument.md`.
+  Vertrag der Antwort (JSON, vom Code geprüft):
+  `art` ∈ vertrag, versicherung, kunde, behoerde, bank, gesundheit, beleg, sonstiges;
+  `bereich` ∈ betrieb, privat; `gegenueber` (Firma oder Amt, ≤ 40 Zeichen);
+  `titel` (≤ 40 Zeichen); `datum` (JJJJ-MM-TT des Schreibens oder null);
+  `fristen`: Liste von `{art ∈ kuendigung, ablauf, zahlung, termin, datum: JJJJ-MM-TT|null, text}`;
+  `sicherheit` 0 bis 1; `grund`.
+  Das Modell rechnet keine Fristen aus, die nicht im Text stehen. Steht nur
+  „drei Monate zum Ende der Laufzeit“ und das Laufzeitende, rechnet **der Code**
+  das Kündigungsdatum; fehlt etwas, bleibt `datum` null und die Frist steht als
+  „prüfen“ in der Liste.
+- Ablage: `<ablage>/<Dokumente>/<Art>/<Gegenüber>/<JJJJ-MM-TT>_<Titel>.<ext>`,
+  Namensteile über `ablegen.sauber()`. Unsicher (`sicherheit` < 0,7 oder Urteil
+  unbrauchbar): `<ablage>/<Dokumente>/Unsortiert/`. `art = beleg`: die Datei
+  wandert in `[quellen].handy_ordner`, dort holt sie der Belegweg ab.
+- Verzeichnis `arbeit/dokumente.json`: `{sha: {pfad, art, bereich, gegenueber,
+  titel, datum, fristen, text (≤ 6.000 Zeichen), abgelegt}}`. Dubletten per
+  Fingerabdruck werden übersprungen.
+- `fristen`: alle Fristen aus dem Verzeichnis, sortiert, Standard die nächsten
+  365 Tage, dazu alle mit `datum` null als „prüfen“. `--echt` schreibt
+  `<ablage>/<Dokumente>/fristen.ics` (VEVENT je Frist, ganztägig, feste UID aus
+  sha und Fristart, damit ein erneuter Import aktualisiert statt verdoppelt,
+  VALARM `erinnern_tage` vorher). Zum Eintragen öffnet der Claude des
+  Mitglieds die Datei (`open fristen.ics`); das Programm schreibt nie selbst in
+  einen Kalender.
+- MCP-Server: zusätzliche Werkzeuge `dokumente_suchen(abfrage, max)` (Suche in
+  Metadaten und Text, gibt Pfad, Art, Gegenüber, Titel, Datum, Fristen und einen
+  Textausschnitt zurück) und `fristen(tage)`.
+- `notfall`: liest `konfig/notfall.toml` (Ansprechpartner, wo liegt was,
+  Passwortmanager, Hinweise) und das Dokumentverzeichnis und schreibt
+  `<ablage>/Notfallordner/Notfallordner.md` und `.pdf`: Ansprechpartner,
+  Verträge und Versicherungen mit Gegenüber und nächster Frist, wo die Belege
+  liegen, wer der Steuerberater ist (`[uebergabe]`), Hinweise. **Nie
+  Passwörter:** enthält `notfall.toml` einen Schlüssel oder Wert, der nach
+  Passwort, PIN, TAN oder Schlüssel aussieht, bricht der Befehl mit `fehler` ab.
+- Trocken ist Standard: ohne `--echt` wird nichts verschoben und kein
+  Verzeichnis, keine ics- und keine Notfalldatei geschrieben.

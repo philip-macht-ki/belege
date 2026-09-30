@@ -881,15 +881,24 @@ def befehl(args) -> int:
     with open(basis / "kontoauszug.csv", "w", encoding="utf-8", newline="") as f:
         csv.writer(f, delimiter=";").writerows(zeilen)
 
+    from .beispiel_dokumente import dokumente_beispiel
+    from .beispiel_jahr import jahr_beispiel
+
+    jahr_beispiel(basis, basis / "kontoauszug.csv")
+    dokumente = basis / "dokumente"
+    dokumente_beispiel(dokumente)
+
     (basis / "README.md").write_text(
         "| Datei | Was sie testet | Erwartetes Ergebnis |\n"
         "|---|---|---|\n"
         "| postfach/ | Mail-Belege und Wächter | Belege finden, Anweisungen ignorieren |\n"
         "| handy/ | Kassenbons | Texterkennung |\n"
-        "| downloads/ | Dublette und unfertiger Download | Dublette melden, crdownload ignorieren |\n",
+        "| downloads/ | Dublette und unfertiger Download | Dublette melden, crdownload ignorieren |\n"
+        "| kontoauszug_quartal.csv | drei Monate in einer Datei (bh7) | Vormonat zugeordnet, davor Lücken |\n"
+        "| dokumente/ | Verträge, Versicherung, Finanzamt, eine Rechnung (bh8) | Ablage nach Art, Fristen, Rechnung als Beleg |\n",
         encoding="utf-8",
     )
-    for p in (postfach, handy, downloads):
+    for p in (postfach, handy, downloads, dokumente):
         print(f"ok: {p.relative_to(basis)}/ ({len(list(p.iterdir()))})")
     return 0
 

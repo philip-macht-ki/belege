@@ -1,0 +1,41 @@
+# Grundlage für den Notfallordner (`belege notfall`). Alle Angaben hier sind
+# für "Studio Beispiel" frei erfunden - trage stattdessen deine eigenen ein.
+#
+# WICHTIG: Hier gehört NIE ein Passwort, eine PIN, eine TAN oder ein
+# Zugangsschlüssel hinein. `belege notfall` bricht ab, sobald ein Feldname
+# oder ein Wert danach aussieht. Wer im Ernstfall an einen Zugang muss, findet
+# ihn über den Passwortmanager, nicht über diese Datei.
+
+[passwortmanager]
+# Nur der Name des Passwortmanagers und wer Zugriff hat - kein Master-Passwort.
+name = "Bitwarden (Familientresor)"
+hinweis = "Zugriff hat nur Mara Beispiel selbst. Im Ernstfall vermittelt der Steuerberater den Kontakt."
+
+[ablage]
+# Wo die wichtigen Unterlagen liegen, in Worten - kein Link mit Zugangsdaten.
+belege = "Google Drive, Ordner 'Studio Beispiel/Betrieb'"
+dokumente = "Google Drive, Ordner 'Studio Beispiel/Dokumente'"
+
+[hinweise]
+# Freier Text, der unten im Notfallordner steht.
+text = [
+    "Der Steuerberater hat einen eigenen Lesezugang zum Ablageordner.",
+    "Die Bankvollmacht für das Geschäftskonto liegt bei der Hausbank, siehe Ordner Bank.",
+    "Laufende Verträge und Versicherungen stehen mit ihrer nächsten Frist unten.",
+]
+
+# Ansprechpartner für den Ernstfall: eine Zeile je Person oder Stelle.
+[[ansprechpartner]]
+name = "Jonas Beispiel"
+rolle = "Steuerberater"
+kontakt = "buero@steuerbeispiel.example"
+
+[[ansprechpartner]]
+name = "Nora Beispiel"
+rolle = "Ehepartnerin"
+kontakt = "0000 111222"
+
+[[ansprechpartner]]
+name = "Hausverwaltung Beispiel"
+rolle = "Vermieter Büro"
+kontakt = "verwaltung@hausbeispiel.example"

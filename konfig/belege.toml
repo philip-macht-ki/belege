@@ -73,3 +73,9 @@ tag_uhrzeit = "21:00"
 [urteil]
 backend = "claude"
 modell = "sonnet"
+
+[dokumente]
+# Verträge, Versicherungen und Briefe, die kein Beleg sind (Modul bh8).
+eingang = "~/Belege/Dokumente-Eingang"
+ordner = "Dokumente"
+erinnern_tage = 28

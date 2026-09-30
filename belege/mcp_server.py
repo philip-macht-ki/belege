@@ -30,7 +30,8 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
 
 
 def lesen(ident: str, konto: str | None = None) -> dict:
-    """Liest eine Mail und kürzt ihren Text auf 8.000 Zeichen für sichere Ergebnisse."""
+    """Liest eine Mail und kürzt ihren Text auf 8.000 Zeichen für sichere
+    Ergebnisse."""
     from .postfach import oeffnen
 
     daten = oeffnen(konto).lesen(ident)
@@ -52,6 +53,21 @@ def anhaenge_speichern(
     ziel = Path(ordner or "~/Downloads").expanduser()
     dateien = oeffnen(konto).anhaenge(ident, ziel)
     return {"dateien": [str(datei) for datei in dateien]}
+
+
+def dokumente_suchen(abfrage: str = "", max: int = 10) -> list[dict]:
+    """Sucht Verträge, Versicherungen und Briefe über Gegenüber, Titel, Art
+    und Text."""
+    from .dokumente import suchen
+
+    return suchen(abfrage, max=min(max, 10))
+
+
+def fristen(tage: int = 365) -> dict:
+    """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
+    from .dokumente import fristen_liste
+
+    return fristen_liste(tage)
 
 
 def _antwort(ergebnis: kern.Ergebnis) -> dict:
@@ -108,15 +124,18 @@ def befehl(args) -> int:
         (
             suchen,
             "Sucht Mails. Weg A: Wörter sowie von:, betreff:, seit:JJJJ-MM-TT. "
-            "Weg B: Gmail-Syntax, etwa from:mara@studio-beispiel.example has:attachment.",
+            "Weg B: Gmail-Syntax, etwa from:mara@studio-beispiel.example "
+            "has:attachment.",
         ),
         (
             lesen,
-            "Liest Kopf, Anhänge und höchstens 8.000 Zeichen einer Mail. Parameter: ident, konto.",
+            "Liest Kopf, Anhänge und höchstens 8.000 Zeichen einer Mail. "
+            "Parameter: ident, konto.",
         ),
         (
             anhaenge_speichern,
-            "Speichert Anhänge. Parameter: ident, ordner, konto. Beispiel: ordner='~/Downloads'.",
+            "Speichert Anhänge. Parameter: ident, ordner, konto. "
+            "Beispiel: ordner='~/Downloads'.",
         ),
         (
             entwurf,
@@ -124,7 +143,18 @@ def befehl(args) -> int:
         ),
         (
             senden,
-            "Sendet nur erlaubte Adressen, sonst Entwurf. Parameter: an, betreff, text, anhaenge, konto.",
+            "Sendet nur erlaubte Adressen, sonst Entwurf. "
+            "Parameter: an, betreff, text, anhaenge, konto.",
+        ),
+        (
+            dokumente_suchen,
+            "Sucht Verträge, Versicherungen und Briefe (keine Buchhaltungsbelege). "
+            "Parameter: abfrage, max (höchstens 10).",
+        ),
+        (
+            fristen,
+            "Zeigt kommende Fristen aus Verträgen und Versicherungen sowie alle, die "
+            "noch geprüft werden müssen. Parameter: tage (Standard 365).",
         ),
     ]
     for funktion, beschreibung in werkzeuge:
