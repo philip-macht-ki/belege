@@ -194,7 +194,12 @@ def _uebergabe(jahr: str, jahr_ordner: Path, index: dict, args) -> None:
 def befehl(args) -> int:
     """Gleicht ein ganzes Jahr ab: je Monat wie `belege monat`, dazu die
     Jahresausgaben unter arbeit/jahr/<JJJJ>/. Trocken ist Standard, wie überall."""
-    jahr = _jahr(getattr(args, "jahr", None))
+    angabe = getattr(args, "jahr", None)
+    if angabe and not re.fullmatch(r"\d{4}", str(angabe)):
+        print(f"fehler: --jahr {angabe} ist kein Jahr. "
+              "Beispiel: belege jahr --jahr 2026")
+        return 2
+    jahr = _jahr(angabe)
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     dateien = _auszugsdateien()
     jahr_ordner = kern.pfad("arbeit", "jahr", jahr)

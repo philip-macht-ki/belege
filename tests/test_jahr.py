@@ -248,3 +248,14 @@ def test_uebergabe_ordner_kopiert_nur_mit_echt(repo):
     jahr.befehl(_args(jahr="2030", uebergabe=True, echt=True))
     assert (ziel_ordner / "2030").exists()
     assert (ziel_ordner / "2030" / "uebersicht.md").exists()
+
+
+def test_ungueltiges_jahr_bricht_mit_fehler_ab(capsys):
+    from types import SimpleNamespace
+
+    from belege import jahr
+
+    code = jahr.befehl(SimpleNamespace(jahr="20xx", paket=False, anfragen=False,
+                                       uebergabe=False, echt=False, ziel=[]))
+    assert code == 2
+    assert "fehler" in capsys.readouterr().out

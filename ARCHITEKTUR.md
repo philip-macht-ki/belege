@@ -390,6 +390,9 @@ belege jahr [--jahr JJJJ] [--anfragen] [--paket] [--uebergabe] [--echt]
   `monat --anfragen`, nie eine Sendung.
 - `--paket`: `arbeit/jahr/<JJJJ>/paket/<MM>/` mit den Belegen je Monat über
   `monat.paket_packen()`, dazu die Jahresausgaben im Paketordner. Nur mit `--echt`.
+  Das Paket ist eine Arbeitskopie unter `arbeit/` und wird bei jedem Lauf neu
+  gebaut (wie bei `belege monat`); Belege in der Ablage werden nie angefasst.
+- Ungültiges `--jahr` (nicht vierstellig): `fehler`, Rückgabe 2.
 - `--uebergabe`: Bei `[uebergabe].weg = "ordner"` wird das Paket mit `--echt`
   nach `<ordner>/<JJJJ>/` kopiert. Bei `weg = "mail"` entsteht **immer nur ein
   Entwurf** an die Übergabeadresse mit der Übersicht im Text und dem Hinweis,
@@ -440,7 +443,9 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   365 Tage, dazu alle mit `datum` null als „prüfen“. `--echt` schreibt
   `<ablage>/<Dokumente>/fristen.ics` (VEVENT je Frist, ganztägig, feste UID aus
   sha und Fristart, damit ein erneuter Import aktualisiert statt verdoppelt,
-  VALARM `erinnern_tage` vorher). Zum Eintragen öffnet der Claude des
+  VALARM `erinnern_tage` vorher, `DTSTAMP` in UTC; die UID enthält zusätzlich
+  einen kurzen Hash aus Fristart und Datum, damit zwei Fristen gleicher Art
+  eines Dokuments sich nicht überschreiben). Zum Eintragen öffnet der Claude des
   Mitglieds die Datei (`open fristen.ics`); das Programm schreibt nie selbst in
   einen Kalender.
 - MCP-Server: zusätzliche Werkzeuge `dokumente_suchen(abfrage, max)` (Suche in
@@ -451,7 +456,10 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   `<ablage>/Notfallordner/Notfallordner.md` und `.pdf`: Ansprechpartner,
   Verträge und Versicherungen mit Gegenüber und nächster Frist, wo die Belege
   liegen, wer der Steuerberater ist (`[uebergabe]`), Hinweise. **Nie
-  Passwörter:** enthält `notfall.toml` einen Schlüssel oder Wert, der nach
-  Passwort, PIN, TAN oder Schlüssel aussieht, bricht der Befehl mit `fehler` ab.
+  Passwörter:** heißt ein Feld wie ein Zugangsgeheimnis (Passwort, password,
+  PIN, TAN, Schlüssel, Token, …, als ganzer Wortteil) oder enthält ein Wert eines
+  („PIN: 4711“, „Passwort ist …“, eine lange Zeichenkette wie ein API-Schlüssel),
+  bricht der Befehl mit `fehler` ab. Erlaubt ist der Hinweis, WO etwas liegt
+  („Das Passwort steht im Tresor.“).
 - Trocken ist Standard: ohne `--echt` wird nichts verschoben und kein
   Verzeichnis, keine ics- und keine Notfalldatei geschrieben.

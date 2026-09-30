@@ -8,28 +8,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
+
 from fpdf import FPDF
 
 from .kern import ablage_ordner, echt as _echt, ereignis, jetzt, konfig
 
-VERBOTENE_WOERTER = (
-    "passwort",
-    "kennwort",
-    "pin",
-    "tan",
-    "schlüssel",
-    "schluessel",
-    "secret",
-    "geheim",
-    "zugangscode",
-    "apikey",
-    "api_key",
-)
+# Feldnamen, die nach einem Zugangsgeheimnis klingen, als ganze Wortteile
+# (``wlan_password`` ja, ``stand`` oder ``tanja`` nein).
+VERBOTENE_TEILE = {
+    "passwort", "password", "passwd", "pass", "pwd", "pw", "kennwort", "pin", "tan",
+    "schlüssel", "schluessel", "secret", "geheim", "zugangscode", "apikey", "token",
+    "credential", "credentials",
+}
+VERBOTENE_ANFAENGE = ("passwort", "password", "kennwort")
 
 # "passwortmanager" ist ein erlaubter Abschnittsname: Er nennt nur, WELCHER
-# Passwortmanager benutzt wird, nie ein Passwort selbst. Seine Felder werden
-# trotzdem geprüft.
+# Passwortmanager benutzt wird, nie ein Passwort selbst. Seine Werte werden
+# trotzdem auf Geheimnisse geprüft.
 ERLAUBTE_SCHLUESSEL = {"passwortmanager"}
+
+# Werte, die ein Geheimnis enthalten: "PIN: 4711", "Passwort ist …", "TAN 123456",
+# oder eine lange Zeichenkette ohne Leerzeichen aus Buchstaben und Ziffern, wie
+# API-Schlüssel sie haben.
+GEHEIMNIS_WERT = re.compile(
+    r"\b(passwort|password|kennwort|pin|tan|pwd|code)\b\s*(:|=|ist\b|lautet\b|is\b|\d{3,})"
+    r"|\b(sk|pk|ghp|gho|xox[abp]|akia)[_-]?[a-z0-9]{8,}"
+    r"|(?=[^\s]*\d)(?=[^\s]*[a-z])[a-z0-9_\-]{24,}",
+    re.IGNORECASE,
+)
 
 
 class NotfallFehler(RuntimeError):
@@ -37,15 +44,17 @@ class NotfallFehler(RuntimeError):
 
 
 def _verdaechtiger_schluessel(name: str) -> bool:
-    if str(name).lower() in ERLAUBTE_SCHLUESSEL:
-        return False
     klein = str(name).lower()
-    return any(wort in klein for wort in VERBOTENE_WOERTER)
+    if klein in ERLAUBTE_SCHLUESSEL:
+        return False
+    if "api_key" in klein or "api-key" in klein:
+        return True
+    teile = [x for x in re.split(r"[^a-zäöüß0-9]+", klein) if x]
+    return any(x in VERBOTENE_TEILE or x.startswith(VERBOTENE_ANFAENGE) for x in teile)
 
 
 def _verdaechtiger_wert(wert: str) -> bool:
-    klein = str(wert).lower()
-    return any(wort in klein for wort in VERBOTENE_WOERTER)
+    return bool(GEHEIMNIS_WERT.search(str(wert)))
 
 
 def pruefe_keine_passwoerter(daten: object, pfad: str = "") -> str | None:

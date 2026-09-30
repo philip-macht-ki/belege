@@ -190,3 +190,17 @@ def test_ics_parsebar_und_uid_stabil_bei_zweitem_lauf(repo, monkeypatch):
     inhalt_2 = ics_pfad.read_text(encoding="utf-8")
     uid_2 = next(z for z in inhalt_2.splitlines() if z.startswith("UID:"))
     assert uid_1 == uid_2
+
+
+def test_ics_zwei_fristen_gleicher_art_haben_eigene_uid_und_utc_stempel():
+    from belege import dokumente
+
+    fristen = [
+        {"sha": "a" * 64, "art": "zahlung", "datum": "2026-12-10", "gegenueber": "Amt", "titel": "Bescheid", "text": "erste"},
+        {"sha": "a" * 64, "art": "zahlung", "datum": "2027-03-10", "gegenueber": "Amt", "titel": "Bescheid", "text": "zweite"},
+    ]
+    text = dokumente.baue_ics(fristen, 28)
+    uids = [z for z in text.splitlines() if z.startswith("UID:")]
+    assert len(uids) == 2 and len(set(uids)) == 2
+    stempel = [z for z in text.splitlines() if z.startswith("DTSTAMP:")][0]
+    assert stempel.endswith("Z")

@@ -93,8 +93,12 @@ def pruefe(antwort: object) -> str | None:
         return "bereich muss betrieb oder privat sein."
     if not isinstance(antwort["gegenueber"], str) or not antwort["gegenueber"].strip():
         return "gegenueber darf nicht leer sein."
+    if len(antwort["gegenueber"]) > 40:
+        return "gegenueber darf höchstens 40 Zeichen haben."
     if not isinstance(antwort["titel"], str) or not antwort["titel"].strip():
         return "titel darf nicht leer sein."
+    if len(antwort["titel"]) > 40:
+        return "titel darf höchstens 40 Zeichen haben."
     if antwort["datum"] is not None:
         if not isinstance(antwort["datum"], str):
             return "datum muss JJJJ-MM-TT oder null sein."
@@ -495,11 +499,17 @@ def baue_ics(fristen: list[dict], erinnern_tage: int) -> str:
         "BEGIN:VCALENDAR", "VERSION:2.0",
         "PRODID:-//belege//dokumente//DE", "CALSCALE:GREGORIAN",
     ]
-    stempel = jetzt().strftime("%Y%m%dT%H%M%SZ")
+    from datetime import timezone
+
+    stempel = jetzt().astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for frist in fristen:
         if not frist.get("datum"):
             continue
-        uid = f"{frist['sha'][:16]}-{frist.get('art', 'frist')}@belege"
+        # Stabil über Läufe, eindeutig auch bei zwei Fristen gleicher Art
+        # im selben Dokument.
+        merkmal = f"{frist.get('art', 'frist')}|{frist['datum']}"
+        kurz = hashlib.sha256(merkmal.encode()).hexdigest()[:8]
+        uid = f"{frist['sha'][:16]}-{frist.get('art', 'frist')}-{kurz}@belege"
         zusammenfassung = _ics_zusammenfassung(frist)
         dtstart = frist["datum"].replace("-", "")
         zeilen += [
