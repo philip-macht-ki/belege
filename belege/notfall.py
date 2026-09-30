@@ -39,6 +39,12 @@ GEHEIMNIS_WERT = re.compile(
 )
 
 
+def _deutsch(iso: str) -> str:
+    """2027-02-14 wird 14.02.2027: der Ordner ist für Menschen, nicht für Programme."""
+    jahr, monat, tag = iso.split("-")
+    return f"{tag}.{monat}.{jahr}"
+
+
 class NotfallFehler(RuntimeError):
     """konfig/notfall.toml enthält etwas, das nach einem Zugangsgeheimnis aussieht."""
 
@@ -130,8 +136,11 @@ def _abschnitte(daten: dict, vertraege: list[dict]) -> list[tuple[str, list[str]
 
     if vertraege:
         zeilen = [
-            f"{v['gegenueber']} ({v['titel']}): nächste Frist "
-            f"{v['datum'] if v['datum'] else 'prüfen'}: {v['text']}"
+            f"{v['gegenueber']} ({v['titel']}): nächste Frist am "
+            f"{_deutsch(v['datum'])}. {v['text']}"
+            if v["datum"]
+            else f"{v['gegenueber']} ({v['titel']}): Frist bitte prüfen, "
+            "sie steht nicht eindeutig im Dokument."
             for v in vertraege
         ]
     else:
@@ -157,7 +166,10 @@ def _abschnitte(daten: dict, vertraege: list[dict]) -> list[tuple[str, list[str]
     )
     weg = uebergabe.get("weg", "mail")
     abschnitte.append(
-        ("Steuerberater / Übergabe", [f"Weg: {weg}, {steuer_zeile}"])
+        ("Steuerberater / Übergabe", [
+            f"Belege gehen per Mail an {steuer_zeile}" if weg == "mail"
+            else f"Belege liegen im freigegebenen Ordner {steuer_zeile}"
+        ])
     )
 
     hinweise = daten.get("hinweise", {}).get("text", [])

@@ -21,7 +21,7 @@ dokumente = "Google Drive, Ordner 'Studio Beispiel/Dokumente'"
 text = [
     "Der Steuerberater hat einen eigenen Lesezugang zum Ablageordner.",
     "Die Bankvollmacht für das Geschäftskonto liegt bei der Hausbank, siehe Ordner Bank.",
-    "Laufende Verträge und Versicherungen stehen mit ihrer nächsten Frist unten.",
+    "Laufende Verträge und Versicherungen stehen mit ihrer nächsten Frist weiter oben.",
 ]
 
 # Ansprechpartner für den Ernstfall: eine Zeile je Person oder Stelle.
