@@ -65,9 +65,10 @@ def entwurf(
 ) -> kern.Ergebnis:
     """Legt nur mit --echt einen Entwurf an und gibt seine IDs zurück."""
     if not echt:
-        kern.log(f"würde Entwurf an {an} anlegen")
+        wem = an or "(Empfänger unbekannt, du trägst ihn im Entwurf ein)"
+        kern.log(f"würde Entwurf an {wem} anlegen: {betreff}")
         return kern.Ergebnis(
-            "nichts", f"Würde einen Entwurf an {an} anlegen.", {"ids": []}
+            "nichts", f"Würde einen Entwurf an {wem} anlegen.", {"ids": []}
         )
     from .postfach import oeffnen
 

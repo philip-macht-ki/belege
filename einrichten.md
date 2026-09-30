@@ -153,6 +153,46 @@ letzten 30 Tage.
    `konfig/waechter.md`), trag sie ein, setz `waechter = true` beim Konto.
    `uv run belege waechter` (trocken) zeigen.
 
+## Teil 7: Das Jahresende (Modul 7)
+
+1. Üben am Musterbetrieb: `uv run belege beispiel --echt` legt auch
+   `beispiel/erzeugt/kontoauszug_quartal.csv` an, drei Monate in einer Datei.
+   Zeig `uv run belege jahr` im Übungssystem und erklär die Zeilen der
+   Übersicht: zugeordnet, fehlt noch, Kontoauszug fehlt.
+2. Echte Kontoauszüge: Sie lädt die fehlenden Monate im Online-Banking als CSV
+   herunter, gern auch als eine Datei fürs ganze Jahr. Alles gehört in den
+   Ordner aus `[monat] auszuege`. Doppelte Zeilen über mehrere Dateien zählt
+   `belege jahr` nur einmal.
+3. `uv run belege jahr --jahr <JJJJ>` (trocken) und `arbeit/jahr/<JJJJ>/`
+   zeigen: `uebersicht.md`, `fehlt_noch.md`, `klaerung.md`.
+4. Lücken schließen: `uv run belege postfach --tage 400 --echt` holt Belege
+   aus dem ganzen Jahr, danach `belege jahr` noch einmal. Für den Rest:
+   `uv run belege jahr --anfragen --echt` legt Entwürfe an die Lieferanten an,
+   **nie** eine Sendung. Sie schickt sie selbst ab.
+5. Paket: `uv run belege jahr --paket --echt`. Übergabe mit `--uebergabe
+   --echt`: bei `weg = "ordner"` eine Kopie, bei `weg = "mail"` nur ein Entwurf
+   mit der Übersicht, weil ein Jahr in keine Mail passt.
+
+## Teil 8: Die Ablage (Modul 8)
+
+1. `[dokumente]` in `konfig/belege.toml`: Eingangsordner anlegen (Standard
+   `~/Belege/Dokumente-Eingang`), `erinnern_tage` erfragen (Standard 28).
+2. Üben: die fünf Musterdokumente aus `beispiel/erzeugt/dokumente/` im
+   Übungssystem mit `uv run belege dokumente` (trocken) und `--echt` ablegen.
+   Die Rechnung darunter wandert in den Handy-Ordner, dort holt sie der Belegweg.
+3. Echte Dokumente: Sie scannt oder legt PDFs in den Eingangsordner. Erst
+   trocken zeigen, dann `--echt`.
+4. Fristen: `uv run belege fristen` zeigen, jede Zeile „prüfen“ gemeinsam
+   ansehen. `uv run belege fristen --echt` schreibt `fristen.ics`; öffne die
+   Datei mit `open`, damit sie im Kalender landet. Ein zweiter Import
+   aktualisiert, statt zu verdoppeln.
+5. Frag deine Ablage: Der Postfach-Server aus Teil 6 hat die Werkzeuge
+   `dokumente_suchen` und `fristen`. Nach `uv sync` neu starten.
+6. Notfallordner: **frag** sie nach Ansprechpartnern, wo was liegt und welchen
+   Passwortmanager sie nutzt, und trag es in `konfig/notfall.toml` ein. **Nie
+   Passwörter**, der Befehl bricht sonst ab. Dann `uv run belege notfall
+   --echt` und den Ordner zeigen. Sag ihr, wem sie ihn geben sollte.
+
 ## Abschlussbericht
 
 Kurz, in dieser Reihenfolge:
