@@ -51,3 +51,15 @@ def test_aus_verschiebt_statt_zu_loeschen(repo, monkeypatch):
     monkeypatch.setattr(zeitplan.subprocess, "run", lambda *a, **k: None)
     assert zeitplan.befehl(Namespace(ziel=["aus"], echt=True)) == 0
     assert (repo / "arbeit" / "zeitplan-alt" / "de.belege.takt.plist").exists()
+
+
+def test_zeitplan_nur_auf_erlaubtem_rechner(repo, monkeypatch, capsys):
+    _vorlagen(repo)
+    p = repo / "konfig/belege.toml"
+    p.write_text(p.read_text().replace('erlaubt = ""', 'erlaubt = "Mac-mini"', 1))
+    monkeypatch.setattr(zeitplan, "rechner", lambda: "MacBook-Air")
+    monkeypatch.setattr(zeitplan.Path, "home", lambda: repo / "home")
+    monkeypatch.setenv("BELEGE_JA", "1")
+    assert zeitplan.befehl(Namespace(ziel=["an"], echt=True)) == 1
+    assert "gehört auf Mac-mini" in capsys.readouterr().out
+    assert not (repo / "home").exists()

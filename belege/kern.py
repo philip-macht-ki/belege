@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import tomllib
 from dataclasses import dataclass, field
@@ -51,6 +52,23 @@ def konfig(name: str) -> dict:
     datei = ROOT / "konfig" / (name if name.endswith(".toml") else f"{name}.toml")
     with open(datei, "rb") as f:
         return tomllib.load(f)
+
+
+def rechner() -> str:
+    """Kurzname dieses Rechners, wie `hostname -s` ihn zeigt."""
+    return socket.gethostname().split(".")[0]
+
+
+def fremder_rechner() -> str | None:
+    """Der erlaubte Rechner, wenn dieser hier nicht ablegen darf, sonst None.
+
+    Die Sperre gibt es, weil Laptops verpasste Läufe beim Aufwachen nachholen und
+    eine alte Kopie dann neben dem Dauerrechner ablegt (ARCHITEKTUR.md, Rechner-Sperre).
+    """
+    erlaubt = str(konfig("belege").get("rechner", {}).get("erlaubt", "")).strip()
+    if erlaubt and erlaubt.lower() != rechner().lower():
+        return erlaubt
+    return None
 
 
 def pfad(*teile: str | Path) -> Path:

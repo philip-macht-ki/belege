@@ -37,3 +37,22 @@ def test_datev_ohne_pdf_rot(repo, capsys):
     p.write_text(t)
     assert pruefen.befehl(Namespace()) == 1
     assert "DATEV-Format fehlt" in capsys.readouterr().out
+
+
+def test_rechner_sperre_und_doppelordner(repo, capsys, monkeypatch):
+    from belege import kern
+
+    monkeypatch.setattr(kern.socket, "gethostname", lambda: "Mac-mini.local")
+    p = repo / "konfig/belege.toml"
+    p.write_text(p.read_text().replace('erlaubt = ""', 'erlaubt = "Mac-mini"', 1))
+    (repo / "ablage/Betrieb/2026/10").mkdir(parents=True)
+    (repo / "ablage/Betrieb/2026/10 (1)").mkdir()
+    pruefen.befehl(Namespace())
+    out = capsys.readouterr().out
+    assert "GRUEN: Rechner-Sperre: nur Mac-mini legt ab" in out
+    assert "GELB: Doppelte Ordner in der Ablage: Betrieb/2026/10 (1)" in out
+
+
+def test_ohne_sperre_gelb(repo, capsys):
+    pruefen.befehl(Namespace())
+    assert "GELB: Rechner-Sperre nicht gesetzt" in capsys.readouterr().out

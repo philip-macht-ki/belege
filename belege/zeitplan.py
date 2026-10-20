@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .kern import echt, konfig, pfad
+from .kern import echt, fremder_rechner, konfig, pfad, rechner
 
 LAEUFE = ("takt", "tag", "monat")
 
@@ -58,6 +58,10 @@ def _zugestimmt() -> bool:
 
 
 def _an() -> int:
+    erlaubt = fremder_rechner()
+    if erlaubt:
+        print(f"fehler: Der Zeitplan gehört auf {erlaubt}, dieser Rechner heißt {rechner()}. Nichts eingerichtet.")
+        return 1
     if not _zugestimmt():
         print("nichts: abgebrochen.")
         return 0

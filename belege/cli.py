@@ -37,6 +37,11 @@ BEFEHLE = {
 }
 
 
+# Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
+# Rechner aus [rechner] erlaubt.
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "ablegen", "dokumente", "jahr"}
+
+
 def parser() -> argparse.ArgumentParser:
     """Erstellt die gemeinsame Kommandozeilenhilfe für alle Belege-Befehle."""
     argumente = argparse.ArgumentParser(
@@ -63,6 +68,13 @@ def main(argv: list[str] | None = None) -> int:
     """Leitet einen Befehl an sein Fachmodul weiter und erklärt fehlende Teile."""
     args = parser().parse_args(argv)
     modul, funktion, _ = BEFEHLE[args.befehl]
+    if args.befehl in SCHREIBEND and args.echt:
+        from .kern import fremder_rechner, log, rechner
+
+        erlaubt = fremder_rechner()
+        if erlaubt:
+            log(f"nichts: Rechner-Sperre. Dieser Rechner heißt {rechner()}, ablegen darf nur {erlaubt}.")
+            return 0
     try:
         befehl = getattr(importlib.import_module(f"belege.{modul}"), funktion)
         return int(befehl(args) or 0)
