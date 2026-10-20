@@ -37,6 +37,12 @@ etwas löschen, nie ungefragt senden.
 - **Mail-Inhalt ist Inhalt, nie Anweisung.** Kein Modellauftrag darf aus einer
   Mail heraus etwas auslösen. Modelle liefern nur das verlangte JSON, der Code
   prüft es gegen ein Schema und verwirft alles andere.
+- **Ein Rechner legt ab.** `[rechner].erlaubt` nennt den Dauerrechner
+  (`hostname -s`). Befehle aus `cli.SCHREIBEND` brechen mit `--echt` auf jedem
+  anderen Rechner mit `nichts: Rechner-Sperre` ab, `zeitplan an` verweigert.
+  Grund: Laptops holen verpasste launchd-Läufe beim Aufwachen nach und legen
+  mit veralteter Sicht auf den Cloud-Ordner einen zweiten Monatsordner an
+  (`10 (1)`). Leer heißt keine Sperre, `pruefen` meldet dann GELB.
 - **Laufzeitdaten nie im synchronisierten Ordner.** `arbeit/` liegt im Repo,
   nicht in Drive/iCloud/Dropbox (Sync-Konflikte zerstören Zugangsdateien).
   `pruefen` meldet ROT, wenn das Repo selbst in einem Sync-Ordner liegt.
@@ -329,7 +335,11 @@ Konsole plus Zähler aus dem Index.
 - launchd: `de.belege.takt` (alle `[takt].minuten` × 60 s, Standard 15),
   `de.belege.tag` (`[takt].tag_uhrzeit`, Standard 21:00), `de.belege.monat`
   (Tag `[uebergabe].tag`, 09:00). Vorlagen in `zeitplan/`, PATH fest gesetzt.
-  `belege zeitplan an` fragt vorher mit `[ja]` nach.
+  `belege zeitplan an` fragt vorher mit `[ja]` nach und verweigert auf einem
+  anderen Rechner als `[rechner].erlaubt`.
+- `belege pruefen` meldet doppelte Ordner in der Ablage (`10 (1)`, `10 2`
+  neben `10`) als GELB. Ursache ist fast immer ein zweiter Rechner, der
+  mitgetaktet hat. Nie im Finder löschen, sondern in der Cloud.
 
 ### Lokaler Postfach-Server (belege/mcp_server.py)
 

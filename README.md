@@ -38,6 +38,10 @@ Ohne `--echt` zeigt jeder Befehl nur, was er täte.
   Vision); Claude bekommt nur den Text. Das ist rund fünf- bis dreißigmal günstiger.
   Nur wenn beides nichts Lesbares findet, schaut Claude als letzte Stufe selbst
   auf eine Kopie der Datei (abschaltbar: `[texterkennung] claude = false`).
+- **Ein Rechner arbeitet.** Zeitplan und Ablage laufen nur auf deinem
+  Dauerrechner. `[rechner] erlaubt` in `konfig/belege.toml` sperrt alle anderen,
+  denn ein Laptop holt verpasste Läufe beim Aufklappen nach und legt sonst
+  doppelt ab.
 - **Der Ordner ist deine Arbeitskopie.** Das Original bleibt im Postfach bzw. bei
   deinem Steuerberater oder Buchhaltungsprogramm. Bei E-Rechnungen wird das XML
   als Original mit abgelegt. Keine Rechtsberatung, keine Zusage zur GoBD.

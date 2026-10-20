@@ -1,10 +1,10 @@
 """Ampeltest für die Belegablage."""
 
 from __future__ import annotations
-import json, os, shutil, stat, subprocess, sys
+import json, os, re, shutil, stat, subprocess, sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from .kern import ablage_ordner, jetzt, konfig, konten, pfad
+from .kern import ablage_ordner, jetzt, konfig, konten, pfad, rechner
 
 SYNC = (
     "Library/CloudStorage",
@@ -17,6 +17,22 @@ SYNC = (
 
 def _sync(p):
     return any(x in str(Path(p).expanduser()) for x in SYNC)
+
+
+DOPPEL = re.compile(r"^(.+?)(?: \(\d+\)| \d)$")
+
+
+def _doppelordner(wurzel: Path) -> list[str]:
+    """Ordner wie `10 (1)` oder `10 2` neben einem `10`: so legt eine Cloud einen zweiten
+    gleichnamigen Ordner ab, meist weil ein zweiter Rechner mitgetaktet hat."""
+    funde = []
+    if not wurzel.is_dir():
+        return funde
+    for ordner in wurzel.rglob("*"):
+        m = DOPPEL.match(ordner.name)
+        if ordner.is_dir() and m and (ordner.parent / m.group(1)).is_dir():
+            funde.append(str(ordner.relative_to(wurzel)))
+    return sorted(funde)
 
 
 def _imap(k):
@@ -251,6 +267,26 @@ def befehl(args) -> int:
         )
     except Exception as e:
         z("GELB", f"Zeitplan nicht prüfbar: {e}", "belege zeitplan an ausführen.")
+    try:
+        erlaubt = str(konfig("belege").get("rechner", {}).get("erlaubt", "")).strip()
+        hier = rechner()
+        if not erlaubt:
+            z("GELB", "Rechner-Sperre nicht gesetzt", f'In konfig/belege.toml unter [rechner] erlaubt = "{hier}" eintragen, wenn dies dein Dauerrechner ist.')
+        elif erlaubt.lower() == hier.lower():
+            z("GRUEN", f"Rechner-Sperre: nur {erlaubt} legt ab")
+        else:
+            z("GELB", f"Dieser Rechner ({hier}) ist nicht der Dauerrechner {erlaubt}", "Hier keinen Zeitplan einschalten. Läuft hier einer, belege zeitplan aus --echt.")
+    except Exception as e:
+        z("GELB", f"Rechner-Sperre nicht prüfbar: {e}")
+    try:
+        doppelt = _doppelordner(ablage_ordner())
+        z(
+            "GELB" if doppelt else "GRUEN",
+            f"Doppelte Ordner in der Ablage: {', '.join(doppelt[:3])}" if doppelt else "Keine doppelten Ordner in der Ablage",
+            "Nicht im Finder löschen. Dateien mit dem richtigen Ordner vergleichen lassen und den doppelten in der Weboberfläche deines Cloud-Speichers in den Papierkorb legen.",
+        )
+    except Exception as e:
+        z("GELB", f"Doppelte Ordner nicht prüfbar: {e}")
     try:
         env = pfad(".env")
         z(
