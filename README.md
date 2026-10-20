@@ -8,10 +8,15 @@ eine Liste, was noch fehlt, und schickt die Belege an deinen Steuerberater.
 Gebaut für Selbstständige, die nicht programmieren. Dein eigener Claude richtet
 alles ein: Gib ihm diesen Link und sag „Richte mir das nach einrichten.md ein“.
 
+Hast du zwei Macs, etwa einen Mac mini und einen Laptop, kommt das Repo nur auf
+den Rechner, der dauerhaft läuft, und dort nach `~/Projekte/belege`, nicht auf den
+Schreibtisch. Der Laptop ist nur das Fenster.
+
 ## Erst einmal üben
 
 „Hol dir github.com/philip-macht-ki/belege und mach die Belege-Übung.“ Dein Claude
-führt dann `uv sync` und `uv run belege uebung --echt` aus: Fünf Rechnungen mit
+holt das Repo nach `~/Projekte/belege` und führt dort `uv sync` und
+`uv run belege uebung --echt` aus: Fünf Rechnungen mit
 Namen wie `Scan_0012.pdf` oder `invoice (3).pdf` bekommen einen sauberen Namen und
 landen unter `~/Belege-Uebung/Ablage`. Nichts Echtes wird berührt.
 
