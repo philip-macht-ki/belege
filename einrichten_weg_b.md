@@ -9,6 +9,12 @@ bei Ja weitermachen.
 
 Weg B geht nur mit Gmail oder Google Workspace.
 
+**Mach Weg B auf dem Dauerrechner.** Die Client-Datei und der Zugang, den
+`belege anmelden` anlegt, liegen nur in `arbeit/geheim/` auf dem Rechner, auf
+dem die Person sich angemeldet hat. Ein anderer Rechner hat sie nicht, und du
+kopierst sie auch nicht hinüber. Zieht das Repo auf einen neuen Rechner um,
+meldet sie sich dort mit Schritt 7 neu an.
+
 ## Was die Person im Browser macht, was du machst
 
 Die Person klickt in der Google Cloud Console, du sagst ihr jeden Schritt

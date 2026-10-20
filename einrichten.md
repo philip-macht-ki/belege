@@ -16,12 +16,23 @@ um den sie dich bittet** („Richte Teil 2 aus einrichten.md ein“). Ohne Angab
 Teil 1. Erkläre jeden Schritt in einem Satz, bevor du ihn ausführst, und frag
 dort nach, wo unten **frag** steht.
 
-**Schritt 0, falls du nur den Link hast:** Hol das Repo mit
-`git clone https://github.com/philip-macht-ki/belege.git` nach
-`~/Desktop/belege` (liegt dort schon etwas, frag nach einem anderen Ort) und
-arbeite dort weiter. Das Repo darf **nicht** in Google Drive, iCloud Drive,
-Dropbox oder OneDrive liegen: Die Cloud-Abgleiche beschädigen sonst die
-Zugangsdateien. Fehlt `git`, sag es und installiere die
+**Schritt 0, vor allem anderen: Auf welchem Rechner bist du?** Zeig der
+Person den Namen aus `hostname -s` und **frag**, ob sie einen zweiten Mac hat,
+der dauerhaft läuft, meist einen Mac mini. Hat sie einen und du läufst gerade
+auf dem Laptop, richte hier nichts ein. Sag ihr, sie soll die Sitzung auf dem
+Dauerrechner starten, etwa über die SSH-Umgebung in der Claude-App, und dort
+weitermachen. Das Repo, die Zugänge und der Zeitplan gehören nur auf den
+Dauerrechner.
+
+**Falls du nur den Link hast:** Hol das Repo mit
+`git clone https://github.com/philip-macht-ki/belege.git` nach `~/Projekte/belege`
+(liegt dort schon etwas, frag nach einem anderen Ort) und arbeite dort weiter.
+Nimm nicht `~/belege`: Der Mac unterscheidet Groß- und Kleinschreibung nicht,
+und das wäre derselbe Ordner wie die Ablage `~/Belege`.
+Das Repo darf **nicht** auf dem Schreibtisch, in Dokumente, in Google Drive,
+iCloud Drive, Dropbox oder OneDrive liegen: Ist der iCloud-Abgleich für
+Schreibtisch und Dokumente an, wandert es sonst in die Cloud, und die
+Cloud-Abgleiche beschädigen die Zugangsdateien. Fehlt `git`, sag es und installiere die
 Xcode-Kommandozeilenwerkzeuge erst nach Rückfrage.
 
 ## Was immer gilt
@@ -139,11 +150,20 @@ letzten 30 Tage.
    `uv run belege pruefen`. Die Zeile Rechner-Sperre muss GRÜN sein.
 5. Hat die Person einen zweiten Rechner, auf dem dieses Repo oder ein älterer
    Ablauf liegt, sag ihr: dort `uv run belege zeitplan aus --echt`, und dort an
-   allen fünf Stellen nachsehen, ob noch etwas taktet: geplante Aufgaben in
-   Claude Code, Cowork-Aufgaben, Routinen im Claude-Konto, launchd und cron.
-   Verschieben, nicht löschen. Die Sperre im Repo dieses Rechners schützt nicht
-   vor einer alten Kopie ohne Sperre auf dem anderen, denn Schreibtisch und
-   Dokumente werden zwischen Macs nicht abgeglichen.
+   allen fünf Stellen nachsehen, ob noch etwas taktet. Stilllegen heißt
+   verschieben, nicht löschen, in einen Ordner mit dem heutigen Datum:
+
+   | Stelle | Liegt in | Stilllegen |
+   |---|---|---|
+   | Geplante Aufgaben in Claude Code | `~/.claude/scheduled-tasks` | nach `~/.claude/scheduled-tasks-deaktiviert-<JJJJMMTT>` verschieben |
+   | Cowork-Aufgaben | `~/Documents/Claude/Scheduled` | nach `~/Documents/Claude/Scheduled-deaktiviert-<JJJJMMTT>` verschieben |
+   | Routinen im Claude-Konto | im Konto, je an ein Gerät gebunden | die Person pausiert sie in der Claude-App, nicht löschen |
+   | launchd | `~/Library/LaunchAgents` | mit `launchctl bootout` entladen, dann nach `~/Library/LaunchAgents/deaktiviert-<JJJJMMTT>` verschieben |
+   | cron | `crontab -l` | Liste nach `~/crontab-deaktiviert-<JJJJMMTT>` sichern, dann die Zeile entfernen |
+
+   Die Sperre im Repo dieses Rechners schützt nicht vor einer alten Kopie ohne
+   Sperre auf dem anderen, denn Schreibtisch und Dokumente werden zwischen Macs
+   nicht abgeglichen. Laptops holen verpasste Läufe beim Aufklappen nach.
 6. Meldet `pruefen` doppelte Ordner wie `10 (1)`: nicht im Finder löschen, das
    Cloud-Programm lädt sie beim Aufwachen wieder hoch. Erst jede Datei mit
    `cmp` gegen den richtigen Ordner prüfen, dann die Person den doppelten
@@ -168,9 +188,12 @@ letzten 30 Tage.
 
 ## Teil 6: Frag dein Postfach, Wächter (Modul 6)
 
-1. Postfach-Server einbinden:
+1. Postfach-Server einbinden, **nur auf dem Dauerrechner**, also dort, wo das
+   Repo und die Zugänge liegen:
    `claude mcp add belege -s user -- uv --directory "$(pwd)" run belege mcp`.
-   Dann `uv sync`.
+   Dann `uv sync`. Auf dem Laptop bindest du ihn nicht ein. Dort fehlen Repo
+   und Zugangsdatei, und die Person erreicht den Server, indem sie ihre
+   Sitzung auf dem Dauerrechner startet.
 2. Weitere Postfächer: je ein `[[konto]]`-Block mit eigenem Namen, `belege`
    nach Wunsch, und `PASSWORT_<NAME>` in `.env` (trägt sie selbst ein).
 3. Wächter: **frag** nach ihren Regeln (Beispiele stehen in
