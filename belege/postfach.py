@@ -9,6 +9,7 @@ import imaplib
 import os
 import re
 import smtplib
+import subprocess
 from datetime import date
 from email import policy
 from email.header import decode_header, make_header
@@ -23,6 +24,27 @@ ANMELDE_HINWEIS = (
     "Webmailer nicht eingeschaltet (GMX/web.de), bei Google Workspace hat der Admin "
     "App-Passwörter gesperrt."
 )
+
+
+def schluesselbund_passwort(name: str) -> str | None:
+    """Liest ein App-Passwort intern aus dem macOS-Schlüsselbund.
+
+    `security -w` schreibt das Geheimnis nur in den von uns aufgefangenen
+    Standardausgang. Es wird weder protokolliert noch an Aufrufer ausgegeben.
+    """
+    try:
+        ergebnis = subprocess.run(
+            ["security", "find-generic-password", "-s", "belege-postfach", "-a", name, "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return ergebnis.stdout.rstrip("\n") if ergebnis.returncode == 0 and ergebnis.stdout else None
+
+
+def passwort(name: str) -> str | None:
+    """Nimmt den Schlüsselbund zuerst, die bisherige Umgebungsvariable als Rückfall."""
+    return schluesselbund_passwort(name) or os.environ.get("PASSWORT_" + name.upper())
 
 
 def _text(wert: str | None) -> str:
@@ -269,10 +291,10 @@ class ImapPostfach(Postfach):
         imap, smtp = _server(domain, konto)
         self.imap_host, self.imap_port = imap
         self.smtp_host, self.smtp_port = smtp
-        self.passwort = os.environ.get("PASSWORT_" + self.name.upper())
+        self.passwort = passwort(self.name)
         if not self.passwort:
             raise RuntimeError(
-                f"Trag das App-Passwort für {self.name} in .env ein, siehe einrichten.md"
+                f"App-Passwort für {self.name} fehlt. Mit belege anmelden --schluesselbund {self.name} speichern."
             )
 
     def _imap(self):
@@ -435,7 +457,14 @@ def _server(domain: str, konto: dict):
         "gmail.com": ("imap.gmail.com:993", "smtp.gmail.com:465"),
         "googlemail.com": ("imap.gmail.com:993", "smtp.gmail.com:465"),
         "gmx.de": ("imap.gmx.net:993", "mail.gmx.net:587"),
+        "gmx.net": ("imap.gmx.net:993", "mail.gmx.net:587"),
         "web.de": ("imap.web.de:993", "smtp.web.de:587"),
+        "t-online.de": ("secureimap.t-online.de:993", "securesmtp.t-online.de:465"),
+        "icloud.com": ("imap.mail.me.com:993", "smtp.mail.me.com:587"),
+        "me.com": ("imap.mail.me.com:993", "smtp.mail.me.com:587"),
+        "mac.com": ("imap.mail.me.com:993", "smtp.mail.me.com:587"),
+        "mailbox.org": ("imap.mailbox.org:993", "smtp.mailbox.org:465"),
+        "freenet.de": ("mx.freenet.de:993", "mx.freenet.de:587"),
     }
     imap, smtp = bekannte.get(
         domain, (konto.get("imap_server", ""), konto.get("smtp_server", ""))

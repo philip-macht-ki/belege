@@ -1,5 +1,5 @@
 from email.message import EmailMessage
-from belege.postfach import OrdnerPostfach, ImapPostfach
+from belege.postfach import OrdnerPostfach, ImapPostfach, _server, passwort, schluesselbund_passwort
 import pytest
 
 
@@ -37,14 +37,44 @@ def test_ordner_suchen_lesen_anhaenge_und_entwurf(repo):
 
 
 def test_imap_server_und_passwortmeldungen(repo, monkeypatch):
+    monkeypatch.setattr("belege.postfach.schluesselbund_passwort", lambda _: None)
     monkeypatch.delenv("PASSWORT_TEST", raising=False)
-    with pytest.raises(RuntimeError, match="Trag das App-Passwort"):
+    with pytest.raises(RuntimeError, match="App-Passwort"):
         ImapPostfach({"name": "test", "adresse": "a@gmail.com"})
     monkeypatch.setenv("PASSWORT_TEST", "x")
     b = ImapPostfach({"name": "test", "adresse": "a@gmx.de"})
     assert (b.imap_host, b.smtp_port) == ("imap.gmx.net", 587)
     with pytest.raises(RuntimeError, match="Microsoft-Postfächer"):
         ImapPostfach({"name": "test", "adresse": "a@outlook.com"})
+
+
+@pytest.mark.parametrize(("domain", "imap", "smtp"), [
+    ("gmx.net", "imap.gmx.net:993", "mail.gmx.net:587"),
+    ("t-online.de", "secureimap.t-online.de:993", "securesmtp.t-online.de:465"),
+    ("icloud.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
+    ("me.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
+    ("mac.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
+    ("mailbox.org", "imap.mailbox.org:993", "smtp.mailbox.org:465"),
+    ("freenet.de", "mx.freenet.de:993", "mx.freenet.de:587"),
+])
+def test_bekannte_server(domain, imap, smtp):
+    assert _server(domain, {}) == ((imap.rsplit(":", 1)[0], int(imap.rsplit(":", 1)[1])), (smtp.rsplit(":", 1)[0], int(smtp.rsplit(":", 1)[1])))
+
+
+def test_schluesselbund_vor_umgebung(monkeypatch):
+    class Antwort:
+        returncode = 0
+        stdout = "geheim\n"
+    monkeypatch.setattr("belege.postfach.subprocess.run", lambda *a, **k: Antwort())
+    monkeypatch.setenv("PASSWORT_TEST", "alt")
+    assert schluesselbund_passwort("test") == "geheim"
+    assert passwort("test") == "geheim"
+
+
+def test_passwort_faellt_auf_umgebung_zurueck(monkeypatch):
+    monkeypatch.setattr("belege.postfach.schluesselbund_passwort", lambda _: None)
+    monkeypatch.setenv("PASSWORT_TEST", "alt")
+    assert passwort("test") == "alt"
 
 
 def test_imap_entwurf_findet_special_use_drafts(repo, monkeypatch):
