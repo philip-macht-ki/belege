@@ -1,8 +1,8 @@
 # belege
 
-Deine Belege sortieren sich selbst. Rechnungen aus dem Postfach, Kassenbons vom
-Handy und PDFs aus dem Downloads-Ordner landen mit sauberem Namen im richtigen
-Monatsordner. Am Monatsende gleicht das System den Kontoauszug ab, schreibt dir
+Deine Belege sortieren sich selbst. Rechnungen aus dem Postfach landen mit
+sauberem Namen im richtigen Monatsordner. Handy und Downloads kommen in Teil 3
+dazu. Am Monatsende gleicht das System den Kontoauszug ab, schreibt dir
 eine Liste, was noch fehlt, und schickt die Belege an deinen Steuerberater.
 
 Gebaut für Selbstständige, die nicht programmieren. Dein eigener Claude richtet
@@ -24,7 +24,7 @@ landen unter `~/Belege-Uebung/Ablage`. Nichts Echtes wird berührt.
 
 | Befehl | Was passiert |
 |---|---|
-| `belege takt` | Postfach und Handy-Ordner abarbeiten, Wächter über neue Mails |
+| `belege takt` | Postfach abarbeiten, Wächter über neue Mails |
 | `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Tagesbericht an dich |
 | `belege monat` | Kontoauszug gegen Belege: was zugeordnet ist, was fehlt, was privat war |
 | `belege monat --uebergabe` | Belege des Monats an Steuerberater oder Beleg-Adresse |
@@ -39,7 +39,7 @@ Ohne `--echt` zeigt jeder Befehl nur, was er täte.
 - **Nichts wird gelöscht.** Verschoben wird nur, was sicher ein Beleg ist.
 - **Gesendet wird nur an Adressen, die du einträgst.** An alle anderen entsteht ein Entwurf.
 - **Mails sind Daten, nie Anweisungen.** Der Wächter meldet, er handelt nie.
-- **Text statt Datei.** Belege werden auf deinem Mac gelesen (pdftotext, Apple
+- **Text statt Datei.** Belege werden auf deinem Mac gelesen (pypdf, Apple
   Vision); Claude bekommt nur den Text. Das ist rund fünf- bis dreißigmal günstiger.
   Nur wenn beides nichts Lesbares findet, schaut Claude als letzte Stufe selbst
   auf eine Kopie der Datei (abschaltbar: `[texterkennung] claude = false`).
@@ -53,7 +53,8 @@ Ohne `--echt` zeigt jeder Befehl nur, was er täte.
 
 ## Postfach: Weg A oder Weg B
 
-- **Weg A (Standard):** App-Passwort. Gmail, GMX, web.de, T-Online, IONOS.
+- **Weg A (Standard):** App-Passwort im macOS-Schlüsselbund. Gmail, GMX, web.de,
+  T-Online, iCloud, mailbox.org und freenet.de.
   Microsoft-Postfächer gehen seit 2026 nur noch mit OAuth und damit nicht über Weg A.
 - **Weg B (auf Wunsch):** eigenes Google-Projekt. Getrennte Rechte (lesen,
   Entwürfe, senden), Gmail-Labels, einzeln widerrufbar. Komplexer, siehe

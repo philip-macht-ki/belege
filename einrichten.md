@@ -1,4 +1,49 @@
-# Einrichten: gib diese Datei deinem Claude
+# Einrichten: Teil 1 – Belege aus dem Postfach
+
+> Diese Fassung ersetzt für Teil 1 die folgenden älteren Modulabschnitte.
+> Teil 2 und 3 bleiben unten als spätere Themen erhalten.
+
+Hallo. Heute richten wir nur das Postfach ein: Rechnungen landen danach von
+allein in `~/Belege`. Das 2-Minuten-Video aus Lektion 0-1 ist freiwillig.
+
+Die Claude-App fragt bei einzelnen Schritten nach Erlaubnis, etwa wenn sie
+einen Ordner anlegt. Du kannst für diese Sitzung „immer erlauben“ wählen, wenn
+du das möchtest. Zuerst prüft Claude still: Mac, freien Platz, die Claude-App,
+`uv` und den Claude-Starter für den Zeitplan. Fehlt `uv`, nutzt Claude nur den
+offiziellen Installer im Benutzerordner: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+Kein Homebrew ist nötig. Danach: `uv sync`, `uv run belege einrichten-claude`
+und `uv run belege pruefen`.
+
+Claude stellt nur zwei Fragen: Mailadresse und Name des Betriebs. Bei Outlook,
+Hotmail, Live oder Microsoft 365 erklärt Claude die Weiterleitung an ein
+Google-Konto, weil dieses Postfach hier nicht direkt geht.
+
+Für das App-Passwort öffnet Claude die passende Seite: Gmail
+<https://myaccount.google.com/apppasswords> (vorher gegebenenfalls Bestätigung
+in zwei Schritten); GMX/web.de: erst IMAP in den Einstellungen einschalten,
+dann ein App-Passwort anlegen; T-Online: Passwort für E-Mail-Programme; iCloud,
+me.com und mac.com: <https://account.apple.com> → „Anmeldung und Sicherheit“ →
+„App-spezifische Passwörter“. Du erzeugst es selbst und fügst es in den
+verdeckt angezeigten Schlüsselbunddialog ein: `uv run belege anmelden
+--schluesselbund geschaeft`. Das Passwort wird nicht in einer Datei gespeichert
+oder ausgegeben. Technische Grenze: macOS übergibt es an `security` kurzzeitig
+als Programmparameter; belege protokolliert es nie.
+
+Die Ablage bleibt in Teil 1 `~/Belege`: kein Cloud-Ordner, keine Downloads,
+kein Handy-Ordner und keine zusätzliche Mac-Berechtigung. Claude macht die
+Übung, dann den Trockenlauf des echten Postfachs, fragt klar nach „Ja“, führt
+den echten Lauf aus, schaltet danach den Takt an und prüft den Bericht.
+
+Handy, Downloads, Cloud, Ablage und Fristen sind **erst Teil 3**. Dann öffnet
+Claude die Systemeinstellungen mit `open
+"x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"`.
+Die Zeitplanvorlagen starten `/bin/zsh`, das `uv run belege` ausführt; Claude
+erklärt vor Ort, welchem tatsächlich gestarteten Programm der Schalter gilt,
+du setzt ihn selbst, dann folgt ein harmloser Lesetest. Das Verhalten auf einem
+frischen Mac wird vorher geprüft. Monat, Jahr und Steuerberater sind **erst
+Teil 2**; zusätzliche Postfachwege und Google-Projekte **erst Teil 4**.
+
+## Ältere Detailanleitung für Teil 2–8
 
 Du bist der Claude einer selbstständigen Person, die nicht programmiert. Sie
 hat dir den Link zu diesem Repo gegeben oder den Ordner geöffnet. Du richtest
