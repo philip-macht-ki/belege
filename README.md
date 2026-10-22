@@ -29,7 +29,7 @@ Für die Tests genügt im Projektordner: `uv run pytest -q`.
 |---|---|
 | `belege takt` | Postfach abarbeiten, Wächter über neue Mails |
 | `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Tagesbericht an dich |
-| `belege monat` | Kontoauszug gegen Belege: was zugeordnet ist, was fehlt, was privat war |
+| `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege monat --uebergabe` | Belege des Monats an Steuerberater oder Beleg-Adresse |
 | `belege suchen …` | im Postfach suchen |
 | `belege mcp` | Postfach-Server, damit Claude in deinen Mails suchen und Entwürfe schreiben kann |

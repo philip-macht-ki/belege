@@ -103,6 +103,8 @@ Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 
 Kontoauszüge, Monatsabschluss, Steuerberater und Jahresübersicht richten wir
 erst in Teil 2 ein.
+`belege monat` sucht dann fehlende Belege selbst in Postfach, Downloads,
+Eingängen und Scan-Ordner und gleicht Mahnungen gegen das Konto ab.
 
 ## Erst in Teil 3: Handy, Downloads, Cloud und Ablage
 
@@ -118,6 +120,12 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
 Claude erklärt dort, welchem gestarteten Programm der Schalter gilt, du setzt
 ihn selbst, danach folgt ein harmloser Lesetest. Das Verhalten auf einem frischen
 Mac wird vor dem Einsatz noch einmal geprüft.
+
+Papierpost (optional): **Frag**, ob Briefe auf Papier kommen. Bei wenigen Briefen genügt ein Foto
+wie bei einem Kassenbon im Handy-Eingang. Bei vielen oder regelmäßigen Briefen
+nutzt du einen Scan-Dienst (zum Beispiel Dropscan oder Caya, kostenpflichtig)
+oder eine Scan-App. Deren Zielordner kommt unter `[quellen]` als `scan_ordner`
+in `konfig/belege.toml`; danach läuft `uv run belege pruefen`.
 
 ## Erst in Teil 4: weitere Postfachwege
 

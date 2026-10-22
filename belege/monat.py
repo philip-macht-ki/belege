@@ -17,6 +17,7 @@ BEKANNTE = {
     "name": ("beguenstigter", "zahlungspflichtiger", "name", "empfänger", "empfaenger"),
     "zweck": ("verwendungszweck", "buchungstext"),
     "soll_haben": ("soll/haben", "soll haben", "soll", "haben"),
+    "originalbetrag": ("originalbetrag", "betrag in fremdwaehrung", "fremdbetrag"),
 }
 
 
@@ -96,7 +97,7 @@ def _spalten(kopf: list[str]) -> dict[str, str | None]:
     }
 
 
-def buchungen(datei: Path, monat: str) -> list[dict]:
+def buchungen(datei: Path, monat: str | None) -> list[dict]:
     """Liest einen Auszug robust und gibt nur Buchungen des gewünschten Monats zurück."""
     roh = next(
         (
@@ -142,13 +143,15 @@ def buchungen(datei: Path, monat: str) -> list[dict]:
             )
         except (KeyError, ValueError):
             continue
-        if tag.strftime("%Y-%m") == monat:
+        if monat is None or tag.strftime("%Y-%m") == monat:
             ergebnis.append(
                 {
                     "datum": tag.isoformat(),
                     "betrag": menge,
                     "name": zeile[spalten["name"]].strip(),
                     "zweck": zeile.get(spalten.get("zweck") or "", "").strip(),
+                    "originalbetrag": _betrag(zeile[spalten["originalbetrag"]])
+                    if spalten.get("originalbetrag") and zeile.get(spalten["originalbetrag"], "").strip() else None,
                 }
             )
     return ergebnis
@@ -201,14 +204,60 @@ def _auszug(args, monat: str) -> Path | None:
     return max(treffer, key=lambda p: p.stat().st_mtime) if treffer else None
 
 
+def _lieferanten(beleg: dict) -> list[str]:
+    """Gibt Lieferant und seine bewusst gepflegten Aliasnamen zurück."""
+    name = str(beleg.get("lieferant", ""))
+    aliase = kern.konfig("regeln").get("monat", {}).get("aliase", {})
+    ergebnis = [name]
+    for hauptname, werte in aliase.items():
+        if _normal(hauptname) == _normal(name):
+            ergebnis.extend(str(wert) for wert in werte)
+    iban = beleg.get("gegen_iban") or beleg.get("iban")
+    if iban:
+        ergebnis.append(str(iban))
+    return ergebnis
+
+
 def _gleicher_name(beleg: dict, buchung: dict) -> bool:
-    """Prüft ein aussagekräftiges gemeinsames Wort in Lieferant und Buchung."""
+    """Ein Betrag genügt nie: Lieferant, Alias oder Gegen-IBAN müssen vorkommen."""
     suchraum = _normal(f"{buchung['name']} {buchung['zweck']}").split()
-    return any(
-        wort in suchraum
-        for wort in _normal(str(beleg.get("lieferant", ""))).split()
-        if len(wort) >= 4
-    )
+    for name in _lieferanten(beleg):
+        woerter = [wort for wort in _normal(name).split() if len(wort) >= 3]
+        if woerter and any(wort in suchraum for wort in woerter):
+            return True
+    return False
+
+
+def _referenz(beleg: dict) -> str:
+    """Nimmt eine Rechnungsnummer aus dem Index oder dem Dateinamen, nie Daten."""
+    wert = str(beleg.get("rechnungsnummer") or beleg.get("nummer") or Path(str(beleg.get("pfad", ""))).stem)
+    treffer = re.findall(r"[A-Za-z]*[0-9][A-Za-z0-9-]*", wert)
+    for nummer in sorted(treffer, key=len, reverse=True):
+        ziffern = re.sub(r"\D", "", nummer)
+        if re.fullmatch(r"20\d{2}[-.]?\d{2}[-.]?\d{2}", nummer) or re.fullmatch(r"0+\d", ziffern):
+            continue
+        if len(nummer) >= 4:
+            return nummer
+    return ""
+
+
+def _beleg_betrag(beleg: dict) -> float | None:
+    """Originalbetrag ist bei Fremdwährung maßgeblich, sonst der Euro-Betrag."""
+    wert = beleg.get("originalbetrag") if beleg.get("originalbetrag") is not None else beleg.get("betrag")
+    try:
+        return float(wert)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sonderart(buchung: dict) -> str | None:
+    """Kennzeichnet Zahlungen, deren Nachweis kein normaler Beleg ist."""
+    cfg = kern.konfig("regeln").get("monat", {})
+    raum = _normal(f"{buchung['name']} {buchung['zweck']}")
+    for art, status in (("lohn", "lohn"), ("abgaben", "abgabe"), ("bank", "bank"), ("abschlag", "abschlag")):
+        if any(_normal(str(muster)) in raum for muster in cfg.get(art, [])):
+            return status
+    return None
 
 
 def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
@@ -225,6 +274,11 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             eintrag["status"] = "ohne_beleg"
             ergebnis.append(eintrag)
             continue
+        sonder = _sonderart(buchung)
+        if sonder:
+            eintrag["status"] = sonder
+            ergebnis.append(eintrag)
+            continue
         art = "eingang" if buchung["betrag"] < 0 else "ausgang"
         tag = date.fromisoformat(buchung["datum"])
         kandidaten = [
@@ -234,13 +288,21 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             and beleg.get("status") == "abgelegt"
             and beleg.get("bereich") == "betrieb"
             and beleg.get("art") == art
-            and beleg.get("betrag") is not None
-            and abs(abs(buchung["betrag"]) - float(beleg["betrag"])) <= 0.01
+            and _beleg_betrag(beleg) is not None
+            and abs(abs(buchung.get("originalbetrag") if buchung.get("originalbetrag") is not None else buchung["betrag"]) - _beleg_betrag(beleg)) <= 0.01
             and _im_fenster(beleg.get("datum"), tag)
         ]
         passende = [
             (sha, beleg) for sha, beleg in kandidaten if _gleicher_name(beleg, buchung)
         ]
+        # Rechnung und Quittung derselben Zahlung sind ein Beleg-Paar. Die
+        # Rechnung bleibt der sichtbare Hauptbeleg.
+        rechnungen = [(sha, beleg) for sha, beleg in passende if not _ist_quittung(beleg)]
+        quittungen = [(sha, beleg) for sha, beleg in passende if _ist_quittung(beleg)]
+        if len(rechnungen) == 1 and quittungen:
+            passende = rechnungen
+            kandidaten = rechnungen
+        referenz = [(sha, beleg) for sha, beleg in passende if (nummer := _referenz(beleg)) and nummer.lower() in buchung.get("zweck", "").lower()]
         privat = [
             beleg for beleg in index.values()
             if beleg.get("bereich") == "privat" and beleg.get("status") == "abgelegt"
@@ -248,21 +310,75 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             and abs(abs(buchung["betrag"]) - float(beleg["betrag"])) <= 0.01
             and _im_fenster(beleg.get("datum"), tag) and _gleicher_name(beleg, buchung)
         ]
-        if not kandidaten and privat:
+        if referenz and len(referenz) == 1:
+            eintrag["status"] = "zugeordnet"
+            eintrag["beleg"] = referenz[0][0]
+            benutzt.add(referenz[0][0])
+        elif not kandidaten and privat:
             # Vom Geschäftskonto bezahlt, Beleg liegt unter Privat: für den Steuerberater eine
             # Privatentnahme, kein fehlender Beleg.
             eintrag["status"] = "privat"
             eintrag["beleg_pfad"] = privat[0].get("pfad")
-        elif len(passende) == 1 and len(kandidaten) == 1:
+        elif len(passende) == 1 and (len(kandidaten) == 1 or buchung.get("originalbetrag") is not None):
             eintrag["status"] = "zugeordnet"
             eintrag["beleg"] = passende[0][0]
             benutzt.add(passende[0][0])
         elif kandidaten:
             eintrag["status"] = "pruefen"
         else:
-            eintrag["status"] = "fehlt"
+            # Ohne Originalbetrag bleibt Fremdwährung nur ein Hinweis, niemals Zuordnung.
+            fremd = any(
+                str(beleg.get("waehrung", "EUR")) != "EUR"
+                and beleg.get("betrag") is not None
+                and abs(abs(buchung["betrag"]) - float(beleg["betrag"])) <= abs(float(beleg["betrag"])) * .03
+                and _gleicher_name(beleg, buchung)
+                for beleg in index.values()
+            )
+            eintrag["status"] = "pruefen" if fremd else "fehlt"
         ergebnis.append(eintrag)
+    _sammelrechnungen(ergebnis, index, benutzt)
+    _dauerbelege(ergebnis)
     return ergebnis
+
+
+def _ist_quittung(beleg: dict) -> bool:
+    """Erkennt Zahlungsbestätigungen, die zu einer Rechnung gehören können."""
+    raum = " ".join(str(beleg.get(name, "")) for name in ("titel", "beschreibung", "text", "pfad"))
+    return bool(re.search(r"quittung|receipt|zahlungsbestätigung|zahlungsbestaetigung", raum, re.I))
+
+
+def _sammelrechnungen(ergebnis: list[dict], index: dict, benutzt: set[str]) -> None:
+    """Ordnet bis zu sechs Teilzahlungen einer passenden Sammelrechnung zu."""
+    offen = [x for x in ergebnis if x["status"] in {"fehlt", "pruefen"}]
+    for sha, beleg in index.items():
+        if sha in benutzt or beleg.get("status") != "abgelegt" or _beleg_betrag(beleg) is None:
+            continue
+        passende = [x for x in offen if _gleicher_name(beleg, x) and _im_fenster(beleg.get("datum"), date.fromisoformat(x["datum"]))]
+        for anzahl in range(2, min(6, len(passende)) + 1):
+            from itertools import combinations
+            for gruppe in combinations(passende, anzahl):
+                if abs(sum(abs(x["betrag"]) for x in gruppe) - _beleg_betrag(beleg)) <= 0.01:
+                    for x in gruppe:
+                        x["status"], x["beleg"] = "zugeordnet (Sammelrechnung)", sha
+                    benutzt.add(sha)
+                    break
+
+
+def _dauerbelege(ergebnis: list[dict]) -> None:
+    """Findet Verträge in der Dokumentenablage, Kündigungen sind kein Nachweis."""
+    dokumente = kern.lesen(kern.pfad("arbeit", "dokumente.json"), {}) or {}
+    for buchung in ergebnis:
+        if buchung["status"] != "fehlt":
+            continue
+        for eintrag in dokumente.values():
+            raum = f"{eintrag.get('gegenueber', '')} {eintrag.get('titel', '')} {eintrag.get('text', '')} {eintrag.get('pfad', '')}"
+            if "kündigung" in _normal(raum) or "kuendigung" in _normal(raum):
+                continue
+            probe = {"lieferant": eintrag.get("gegenueber", "")}
+            if eintrag.get("art") == "vertrag" and _gleicher_name(probe, buchung):
+                buchung["status"] = "zugeordnet (Dauerbeleg)"
+                buchung["beleg_pfad"] = eintrag.get("pfad")
+                break
 
 
 def _im_fenster(wert: str | None, tag: date) -> bool:
@@ -304,12 +420,27 @@ def offene_posten_text(monat: str, ergebnis: list[dict]) -> str:
     if privat:
         teile.append("Vom Geschäftskonto bezahlt, der Beleg ist privat (vermutlich Privatentnahme):\n"
                      + "\n".join(_zeile(x) for x in privat))
+    erklaerungen = {
+        "lohn": "Lohnabrechnung nötig, sie kommt vom Lohnbüro:",
+        "abgabe": "Bescheid nötig:",
+        "bank": "Kontoauszug genügt:",
+        "abschlag": "Abschlagsplan oder Jahresrechnung nötig:",
+    }
+    for status, text in erklaerungen.items():
+        posten = [x for x in ergebnis if x["status"] == status]
+        if posten:
+            teile.append(text + "\n" + "\n".join(_zeile(x) for x in posten))
+    gefunden = [x for x in ergebnis if x["status"] == "gefunden"]
+    if gefunden:
+        teile.append("Liegt schon woanders, bitte ablegen:\n" + "\n".join(
+            _zeile(x) + f" → {x.get('fund', '')}" for x in gefunden
+        ))
     if not teile:
         teile.append(f"Zu allen Zahlungen im {monat[5:]}/{monat[:4]} liegt ein Beleg vor.")
     return "\n\n".join(teile)
 
 
-def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict]) -> None:
+def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen: list[dict] | None = None) -> None:
     """Schreibt die lesbaren Abgleichdateien nach arbeit/monat/<JJJJ-MM>/."""
     ordner.mkdir(parents=True, exist_ok=True)
     offen = [x for x in ergebnis if x["status"] == "fehlt"]
@@ -344,7 +475,100 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict]) -> None:
     if privat:
         zeilen += ["", "Vom Geschäftskonto bezahlt, Beleg privat:"] + [_zeile(x) for x in privat]
     (ordner / "klaerung.md").write_text("\n".join(zeilen) + "\n", encoding="utf-8")
+    if mahnungen:
+        (ordner / "mahnungen.md").write_text("# Mahnungen\n\n" + "\n".join(
+            f"- {x['glaeubiger']}: {x['status']} ({x['pfad']})" for x in mahnungen
+        ) + "\n", encoding="utf-8")
     kern.schreiben(ordner / "abgleich.json", ergebnis)
+
+
+def _fund_passt(datei: Path, buchung: dict) -> bool:
+    """Prüft Nachsuche konservativ über Betrag und Lieferantenbezug im Fund."""
+    try:
+        text = datei.read_bytes().decode("latin-1", errors="ignore") + " " + datei.name
+    except OSError:
+        return False
+    # Der Buchungsname muss im Fund auftauchen. Ohne sichere Lieferantenangabe
+    # wird ein gleich hoher Betrag nie als Fund gemeldet.
+    name = _normal(buchung["name"])
+    if not any(wort in _normal(text).split() for wort in name.split() if len(wort) >= 4):
+        return False
+    zahlen = re.findall(r"\d+(?:[.,]\d{2})", text)
+    return any(abs(_betrag(wert) - abs(buchung["betrag"])) <= .01 for wert in zahlen)
+
+
+def _nachsuche(daten: list[dict], args) -> None:
+    """Sucht fehlende Belege lesend in allen bekannten Eingängen.
+
+    Ein einzelner Fund darf mit --echt durch den normalen Ablageweg laufen.
+    """
+    from . import quellen
+    cfg = kern.konfig("belege")
+    funde = list(quellen.downloads_funde() or []) + list(quellen.handy_funde() or []) + list(quellen.scan_funde() or [])
+    eingang_wert = str(cfg.get("dokumente", {}).get("eingang", "")).strip()
+    eingang = kern.erweitert(eingang_wert) if eingang_wert else None
+    if eingang and eingang.is_dir():
+        from .typen import Fund
+        for datei in eingang.iterdir():
+            if datei.is_file():
+                funde.append(Fund(datei, "dokumente-eingang", datei.name, date.fromtimestamp(datei.stat().st_mtime)))
+    for konto in cfg.get("konto", []):
+        if not konto.get("belege", True):
+            continue
+        try:
+            funde.extend(quellen.postfach_funde(konto["name"], 55) or [])
+        except Exception:  # ein nicht eingerichtetes Postfach soll Monatsende nicht bremsen
+            continue
+    for buchung in (x for x in daten if x["status"] == "fehlt"):
+        passende = [fund for fund in funde if _fund_passt(fund.datei, buchung)]
+        if not passende:
+            continue
+        if len(passende) > 1:
+            buchung["status"] = "pruefen"
+            buchung["hinweis"] = "Nachsuche mehrdeutig: mehrere passende Funde"
+            continue
+        fund = passende[0]
+        buchung["status"] = "gefunden"
+        buchung["fund"] = str(fund.mail.get("betreff") if fund.mail else fund.datei)
+        buchung["quelle"] = fund.quelle
+        if kern.echt(args):
+            from .verarbeiten import verarbeite
+            verarbeite(fund, True)
+
+
+def _mahnungen() -> list[dict]:
+    """Gleicht abgelegte Mahnungen mit allen verfügbaren Kontoauszügen ab."""
+    dokumente = kern.lesen(kern.pfad("arbeit", "dokumente.json"), {}) or {}
+    auszug_ordner = kern.erweitert(kern.konfig("belege").get("monat", {}).get("auszuege", ""))
+    alle = []
+    for csv_datei in auszug_ordner.glob("*.csv"):
+        # Mahnungen dürfen alte Zahlungen suchen, nicht nur den gerade
+        # abgeglichenen Monat.
+        try:
+            alle.extend(buchungen(csv_datei, None))
+        except Exception:
+            continue
+    ergebnis = []
+    for eintrag in dokumente.values():
+        text = f"{eintrag.get('titel', '')} {eintrag.get('text', '')}"
+        if not re.search(r"mahnung|zahlungserinnerung|letzte aufforderung", text, re.I):
+            continue
+        try:
+            tag = date.fromisoformat(str(eintrag.get("datum")))
+        except ValueError:
+            continue
+        glaeubiger = str(eintrag.get("gegenueber", ""))
+        betraege = [float(w) for w in re.findall(r"\d+(?:[.,]\d{2})", text) for w in [_betrag(w)]]
+        letzter_auszug = max((date.fromisoformat(b["datum"]) for b in alle), default=None)
+        if letzter_auszug is None or letzter_auszug < tag:
+            ergebnis.append({"glaeubiger": glaeubiger, "status": "nicht prüfbar, Auszug fehlt", "pfad": eintrag.get("pfad", "")})
+            continue
+        passende = [b for b in alle if tag - timedelta(days=60) <= date.fromisoformat(b["datum"]) <= tag
+                    and _gleicher_name({"lieferant": glaeubiger}, b)
+                    and (not betraege or any(abs(abs(b["betrag"]) - wert) <= .01 for wert in betraege))]
+        status = f"bezahlt am {_tag(passende[0]['datum'])}" if passende else "offen"
+        ergebnis.append({"glaeubiger": glaeubiger, "status": status, "pfad": eintrag.get("pfad", "")})
+    return ergebnis
 
 
 def _als_pdf(bild: Path, ziel: Path) -> Path:
@@ -485,9 +709,11 @@ def befehl(args) -> int:
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     daten = abgleichen(buchungen(auszug, monat), index)
+    _nachsuche(daten, args)
+    mahnungen = _mahnungen()
     ziel = kern.pfad("arbeit", "monat", monat)
-    _schreibe_ausgaben(ziel, monat, daten)
-    zugeordnet = sum(x["status"] == "zugeordnet" for x in daten)
+    _schreibe_ausgaben(ziel, monat, daten, mahnungen)
+    zugeordnet = sum(x["status"].startswith("zugeordnet") for x in daten)
     pruefen = sum(x["status"] == "pruefen" for x in daten)
     fehlt = [x for x in daten if x["status"] == "fehlt"]
     fehlbetrag = f"{sum(abs(x['betrag']) for x in fehlt):.2f}".replace(".", ",")
