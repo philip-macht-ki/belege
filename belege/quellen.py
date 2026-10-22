@@ -134,14 +134,21 @@ def scan_funde():
     ordner = kern.erweitert(wert)
     if not ordner.exists():
         return
+    gesehen = _gesehen()
+    bekannte = set(gesehen.get("scan_sha", []))
     for datei in sorted(ordner.iterdir()):
         if not _erlaubt(datei):
             continue
         sha = _sha(datei)
+        if sha in bekannte:
+            continue
         ziel = kern.pfad("arbeit", "tmp", "scan", f"{sha}{datei.suffix.lower()}")
         ziel.parent.mkdir(parents=True, exist_ok=True)
         if not ziel.exists():
             ziel.write_bytes(datei.read_bytes())
+        bekannte.add(sha)
+        gesehen["scan_sha"] = sorted(bekannte)
+        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
         yield Fund(ziel, "scan", datei.name, date.fromtimestamp(datei.stat().st_mtime))
 
 

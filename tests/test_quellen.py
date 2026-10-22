@@ -37,3 +37,13 @@ def test_scan_funde_kopiert_papierpost_und_laesst_original(repo):
     toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
     fund = list(quellen.scan_funde())[0]
     assert original.exists() and fund.datei != original and fund.datei.read_bytes() == original.read_bytes()
+
+
+def test_scan_funde_liefert_sha_nur_einmal(repo):
+    scan = repo / "scan"
+    scan.mkdir()
+    (scan / "brief.pdf").write_bytes(b"Papierpost")
+    toml = repo / "konfig/belege.toml"
+    toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
+    assert len(list(quellen.scan_funde())) == 1
+    assert list(quellen.scan_funde()) == []

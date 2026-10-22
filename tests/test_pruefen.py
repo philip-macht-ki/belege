@@ -56,3 +56,12 @@ def test_rechner_sperre_und_doppelordner(repo, capsys, monkeypatch):
 def test_ohne_sperre_gelb(repo, capsys):
     pruefen.befehl(Namespace())
     assert "GELB: Rechner-Sperre nicht gesetzt" in capsys.readouterr().out
+
+
+def test_papierpost_leer_ist_ok_und_fehlender_ordner_rot(repo, capsys):
+    pruefen.befehl(Namespace())
+    assert "GRUEN: Papierpost: keine Papierpost eingetragen" in capsys.readouterr().out
+    konfig = repo / "konfig/belege.toml"
+    konfig.write_text(konfig.read_text().replace('scan_ordner = ""', 'scan_ordner = "/nicht/vorhanden"'))
+    assert pruefen.befehl(Namespace()) == 1
+    assert "ROT: Papierpost-Ordner fehlt" in capsys.readouterr().out

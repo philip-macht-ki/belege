@@ -521,7 +521,11 @@ def _nachsuche(daten: list[dict], args) -> None:
             continue
     for buchung in (x for x in daten if x["status"] == "fehlt"):
         passende = [fund for fund in funde if _fund_passt(fund.datei, buchung)]
-        if len(passende) != 1:
+        if not passende:
+            continue
+        if len(passende) > 1:
+            buchung["status"] = "pruefen"
+            buchung["hinweis"] = "Nachsuche mehrdeutig: mehrere passende Funde"
             continue
         fund = passende[0]
         buchung["status"] = "gefunden"
