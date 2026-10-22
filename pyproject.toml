@@ -15,6 +15,7 @@ dependencies = [
     "ocrmac>=1.0; sys_platform == 'darwin'",
     "pyobjc-framework-Vision>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
+    "pypdf>=6.19.0",
 ]
 
 # Alles oben ist fest dabei: `uv run` entfernt bei jedem Aufruf Pakete, die nur

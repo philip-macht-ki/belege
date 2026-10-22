@@ -26,6 +26,23 @@ def test_pdftotext_liest_und_kuerzt(repo):
     assert 100 <= len(t.text) <= 6000
 
 
+def test_pypdf_liest_text_pdf_ohne_poppler(repo, monkeypatch):
+    p = repo / "rechnung-ohne-poppler.pdf"
+    _pdf(p, "Rechnung Studio Beispiel Betrag 12,50 EUR mit ausreichend lesbarem Text. " * 20)
+    monkeypatch.setattr(text, "_pdftotext", lambda _: "")
+    erkannt = auslesen(p)
+    assert erkannt.stufe == "pypdf"
+    assert "Rechnung" in erkannt.text
+
+
+@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Quartz gibt es nur unter macOS")
+def test_quartz_rendert_pdf_ohne_poppler(repo):
+    p = repo / "quartz.pdf"
+    _pdf(p, "Rechnung Studio Beispiel")
+    bilder = text._pdf_bilder_quartz(p, repo)
+    assert len(bilder) == 1 and bilder[0].is_file()
+
+
 def test_fehlerquote_erkennt_zeichensalat():
     assert fehlerquote("Eine normale Rechnung mit klaren Worten und Betrag 12,50 EUR.") == 0
     assert fehlerquote("RecHnung Re5hnung ### normale Worte") > .10
