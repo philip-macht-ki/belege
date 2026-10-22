@@ -25,3 +25,15 @@ def test_mail_erledigt_erst_mit_echt(repo):
     quellen.mail_erledigt("geschaeft", "mail-1", True)
     daten = json.loads((repo / "arbeit" / "gesehen.json").read_text())
     assert daten["geschaeft"]["mails"] == ["mail-1"]
+
+
+def test_scan_funde_kopiert_papierpost_und_laesst_original(repo):
+    """I: Scan-Dienste behalten ihr Original; verarbeitet wird eine Arbeitskopie."""
+    scan = repo / "scan"
+    scan.mkdir()
+    original = scan / "brief.pdf"
+    original.write_bytes(b"Papierpost")
+    toml = repo / "konfig/belege.toml"
+    toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
+    fund = list(quellen.scan_funde())[0]
+    assert original.exists() and fund.datei != original and fund.datei.read_bytes() == original.read_bytes()

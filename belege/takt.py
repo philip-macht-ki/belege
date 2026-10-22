@@ -94,8 +94,9 @@ def befehl_postfach(args) -> int:
 
 
 def befehl_handy(args) -> int:
-    """Nur den Handy-Ordner abarbeiten."""
-    return _einzelschritt("handy", args)
+    """Handy- und Papier-Eingang abarbeiten."""
+    code = _einzelschritt("handy", args)
+    return max(code, _einzelschritt("scan", args))
 
 
 def befehl_downloads(args) -> int:
@@ -134,8 +135,8 @@ def _lauf(args, schritte: tuple[str, ...], sperre: str) -> int:
 
 
 def befehl(args) -> int:
-    """`belege takt`: Postfach, Handy-Ordner, Wächter."""
-    return _lauf(args, ("postfach", "handy", "waechter"), "takt")
+    """`belege takt`: Postfach, Handy, Papierpost und Wächter."""
+    return _lauf(args, ("postfach", "handy", "scan", "waechter"), "takt")
 
 
 def befehl_tag(args) -> int:

@@ -119,6 +119,17 @@ Claude erklärt dort, welchem gestarteten Programm der Schalter gilt, du setzt
 ihn selbst, danach folgt ein harmloser Lesetest. Das Verhalten auf einem frischen
 Mac wird vor dem Einsatz noch einmal geprüft.
 
+Optional: Frag, ob Briefe auf Papier kommen. Bei wenigen Briefen genügt ein Foto
+wie bei einem Kassenbon im Handy-Eingang. Bei vielen oder regelmäßigen Briefen
+nutzt du einen Scan-Dienst (zum Beispiel Dropscan oder Caya, kostenpflichtig)
+oder eine Scan-App. Deren Zielordner kommt unter `[quellen]` als `scan_ordner`
+in `konfig/belege.toml`; danach läuft `uv run belege pruefen`.
+
+## Teil 5: Monatsende
+
+`belege monat` sucht fehlende Belege selbst in Postfach, Downloads, Eingängen
+und Scan-Ordnern und gleicht Mahnungen gegen das Konto ab.
+
 ## Erst in Teil 4: weitere Postfachwege
 
 Eigene Google-Projekte, weitere Konten und der Postfach-Assistent gehören zu

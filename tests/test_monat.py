@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from datetime import timedelta
 
 from belege import kern, monat
@@ -132,3 +133,56 @@ def test_anfragen_sind_immer_entwuerfe(repo, monkeypatch):
     monat.befehl(_args(monat=monat_wert, anfragen=True, echt=True))
     assert len(entwuerfe) == 1 and "34,00" in entwuerfe[0][1]
     assert gesendet == []
+
+
+def test_monat_praezision_alias_referenz_und_fremdwaehrung(repo):
+    """A-C: Name bleibt Pflicht, Alias und Rechnungsnummer machen eindeutig."""
+    tag = kern.jetzt().date().isoformat()
+    index = {
+        "falsch": {"datum": tag, "betrag": 10, "lieferant": "Anderer", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+        "richtig": {"datum": tag, "betrag": 10, "lieferant": "Pixelwerk", "rechnungsnummer": "RE-4711", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+        "usd": {"datum": tag, "betrag": 9.2, "originalbetrag": 10, "lieferant": "Dollar Dienst", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+    }
+    daten = monat.abgleichen([
+        {"datum": tag, "betrag": -10, "name": "Fremde Firma", "zweck": "RE-4711"},
+        {"datum": tag, "betrag": -10, "name": "PXW", "zweck": "RE-4711"},
+        {"datum": tag, "betrag": -9.2, "originalbetrag": -10, "name": "Dollar Dienst", "zweck": ""},
+    ], index)
+    assert [x["status"] for x in daten] == ["pruefen", "zugeordnet", "zugeordnet"]
+
+
+def test_monat_belegpaar_sammelrechnung_dauerbeleg_und_sonderarten(repo):
+    """D-G: Paare, Teilzahlungen, Verträge und besondere Nachweise."""
+    tag = kern.jetzt().date().isoformat()
+    kern.schreiben(repo / "arbeit/dokumente.json", {
+        "vertrag": {"art": "vertrag", "gegenueber": "Mietwerk", "titel": "Mietvertrag", "pfad": "Dokumente/Vertrag/Mietwerk.pdf"},
+    })
+    index = {
+        "rechnung": {"datum": tag, "betrag": 20, "lieferant": "Druckwerk", "beschreibung": "Rechnung", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+        "quittung": {"datum": tag, "betrag": 20, "lieferant": "Druckwerk", "beschreibung": "Receipt", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+        "sammel": {"datum": tag, "betrag": 30, "lieferant": "Abohaus", "art": "eingang", "bereich": "betrieb", "status": "abgelegt"},
+    }
+    daten = monat.abgleichen([
+        {"datum": tag, "betrag": -20, "name": "Druckwerk", "zweck": ""},
+        {"datum": tag, "betrag": -10, "name": "Abohaus", "zweck": "Teil 1"},
+        {"datum": tag, "betrag": -20, "name": "Abohaus", "zweck": "Teil 2"},
+        {"datum": tag, "betrag": -50, "name": "Mietwerk", "zweck": "Miete"},
+        {"datum": tag, "betrag": -3, "name": "Bank", "zweck": "Kontoführung"},
+    ], index)
+    assert [x["status"] for x in daten] == ["zugeordnet", "zugeordnet (Sammelrechnung)", "zugeordnet (Sammelrechnung)", "zugeordnet (Dauerbeleg)", "bank"]
+
+
+def test_monat_nachsuche_und_mahnung(repo):
+    """H und J: Fund bleibt trocken, eine Mahnung wird gegen alle CSV geprüft."""
+    fund = repo / "downloads" / "pixelwerk.pdf"
+    fund.write_text("Pixelwerk Rechnung 12,00", encoding="utf-8")
+    alt = kern.jetzt().timestamp() - 700
+    os.utime(fund, (alt, alt))
+    daten = [{"datum": kern.jetzt().date().isoformat(), "betrag": -12, "name": "Pixelwerk", "zweck": "", "status": "fehlt"}]
+    monat._nachsuche(daten, _args())
+    assert daten[0]["status"] == "gefunden" and fund.exists()
+    monat_wert = kern.jetzt().strftime("%Y-%m")
+    (repo / "auszuege" / "mahnung.csv").write_text(
+        f"Datum;Name;Betrag\n{kern.jetzt():%d.%m.%Y};Pixelwerk;-12,00\n", encoding="utf-8")
+    kern.schreiben(repo / "arbeit/dokumente.json", {"m": {"datum": kern.jetzt().date().isoformat(), "gegenueber": "Pixelwerk", "titel": "Mahnung", "text": "Zahlungserinnerung 12,00", "pfad": "Dokumente/Mahnung.pdf"}})
+    assert monat._mahnungen()[0]["status"].startswith("bezahlt am")

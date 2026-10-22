@@ -244,6 +244,13 @@ def befehl(args) -> int:
                 f"{label} vorhanden" if ok else f"{label} fehlt",
                 "Ordner anlegen oder Pfad in konfig/belege.toml korrigieren.",
             )
+        scan = str(q.get("scan_ordner", "")).strip()
+        if not scan:
+            z("GRUEN", "Papierpost: keine Papierpost eingetragen")
+        else:
+            ok = Path(scan).expanduser().exists()
+            z("GRUEN" if ok else "ROT", "Papierpost-Ordner vorhanden" if ok else "Papierpost-Ordner fehlt",
+              "Pfad in konfig/belege.toml korrigieren oder leer lassen.")
     except Exception as e:
         z("GELB", f"Quellen nicht prüfbar: {e}")
     try:

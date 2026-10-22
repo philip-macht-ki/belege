@@ -292,6 +292,9 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
   Namenstreffer → `zugeordnet`; ein Kandidat ohne Namenstreffer oder mehrere
   → `pruefen`; keiner → `fehlt`. Ein Beleg wird höchstens einer Buchung
   zugeordnet.
+- Der Monatsabgleich verlangt immer einen Lieferantenbezug (Name, gepflegter
+  Alias oder Gegen-IBAN), sucht fehlende Belege zusätzlich lesend in Postfach,
+  Downloads, Eingängen und Papier-Scans und meldet Mahnungen mit Kontotreffern.
 - Ausgaben: `fehlt_noch.csv` (Datum, Betrag, Name, Verwendungszweck,
   vermuteter Lieferant), `fehlt_noch.md`, `pruefen.md`, `klaerung.md` (je
   offene Buchung eine Zeile „Was ist das?“ zum Ausfüllen, für den

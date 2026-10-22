@@ -17,3 +17,8 @@ domains = ["stripe.com", "paypal.com", "paypal.de", "paddle.com", "lemonsqueezy.
 [monat]
 # Buchungen, zu denen es keinen Beleg gibt.
 ohne_beleg = ["Finanzamt", "Gehalt", "Lohn", "Umbuchung", "Privatentnahme", "Sparen", "Tilgung"]
+aliase = { "Pixelwerk" = ["PXW", "Pixelwerk Software"] }
+lohn = ["Gehalt", "Lohn"]
+abgaben = ["Finanzamt", "Krankenkasse", "AOK", "Berufsgenossenschaft", "Gemeinde", "Stadtkasse"]
+bank = ["Kontoführung", "Entgelt", "Zinsen"]
+abschlag = ["Abschlag"]
