@@ -18,11 +18,12 @@ dependencies = [
     "pypdf>=6.19.0",
 ]
 
-# Alles oben ist fest dabei: `uv run` entfernt bei jedem Aufruf Pakete, die nur
-# über --extra kamen. Ein Postfach-Server, der nach dem nächsten Lauf fehlt,
-# versteht niemand.
-[project.optional-dependencies]
+# `uv run pytest` funktioniert ohne Zusatzschalter.
+[dependency-groups]
 dev = ["pytest>=8"]
+
+[tool.uv]
+default-groups = ["dev"]
 
 [project.scripts]
 belege = "belege.cli:main"

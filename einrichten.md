@@ -1,7 +1,10 @@
-# Belege einrichten – Teil 1
+# Belege einrichten Teil 1
 
 Hallo. Heute richten wir nur das Postfach ein: Rechnungen landen danach von
 allein in `~/Belege`. Das kurze Video aus Lektion 0-1 ist freiwillig.
+
+Das Projekt liegt in `~/Projekte/belege`, nicht in Desktop oder Documents. So
+braucht Claude keine zusätzliche Mac-Berechtigung für den Projektordner.
 
 Die Claude-App fragt bei einzelnen Schritten nach Erlaubnis, etwa wenn sie
 einen Ordner anlegt. Du kannst für diese Sitzung „immer erlauben“ wählen, wenn

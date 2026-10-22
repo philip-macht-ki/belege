@@ -57,7 +57,7 @@ dependencies = [
     { name = "requests" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
 ]
@@ -75,10 +75,11 @@ requires-dist = [
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10" },
     { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'", specifier = ">=10" },
     { name = "pypdf", specifier = ">=6.19.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "requests", specifier = ">=2.31" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "certifi"

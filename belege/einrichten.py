@@ -29,7 +29,7 @@ if [ -d "$basis" ]; then
     if [ -n "$kandidat" ]; then
       exec "$kandidat" "$@"
     fi
-  done < <(find "$basis" -mindepth 1 -maxdepth 1 -type d -exec basename {{}} \; | sort -r)
+  done < <(find "$basis" -mindepth 1 -maxdepth 1 -type d -exec basename {{}} \; | (sort -V -r 2>/dev/null || sort -t. -k1,1nr -k2,2nr -k3,3nr))
 fi
 print -u2 "Claude wurde nicht gefunden. Öffne die Claude-App einmal und versuche es erneut."
 exit 127

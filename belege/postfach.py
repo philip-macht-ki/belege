@@ -465,6 +465,8 @@ def _server(domain: str, konto: dict):
         "mac.com": ("imap.mail.me.com:993", "smtp.mail.me.com:587"),
         "mailbox.org": ("imap.mailbox.org:993", "smtp.mailbox.org:465"),
         "freenet.de": ("mx.freenet.de:993", "mx.freenet.de:587"),
+        "posteo.de": ("posteo.de:993", "posteo.de:465"),
+        "posteo.net": ("posteo.de:993", "posteo.de:465"),
     }
     imap, smtp = bekannte.get(
         domain, (konto.get("imap_server", ""), konto.get("smtp_server", ""))

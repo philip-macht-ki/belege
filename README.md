@@ -9,8 +9,9 @@ Gebaut für Selbstständige, die nicht programmieren. Dein eigener Claude richte
 alles ein: Gib ihm diesen Link und sag „Richte mir das nach einrichten.md ein“.
 
 Hast du zwei Macs, etwa einen Mac mini und einen Laptop, kommt das Repo nur auf
-den Rechner, der dauerhaft läuft, und dort nach `~/Projekte/belege`, nicht auf den
-Schreibtisch. Der Laptop ist nur das Fenster.
+den Rechner, der dauerhaft läuft, und dort nach `~/Projekte/belege`, nicht in
+Desktop oder Documents. So braucht Claude keine zusätzliche Mac-Berechtigung.
+Der Laptop ist nur das Fenster.
 
 ## Erst einmal üben
 
@@ -19,6 +20,8 @@ holt das Repo nach `~/Projekte/belege` und führt dort `uv sync` und
 `uv run belege uebung --echt` aus: Fünf Rechnungen mit
 Namen wie `Scan_0012.pdf` oder `invoice (3).pdf` bekommen einen sauberen Namen und
 landen unter `~/Belege-Uebung/Ablage`. Nichts Echtes wird berührt.
+
+Für die Tests genügt im Projektordner: `uv run pytest -q`.
 
 ## Was es tut
 
@@ -54,7 +57,7 @@ Ohne `--echt` zeigt jeder Befehl nur, was er täte.
 ## Postfach: Weg A oder Weg B
 
 - **Weg A (Standard):** App-Passwort im macOS-Schlüsselbund. Gmail, GMX, web.de,
-  T-Online, iCloud, mailbox.org und freenet.de.
+  T-Online, iCloud, mailbox.org, freenet.de und Posteo.
   Microsoft-Postfächer gehen seit 2026 nur noch mit OAuth und damit nicht über Weg A.
 - **Weg B (auf Wunsch):** eigenes Google-Projekt. Getrennte Rechte (lesen,
   Entwürfe, senden), Gmail-Labels, einzeln widerrufbar. Komplexer, siehe

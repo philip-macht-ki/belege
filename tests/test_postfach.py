@@ -56,6 +56,8 @@ def test_imap_server_und_passwortmeldungen(repo, monkeypatch):
     ("mac.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
     ("mailbox.org", "imap.mailbox.org:993", "smtp.mailbox.org:465"),
     ("freenet.de", "mx.freenet.de:993", "mx.freenet.de:587"),
+    ("posteo.de", "posteo.de:993", "posteo.de:465"),
+    ("posteo.net", "posteo.de:993", "posteo.de:465"),
 ])
 def test_bekannte_server(domain, imap, smtp):
     assert _server(domain, {}) == ((imap.rsplit(":", 1)[0], int(imap.rsplit(":", 1)[1])), (smtp.rsplit(":", 1)[0], int(smtp.rsplit(":", 1)[1])))

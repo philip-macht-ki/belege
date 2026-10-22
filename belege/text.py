@@ -137,7 +137,12 @@ def _pdf_bilder_quartz(datei: Path, ordner: Path) -> list[Path]:
         for nummer in range(1, min(2, Quartz.CGPDFDocumentGetNumberOfPages(dokument)) + 1):
             seite = Quartz.CGPDFDocumentGetPage(dokument, nummer)
             box = Quartz.CGPDFPageGetBoxRect(seite, Quartz.kCGPDFMediaBox)
-            breite, hoehe = max(1, int(box.size.width * 200 / 72)), max(1, int(box.size.height * 200 / 72))
+            drehung = Quartz.CGPDFPageGetRotationAngle(seite) % 360
+            seitenbreite, seitenhoehe = box.size.width, box.size.height
+            if drehung in (90, 270):
+                seitenbreite, seitenhoehe = seitenhoehe, seitenbreite
+            breite = max(1, int(seitenbreite * 200 / 72))
+            hoehe = max(1, int(seitenhoehe * 200 / 72))
             daten = bytearray(breite * hoehe * 4)
             kontext = Quartz.CGBitmapContextCreate(
                 daten, breite, hoehe, 8, breite * 4, Quartz.CGColorSpaceCreateDeviceRGB(),
@@ -147,9 +152,13 @@ def _pdf_bilder_quartz(datei: Path, ordner: Path) -> list[Path]:
                 return []
             Quartz.CGContextSetRGBFillColor(kontext, 1, 1, 1, 1)
             Quartz.CGContextFillRect(kontext, Quartz.CGRectMake(0, 0, breite, hoehe))
-            Quartz.CGContextTranslateCTM(kontext, 0, hoehe)
-            Quartz.CGContextScaleCTM(kontext, breite / box.size.width, -hoehe / box.size.height)
-            Quartz.CGContextTranslateCTM(kontext, -box.origin.x, -box.origin.y)
+            # Der Bitmap-Puffer wird von Pillow zeilenweise von oben gelesen.
+            # Die frühere eigene Umkehrung der Y-Achse drehte ihn dadurch auf den
+            # Kopf. Quartz bildet MediaBox und den /Rotate-Eintrag korrekt ab.
+            transformation = Quartz.CGPDFPageGetDrawingTransform(
+                seite, Quartz.kCGPDFMediaBox, Quartz.CGRectMake(0, 0, breite, hoehe), 0, True,
+            )
+            Quartz.CGContextConcatCTM(kontext, transformation)
             Quartz.CGContextDrawPDFPage(kontext, seite)
             ziel = ordner / f"seite-{nummer}.png"
             Image.frombytes("RGBA", (breite, hoehe), bytes(daten)).save(ziel)
@@ -239,7 +248,7 @@ def _tesseract(datei: Path) -> str:
             texte = (
                 subprocess.run(
                     ["tesseract", str(bild), "stdout", "-l", "deu+eng"],
-                    capture_output=True, text=True, timeout=90,
+                    capture_output=True, text=True, errors="replace", timeout=90,
                 ).stdout
                 for bild in bilder
             )
