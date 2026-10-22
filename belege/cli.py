@@ -18,6 +18,7 @@ BEFEHLE = {
     "bericht": ("bericht", "befehl", "Tagesbericht erstellen"),
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
     "anmelden": ("anmelden", "befehl", "Google-Zugang einrichten"),
+    "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
     "mcp": ("mcp_server", "befehl", "Lokalen Postfach-Server starten"),
     "zeitplan": ("zeitplan", "befehl", "Zeitplan an, aus oder zeigen"),
     "verbrauch": ("urteil", "befehl_verbrauch", "Modellurteile der letzten Tage"),
@@ -59,6 +60,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--anfragen", action="store_true")
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
+    argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
     return argumente

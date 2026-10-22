@@ -148,7 +148,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `kern.py` | ROOT (Env `BELEGE_ROOT`), `konfig()`, `pfad()`, `lesen()`, `schreiben()`, `jetzt()`, `log()`, `ereignis()`, `Sperre`, `Ergebnis`, `ablage_ordner()`, `echt(args)` |
 | `typen.py` | `Fund`, `Text`, `Einordnung` |
 | `urteil.py` | `frage(auftrag, *, zweck, rueckfall=None, pruefe=None) -> dict|list` (aus social-pipeline, schlank), `vorlage(name, **werte)` liest `vorlagen/prompts/<name>.md` |
-| `text.py` | `auslesen(datei: Path) -> Text`; Stufen siehe unten |
+| `text.py` | `auslesen(datei: Path) -> Text`; Stufen siehe unten (`pypdf` zusätzlich für Text-PDFs) |
 | `xrechnung.py` | `ist_erechnung(datei) -> bool`, `lesen(datei) -> dict` (nummer, datum, verkaeufer, kaeufer, betrag, waehrung, positionen), `sicht_pdf(daten, xml_datei, ziel: Path)`, `zugferd_in(pdf) -> bool` |
 | `einordnen.py` | `einordnen(fund: Fund, text: Text) -> Einordnung` (Regeln → Urteil → Rückfall) |
 | `ablegen.py` | `sauber(s)`, `dateiname(e, ext)`, `ziel(e, ext) -> Path`, `ablegen(fund, e, text, echt) -> Ergebnis` |
@@ -186,7 +186,9 @@ class Postfach:
 - Weg A: `imaplib` (SSL 993) und `smtplib` (465 SSL oder 587 STARTTLS).
   Server aus `imap_server`/`smtp_server`, leer = aus der Domain abgeleitet
   (gmail.com, googlemail.com, gmx.de/.net, web.de, t-online.de, ionos/1und1).
-  Passwort aus Env `PASSWORT_<NAME>` (Name groß). Entwürfe per IMAP `APPEND`
+  Passwort zuerst aus dem macOS-Schlüsselbund (Dienst `belege-postfach`, Konto =
+  Postfachname), `PASSWORT_<NAME>` (Name groß) nur als Rückfall für Bestandskunden.
+  Entwürfe per IMAP `APPEND`
   in den Entwurfsordner (Special-Use `\Drafts`, sonst „Entwürfe“/„Drafts“/
   „[Gmail]/Entwürfe“). Gesendete Mail per `APPEND` in `\Sent`, außer bei Gmail
   (legt selbst ab).
@@ -202,8 +204,9 @@ class Postfach:
 Stufen der Reihe nach, abbrechen sobald **brauchbar** (≥ 100 Zeichen und
 Fehlerquote ≤ 10 %, Fehlerquote = Anteil Wörter mit Zeichensalat):
 1. `xml` (E-Rechnung) / `docx` (Zip-XML) / reiner Text bei .txt/.csv
-2. `pdftotext -layout -l 2` (Poppler)
-3. `vision`: nur macOS, PDF-Seiten mit `pdftoppm -r 200 -l 2` zu PNG, dann
+2. `pdftotext -layout -l 2` (Poppler, wenn vorhanden), danach `pypdf` für Text-PDFs
+3. `vision`: nur macOS, PDF-Seiten mit `pdftoppm` (wenn vorhanden), sonst
+   CoreGraphics zu PNG, dann
    PyObjC `VNRecognizeTextRequest` (accurate, Sprachkorrektur, Sprachen de-DE,
    en-US, höchste unterstützte Revision). Leeres Ergebnis ohne Ausnahme ist
    ein Fehlschlag, kein Erfolg.

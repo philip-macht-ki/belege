@@ -53,10 +53,11 @@ dependencies = [
     { name = "pillow" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'" },
+    { name = "pypdf" },
     { name = "requests" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
 ]
@@ -73,10 +74,12 @@ requires-dist = [
     { name = "pillow", specifier = ">=10" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10" },
     { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'", specifier = ">=10" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "pypdf", specifier = ">=6.19.0" },
     { name = "requests", specifier = ">=2.31" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "certifi"

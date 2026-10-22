@@ -38,7 +38,9 @@ def _doppelordner(wurzel: Path) -> list[str]:
 def _imap(k):
     import imaplib
 
-    pw = os.environ.get("PASSWORT_" + str(k.get("name", "")).upper())
+    from .postfach import passwort
+
+    pw = passwort(str(k.get("name", "")))
     if not pw:
         raise RuntimeError("Passwort fehlt in .env")
     server = (
@@ -79,6 +81,19 @@ def befehl(args) -> int:
         "uv verfügbar" if shutil.which("uv") else "uv fehlt",
         "uv installieren: https://docs.astral.sh/uv/",
     )
+    try:
+        zeitplan_path = f"/usr/bin:/bin:/usr/sbin:/sbin:{Path.home()}/.local/bin"
+        claude = subprocess.run(
+            ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "claude", "--version"],
+            capture_output=True, text=True, timeout=15,
+        )
+        z(
+            "GRUEN" if claude.returncode == 0 else "GELB",
+            "Claude im Zeitplan erreichbar" if claude.returncode == 0 else "Claude im Zeitplan nicht erreichbar",
+            "belege einrichten-claude ausführen und die Claude-App einmal öffnen.",
+        )
+    except Exception as e:
+        z("GELB", f"Claude im Zeitplan nicht prüfbar: {e}", "belege einrichten-claude ausführen.")
     for tool in ("pdftotext", "pdftoppm"):
         z(
             "GRUEN" if shutil.which(tool) else "GELB",
@@ -165,6 +180,14 @@ def befehl(args) -> int:
             name = str(k.get("name", "Postfach"))
             weg = k.get("weg")
             if weg == "a":
+                from .postfach import schluesselbund_passwort
+
+                im_schluesselbund = schluesselbund_passwort(name)
+                z(
+                    "GRUEN" if im_schluesselbund else "GELB",
+                    f"Passwort im Schlüsselbund ({name}): ja" if im_schluesselbund else f"Passwort im Schlüsselbund ({name}): nein",
+                    f"belege anmelden --schluesselbund {name} ausführen.",
+                )
                 try:
                     _imap(k)
                     z("GRUEN", f"Postfach {name}: Anmeldung klappt")

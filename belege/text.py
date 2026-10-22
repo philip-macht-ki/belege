@@ -58,7 +58,15 @@ def _brauchbar(text: str) -> bool:
 
 def _seiten(datei: Path) -> int:
     """Zählt höchstens die ersten zwei PDF-Seiten."""
-    if datei.suffix.lower() != ".pdf" or not shutil.which("pdfinfo"):
+    if datei.suffix.lower() != ".pdf":
+        return 1
+    try:
+        from pypdf import PdfReader
+
+        return min(2, len(PdfReader(str(datei)).pages))
+    except Exception:  # Poppler bleibt ein optionaler Rückfall.
+        pass
+    if not shutil.which("pdfinfo"):
         return 1
     try:
         ergebnis = subprocess.run(["pdfinfo", str(datei)], capture_output=True, text=True, timeout=20)
@@ -101,6 +109,65 @@ def _pdftotext(datei: Path) -> str:
         return ""
 
 
+def _pypdf(datei: Path) -> str:
+    """Liest Text-PDFs ohne Poppler; pypdf ist plattformunabhängig."""
+    try:
+        from pypdf import PdfReader
+
+        return "\n".join(page.extract_text() or "" for page in PdfReader(str(datei)).pages[:2])
+    except Exception:  # Ein defektes oder gescanntes PDF geht zur nächsten Stufe.
+        return ""
+
+
+def _pdf_bilder_quartz(datei: Path, ordner: Path) -> list[Path]:
+    """Rendert maximal zwei PDF-Seiten mit macOS CoreGraphics nach PNG.
+
+    Das ersetzt pdftoppm auf Macs ohne Homebrew. Der Rasterpuffer bleibt nur im
+    temporären Ordner und wird anschließend von Vision gelesen.
+    """
+    try:
+        from Foundation import NSURL
+        from PIL import Image
+        import Quartz
+
+        dokument = Quartz.CGPDFDocumentCreateWithURL(NSURL.fileURLWithPath_(str(datei)))
+        if not dokument:
+            return []
+        bilder = []
+        for nummer in range(1, min(2, Quartz.CGPDFDocumentGetNumberOfPages(dokument)) + 1):
+            seite = Quartz.CGPDFDocumentGetPage(dokument, nummer)
+            box = Quartz.CGPDFPageGetBoxRect(seite, Quartz.kCGPDFMediaBox)
+            drehung = Quartz.CGPDFPageGetRotationAngle(seite) % 360
+            seitenbreite, seitenhoehe = box.size.width, box.size.height
+            if drehung in (90, 270):
+                seitenbreite, seitenhoehe = seitenhoehe, seitenbreite
+            breite = max(1, int(seitenbreite * 200 / 72))
+            hoehe = max(1, int(seitenhoehe * 200 / 72))
+            daten = bytearray(breite * hoehe * 4)
+            kontext = Quartz.CGBitmapContextCreate(
+                daten, breite, hoehe, 8, breite * 4, Quartz.CGColorSpaceCreateDeviceRGB(),
+                Quartz.kCGImageAlphaPremultipliedLast,
+            )
+            if not kontext:
+                return []
+            Quartz.CGContextSetRGBFillColor(kontext, 1, 1, 1, 1)
+            Quartz.CGContextFillRect(kontext, Quartz.CGRectMake(0, 0, breite, hoehe))
+            # Der Bitmap-Puffer wird von Pillow zeilenweise von oben gelesen.
+            # Die frühere eigene Umkehrung der Y-Achse drehte ihn dadurch auf den
+            # Kopf. Quartz bildet MediaBox und den /Rotate-Eintrag korrekt ab.
+            transformation = Quartz.CGPDFPageGetDrawingTransform(
+                seite, Quartz.kCGPDFMediaBox, Quartz.CGRectMake(0, 0, breite, hoehe), 0, True,
+            )
+            Quartz.CGContextConcatCTM(kontext, transformation)
+            Quartz.CGContextDrawPDFPage(kontext, seite)
+            ziel = ordner / f"seite-{nummer}.png"
+            Image.frombytes("RGBA", (breite, hoehe), bytes(daten)).save(ziel)
+            bilder.append(ziel)
+        return bilder
+    except Exception:  # Quartz fehlt nur außerhalb von macOS oder bei kaputtem PDF.
+        return []
+
+
 def _vision_bild(datei: Path) -> str:
     """Liest Text aus einem Bild mit Apples Texterkennung (über das Paket ocrmac).
 
@@ -131,19 +198,19 @@ def _vision(datei: Path) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         ordner = Path(tmp)
         if datei.suffix.lower() == ".pdf":
-            if not shutil.which("pdftoppm"):
-                return ""
-            basis = ordner / "seite"
-            try:
-                ergebnis = subprocess.run(
-                    ["pdftoppm", "-png", "-r", "200", "-l", "2", str(datei), str(basis)],
-                    capture_output=True, timeout=90,
-                )
-            except OSError:
-                return ""
-            if ergebnis.returncode:
-                return ""
-            bilder = sorted(ordner.glob("seite-*.png"))
+            bilder = []
+            if shutil.which("pdftoppm"):
+                basis = ordner / "seite"
+                try:
+                    ergebnis = subprocess.run(
+                        ["pdftoppm", "-png", "-r", "200", "-l", "2", str(datei), str(basis)],
+                        capture_output=True, timeout=90,
+                    )
+                    bilder = sorted(ordner.glob("seite-*.png")) if not ergebnis.returncode else []
+                except OSError:
+                    pass
+            if not bilder:
+                bilder = _pdf_bilder_quartz(datei, ordner)
         elif datei.suffix.lower() == ".heic":
             ziel = ordner / "bild.jpg"
             if not shutil.which("sips"):
@@ -181,7 +248,7 @@ def _tesseract(datei: Path) -> str:
             texte = (
                 subprocess.run(
                     ["tesseract", str(bild), "stdout", "-l", "deu+eng"],
-                    capture_output=True, text=True, timeout=90,
+                    capture_output=True, text=True, errors="replace", timeout=90,
                 ).stdout
                 for bild in bilder
             )
@@ -281,7 +348,7 @@ def auslesen(datei: Path) -> Text:
     bester = ("", "leer")
     stufen = []
     if endung == ".pdf":
-        stufen.append((_pdftotext, "pdftotext"))
+        stufen.extend([(_pdftotext, "pdftotext"), (_pypdf, "pypdf")])
     if endung == ".pdf" or endung in BILDENDUNGEN:
         stufen.extend([(_vision, "vision"), (_tesseract, "tesseract")])
     for leser, stufe in stufen:

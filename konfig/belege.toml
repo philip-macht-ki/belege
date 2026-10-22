@@ -16,14 +16,14 @@ ust_id = ""
 erlaubt = ""
 
 [ablage]
-# Ein Ordner, der sich mit der Cloud abgleicht (Google Drive, iCloud, Dropbox).
+# Teil 1 arbeitet nur in ~/Belege. Cloud-Ordner kommen erst in Teil 3 dazu.
 ordner = "~/Belege"
 bereich_betrieb = "Betrieb"
 bereich_privat = "Privat"
 privat = true
 
 # Ein Block je Postfach. Das erste wird nach Belegen durchsucht.
-# weg = "a" (App-Passwort, Standard) | "b" (eigenes Google-Projekt) | "ordner" (Musterpostfach)
+# weg = "a" (App-Passwort im Schlüsselbund, Standard) | "b" (eigenes Google-Projekt) | "ordner" (Musterpostfach)
 [[konto]]
 name = "geschaeft"
 weg = "ordner"

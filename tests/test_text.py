@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from types import SimpleNamespace
 
 from fpdf import FPDF
 from PIL import Image, ImageDraw
@@ -24,6 +25,53 @@ def test_pdftotext_liest_und_kuerzt(repo):
     t = auslesen(p)
     assert t.stufe == "pdftotext"
     assert 100 <= len(t.text) <= 6000
+
+
+def test_pypdf_liest_text_pdf_ohne_poppler(repo, monkeypatch):
+    p = repo / "rechnung-ohne-poppler.pdf"
+    _pdf(p, "Rechnung Studio Beispiel Betrag 12,50 EUR mit ausreichend lesbarem Text. " * 20)
+    monkeypatch.setattr(text, "_pdftotext", lambda _: "")
+    erkannt = auslesen(p)
+    assert erkannt.stufe == "pypdf"
+    assert "Rechnung" in erkannt.text
+
+
+@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Quartz und Vision gibt es nur unter macOS")
+def test_quartz_scan_wird_ohne_poppler_aufrecht_mit_vision_gelesen(repo, monkeypatch):
+    pytest.importorskip("Vision")
+    png = repo / "bekannter-text.png"
+    bild = Image.new("RGB", (1800, 1000), "white")
+    zeichner = ImageDraw.Draw(bild)
+    try:
+        from PIL import ImageFont
+        schrift = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 96)
+    except OSError:
+        schrift = None
+    for y in range(80, 900, 160):
+        zeichner.text((80, y), "Rechnung Nr. 4711", fill="black", font=schrift)
+    bild.save(png)
+    pdf = repo / "quartz-scan.pdf"
+    doc = FPDF(unit="pt", format=(900, 500))
+    doc.add_page()
+    doc.image(str(png), x=0, y=0, w=900, h=500)
+    doc.output(str(pdf))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    erkannt = auslesen(pdf)
+    assert erkannt.stufe == "vision"
+    assert "Rechnung Nr. 4711" in erkannt.text
+
+
+def test_tesseract_ersetzt_ungueltige_ausgabezeichen(repo, monkeypatch):
+    bild = repo / "scan.png"
+    bild.write_bytes(b"bild")
+    monkeypatch.setattr(text.shutil, "which", lambda name: "/usr/bin/tesseract" if name == "tesseract" else None)
+
+    def lauf(*args, **kwargs):
+        assert kwargs["errors"] == "replace"
+        return SimpleNamespace(stdout="Rechnung \ufffd 4711", returncode=0)
+
+    monkeypatch.setattr(text.subprocess, "run", lauf)
+    assert text._tesseract(bild) == "Rechnung \ufffd 4711"
 
 
 def test_fehlerquote_erkennt_zeichensalat():
