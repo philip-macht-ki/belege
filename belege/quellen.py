@@ -33,8 +33,8 @@ def _erlaubt(datei: Path) -> bool:
     return datei.is_file() and not datei.name.startswith(".") and datei.suffix.lower() in ENDUNGEN
 
 
-def _ausgeschlossen(mail: dict) -> bool:
-    """Prüft Ausschlüsse vor dem Herunterladen von Mailanhängen."""
+def ausgeschlossen(mail: dict) -> bool:
+    """Prüft Ausschlüsse vor dem Herunterladen von Mailanhängen und vor dem Wächter."""
     suchraum = " ".join(str(mail.get(name, "")) for name in ("von", "von_name", "betreff")).lower()
     muster = kern.konfig("regeln").get("ausschluss", [])
     return any(str(wert).lower() in suchraum for wert in muster)
@@ -68,7 +68,7 @@ def postfach_funde(konto: str, tage: int | None = None):
     bekannte = set(stand.get("mails", []))
     eindeutig = {mail.get("id"): mail for mail in mails if mail.get("id")}
     for mail_id, mail in eindeutig.items():
-        if mail_id in bekannte or _ausgeschlossen(mail):
+        if mail_id in bekannte or ausgeschlossen(mail):
             continue
         ziel = _mail_tmp(konto, str(mail_id))
         dateien = postfach.anhaenge(str(mail_id), ziel)

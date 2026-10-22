@@ -98,6 +98,7 @@ def befehl(args) -> int:
     alle_regeln = regeln()
     eigene = {str(k.get("adresse", "")).lower() for k in kern.konten()}
     from .postfach import oeffnen
+    from .quellen import ausgeschlossen
     from .urteil import frage, vorlage
 
     for konto in kern.konten():
@@ -115,6 +116,9 @@ def befehl(args) -> int:
         neue = [
             m for m in postfach.suchen(max=30, seit=seit)
             if m["id"] not in bekannt and not _eigene_mail(m, eigene)
+            # Die Ausschlussliste gilt auch hier: solche Mails liest der Wächter nicht
+            # und schickt nichts davon an ein Modell.
+            and not ausgeschlossen(m)
         ]
         if not neue:
             continue

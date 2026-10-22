@@ -88,3 +88,29 @@ def test_pruefe_verwirft_fremde_id(repo):
     """Ein Modell darf keine Mail außerhalb der Eingabemenge behaupten."""
     antwort = [{"id": "fremd", "regel": "Mahnung", "sofort": True, "satz": "Bitte prüfen."}]
     assert waechter.pruefe(antwort, {"echt"}) is not None
+
+
+def test_ausschlussliste_gilt_auch_fuer_den_waechter(repo, monkeypatch):
+    gesendet, _ = _ohne_mitteilung_und_senden(monkeypatch)
+    regeln = repo / "konfig" / "regeln.toml"
+    regeln.write_text(
+        regeln.read_text(encoding="utf-8").replace("ausschluss = []", 'ausschluss = ["post@studio-beispiel"]'),
+        encoding="utf-8",
+    )
+    gelesen = []
+    from belege import postfach
+
+    echtes_oeffnen = postfach.oeffnen
+
+    def oeffnen(name):
+        fach = echtes_oeffnen(name)
+        lesen = fach.lesen
+        fach.lesen = lambda mail_id: gelesen.append(mail_id) or lesen(mail_id)
+        return fach
+
+    monkeypatch.setattr(postfach, "oeffnen", oeffnen)
+    _mail(repo / "beispiel/erzeugt/postfach/mahnung.eml", "Mahnung", "Bitte zahlen Sie.")
+    assert waechter.befehl(argparse.Namespace(echt=True)) == 0
+    assert gelesen == []
+    assert "waechter" not in _ereignisse(repo)
+    assert gesendet == []

@@ -22,16 +22,43 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Danach führt Claude `uv sync`, `uv run belege einrichten-claude` und
 `uv run belege pruefen` aus. Homebrew ist nicht nötig.
 
-## Zwei Fragen
+## Schritt 1: die Übung, dann anhalten
+
+Die Ablage ist `~/Belege`. Das braucht keine zusätzliche Mac-Berechtigung. Wir
+wählen heute weder Downloads noch Handy noch einen Cloud-Ordner aus.
+
+Claude legt den Übungsordner an und zeigt, was aus jeder der fünf erfundenen
+Rechnungen geworden ist: `uv run belege uebung --echt`. Die Übung liest kein
+Postfach und verschickt keine Mail.
+
+**Danach hält Claude an.** Er sagt, dass die Übung fertig ist, und richtet
+Postfach und Zeitplan erst ein, wenn die Person ausdrücklich weitermachen will,
+etwa mit „Verbinde mein Postfach“ oder „weiter“. Die Kurslektionen gehen in
+genau diesen Schritten vor.
+
+Möchte die Person vorher den Musterbetrieb sehen (Lektion 0-2), legt Claude ihn
+mit `uv run belege beispiel` an, zeigt `uv run belege takt` und
+`uv run belege tag` trocken und lässt beides erst nach einem ausdrücklichen Ja
+mit `--echt` laufen. Danach fragt er nach Betriebsname, weiteren Schreibweisen,
+Tätigkeit, USt-IdNr und ob Privatbelege getrennt abgelegt werden, trägt alles
+ein und hält wieder an.
+
+## Schritt 2: Postfach verbinden, erst nach ausdrücklichem Weiter
 
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
-dein Betrieb?
+dein Betrieb, falls das noch nicht eingetragen ist?
 
 Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Dieses
 Postfach kann hier nicht direkt verbunden werden. Richte dort eine Weiterleitung
 an ein Google-Konto ein; dieses Google-Konto verwenden wir dann für Rechnungen.
+Leite nur Rechnungen weiter, nicht das ganze Postfach.
 
-## App-Passwort
+Bevor Claude zum ersten Mal ins Postfach schaut, fragt er: Gibt es Absender mit
+vertraulichen Unterlagen, etwa Mandanten oder Patienten? Die trägt er in
+`ausschluss` in `konfig/regeln.toml` ein. Von ihnen lädt das System keinen
+Anhang, und auch der Wächter liest sie nicht.
+
+### App-Passwort
 
 Claude öffnet die passende Seite. Du erzeugst das Passwort selbst und fügst es
 danach in das kleine Mac-Fenster ein. Es wird verdeckt eingegeben und nur im
@@ -56,18 +83,19 @@ unverändert. Technische Grenze: macOS nimmt das Passwort bei `security` als
 kurzlebigen Programmparameter entgegen; belege schreibt oder protokolliert es
 nie.
 
-## Die erste Übung und der erste Lauf
+Dann prüft Claude mit `uv run belege pruefen` und schaut trocken ins echte
+Postfach: `uv run belege postfach`. Er zeigt die gefundenen Betreffzeilen und
+**hält wieder an**. Abgelegt wird erst nach einem klaren „Ja, ablegen“ mit
+`uv run belege postfach --echt`.
 
-Die Ablage ist `~/Belege`. Das braucht keine zusätzliche Mac-Berechtigung. Wir
-wählen heute weder Downloads noch Handy noch einen Cloud-Ordner aus.
+## Schritt 3: Zeitplan, erst nach ausdrücklichem Weiter
 
-1. Claude legt die Übung an und zeigt sie: `uv run belege uebung --echt`.
-2. Claude schaut trocken ins echte Postfach: `uv run belege postfach`.
-3. Claude fragt klar „Soll ich die erkannten Belege jetzt ablegen?“ Erst nach
-   deinem „Ja“ folgt `uv run belege postfach --echt`.
-4. Claude schaltet den Takt erst nach deiner Zustimmung ein:
-   `BELEGE_JA=1 uv run belege zeitplan an --echt`.
-5. Claude prüft den Bericht und zeigt `uv run belege pruefen` noch einmal.
+Claude schaltet den Takt erst ein, wenn die Person es ausdrücklich will, etwa
+mit „Richte den Belege-Zeitplan ein“: `BELEGE_JA=1 uv run belege zeitplan an --echt`.
+Er trägt dabei die Rechner-Sperre ein, damit nur dieser Mac ablegt, und sagt,
+dass der Wächter jede neue Mail einmal ansieht (Absender, Betreff, Anfang des
+Textes gehen dafür an Claude) und wie man ihn ausschaltet (`waechter = false` beim Konto). Zum Schluss zeigt er
+`uv run belege zeitplan zeigen` und `uv run belege pruefen` noch einmal.
 
 Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 
