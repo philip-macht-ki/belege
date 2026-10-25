@@ -1,5 +1,7 @@
 # belege
 
+Vor jeder Einrichtung oder Änderung zuerst `bash werkzeuge/aktualisieren.sh` ausführen; es holt die neueste Vorlage und bewahrt deine Einstellungen und Inhalte.
+
 Vertrag zwischen den Teilen: `ARCHITEKTUR.md`. Wer ein Format ändert, ändert es dort zuerst.
 
 ## Regeln
