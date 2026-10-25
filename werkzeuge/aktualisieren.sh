@@ -121,7 +121,11 @@ while IFS= read -r -d '' datei; do
   metadaten "$rel" && continue
   ziel="$HIER/$rel"
   if geschuetzt "$rel" && [ -e "$ziel" ]; then
-    if [ "$(pruefsumme "$ziel")" != "$(pruefsumme "$datei")" ]; then
+    # Eine neue Fassung nur, wenn sich die Vorlage seit dem letzten Update
+    # geändert hat. Sonst läge nach jedem Update dieselbe .neu-Datei daneben.
+    neu_summe="$(pruefsumme "$datei")"
+    vorlage_vorher="$(gespeichert "$rel")"
+    if [ "$(pruefsumme "$ziel")" != "$neu_summe" ] && [ "$vorlage_vorher" != "$neu_summe" ]; then
       mkdir -p "$(dirname "$ziel")"
       cp -p "$datei" "$ziel.neu-$HEUTE"
       NEUFASSUNGEN+=("$rel.neu-$HEUTE")

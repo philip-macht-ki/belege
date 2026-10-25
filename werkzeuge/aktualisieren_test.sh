@@ -24,6 +24,9 @@ bash werkzeuge/aktualisieren.sh --archiv "$TMP/zwei.tar.gz" --kennung zwei > "$T
 [ "$(cat neu/geschuetzt.txt)" = neu ] || fehler neue_Schutzdatei
 [ -f extra.txt ] || fehler neue_Datei
 [ -f datei.txt ] || fehler nichts_loeschen
+rm -f keep/einst.txt.neu-*
+bash werkzeuge/aktualisieren.sh --archiv "$TMP/zwei.tar.gz" --kennung zwei >/dev/null
+ls keep/einst.txt.neu-* >/dev/null 2>&1 && fehler keine_neue_Fassung_ohne_Vorlagenaenderung
 bash werkzeuge/aktualisieren.sh --pruefen --kennung zwei >/dev/null
 if bash werkzeuge/aktualisieren.sh --pruefen --kennung drei >/dev/null; then fehler pruefen_alter_Stand; else [ "$?" -eq 10 ] || fehler pruefen_code; fi
 bash werkzeuge/aktualisieren.sh --archiv "$TMP/drei.zip" --kennung drei >/dev/null
