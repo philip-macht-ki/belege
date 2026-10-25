@@ -1,5 +1,6 @@
 from argparse import Namespace
 from belege import pruefen
+from types import SimpleNamespace
 
 
 def test_musterwerte_gelb(repo, capsys):
@@ -65,3 +66,23 @@ def test_papierpost_leer_ist_ok_und_fehlender_ordner_rot(repo, capsys):
     konfig.write_text(konfig.read_text().replace('scan_ordner = ""', 'scan_ordner = "/nicht/vorhanden"'))
     assert pruefen.befehl(Namespace()) == 1
     assert "ROT: Papierpost-Ordner fehlt" in capsys.readouterr().out
+
+
+def test_codex_pruefung(monkeypatch, repo, capsys):
+    monkeypatch.setenv("URTEIL_BACKEND", "codex")
+    monkeypatch.setattr(pruefen.shutil, "which", lambda name: "/opt/homebrew/bin/codex" if name == "codex" else None)
+    monkeypatch.setattr(pruefen.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    pruefen.befehl(Namespace())
+    out = capsys.readouterr().out
+    assert "GRUEN: Codex im Zeitplan angemeldet" in out
+    assert "GRUEN: Urteil codex verfügbar" in out
+
+
+def test_lokal_pruefung_modell_fehlt(monkeypatch, repo, capsys):
+    monkeypatch.setenv("URTEIL_BACKEND", "lokal")
+    monkeypatch.setattr(pruefen.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    monkeypatch.setattr(pruefen.requests, "get", lambda *a, **k: SimpleNamespace(status_code=200, json=lambda: {"models": []}))
+    pruefen.befehl(Namespace())
+    out = capsys.readouterr().out
+    assert "GRUEN: Ollama läuft im Zeitplan über HTTP" in out
+    assert "GELB: Urteil lokal: Modell qwen3:14b fehlt -> ollama pull qwen3:14b" in out

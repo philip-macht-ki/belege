@@ -19,8 +19,24 @@ Claude den offiziellen Installer im Benutzerordner:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Danach führt Claude `uv sync`, `uv run belege einrichten-claude` und
+Danach führt Claude `uv sync`, `uv run belege einrichten-urteil` und
 `uv run belege pruefen` aus. Homebrew ist nicht nötig.
+
+## Welcher Weg ordnet ein?
+
+Bist du Claude, bleibt `claude` wie bisher eingestellt; frage dazu nichts.
+Bist du Codex (oder hat die Person kein Claude-Abo), frag sie, ob das Einordnen
+auf ihrem Mac (lokal) oder über ihr ChatGPT-Abo (codex) laufen soll. Prüfe erst
+den Arbeitsspeicher mit `sysctl -n hw.memsize` und gib eine Empfehlung: ab 32 GB
+lokal mit `qwen3:14b`, bei 16 bis 31 GB ist lokal mit `qwen3:8b` möglich,
+darunter codex. Lokal verlässt nichts den Mac und kostet nichts, ist aber etwas
+langsamer und erkennt etwas weniger. Codex schickt Absender, Betreff und
+Belegtext an OpenAI und läuft über das Abo.
+
+Bei lokal: Installiere Ollama über <https://ollama.com> (die App), hole das
+Modell mit `ollama pull …` und trage `backend = "lokal"` sowie `modell_lokal`
+ein. Bei codex: Trage `backend = "codex"` ein. Danach führe
+`uv run belege einrichten-urteil` und `uv run belege pruefen` aus.
 
 ## Schritt 1: die Übung, dann anhalten
 
