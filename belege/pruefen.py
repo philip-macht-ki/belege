@@ -4,6 +4,7 @@ from __future__ import annotations
 import json, os, re, shutil, stat, subprocess, sys
 from datetime import datetime, timedelta
 from pathlib import Path
+import requests
 from .kern import ablage_ordner, jetzt, konfig, konten, pfad, rechner
 
 SYNC = (
@@ -82,18 +83,40 @@ def befehl(args) -> int:
         "uv installieren: https://docs.astral.sh/uv/",
     )
     try:
-        zeitplan_path = f"/usr/bin:/bin:/usr/sbin:/sbin:{Path.home()}/.local/bin"
-        claude = subprocess.run(
-            ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "claude", "--version"],
-            capture_output=True, text=True, timeout=15,
+        backend = os.environ.get(
+            "URTEIL_BACKEND", konfig("belege").get("urteil", {}).get("backend", "claude")
         )
-        z(
-            "GRUEN" if claude.returncode == 0 else "GELB",
-            "Claude im Zeitplan erreichbar" if claude.returncode == 0 else "Claude im Zeitplan nicht erreichbar",
-            "belege einrichten-claude ausführen und die Claude-App einmal öffnen.",
-        )
+        urteil_cfg = konfig("belege").get("urteil", {})
     except Exception as e:
-        z("GELB", f"Claude im Zeitplan nicht prüfbar: {e}", "belege einrichten-claude ausführen.")
+        backend, urteil_cfg = "", {}
+        z("ROT", f"Urteil nicht prüfbar: {e}")
+    zeitplan_path = f"/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:{Path.home()}/.local/bin"
+    if backend == "claude":
+        try:
+            claude = subprocess.run(
+                ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "claude", "--version"],
+                capture_output=True, text=True, timeout=15,
+            )
+            z("GRUEN" if claude.returncode == 0 else "GELB",
+              "Claude im Zeitplan erreichbar" if claude.returncode == 0 else "Claude im Zeitplan nicht erreichbar",
+              "belege einrichten-claude ausführen und die Claude-App einmal öffnen.")
+        except Exception as e:
+            z("GELB", f"Claude im Zeitplan nicht prüfbar: {e}", "belege einrichten-claude ausführen.")
+    elif backend == "codex":
+        try:
+            codex = subprocess.run(
+                ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "codex", "login", "status"],
+                capture_output=True, text=True, timeout=15,
+            )
+            z("GRUEN" if codex.returncode == 0 else "GELB",
+              "Codex im Zeitplan angemeldet" if codex.returncode == 0 else "Codex im Zeitplan nicht angemeldet",
+              "belege einrichten-urteil ausführen, dann codex login.")
+        except Exception as e:
+            z("GELB", f"Codex im Zeitplan nicht prüfbar: {e}", "belege einrichten-urteil ausführen, dann codex login.")
+    elif backend in {"anthropic", "ohne"}:
+        z("GRUEN", f"Urteil {backend}: keine Zeitplan-CLI nötig")
+    elif backend == "lokal":
+        z("GRUEN", "Ollama läuft im Zeitplan über HTTP")
     for tool in ("pdftotext", "pdftoppm"):
         z(
             "GRUEN" if shutil.which(tool) else "GELB",
@@ -116,16 +139,34 @@ def befehl(args) -> int:
             "Nur auf macOS verfügbar; sonst wird eine andere Texterkennung genutzt.",
         )
     try:
-        backend = os.environ.get(
-            "URTEIL_BACKEND",
-            konfig("belege").get("urteil", {}).get("backend", "claude"),
-        )
-        ok = backend != "claude" or bool(shutil.which("claude"))
-        z(
-            "GRUEN" if ok else "ROT",
-            f"Urteil {backend} verfügbar" if ok else "Claude fehlt",
-            "Claude Code installieren oder Urteil-Backend ändern.",
-        )
+        if backend == "claude":
+            ok = bool(shutil.which("claude"))
+            z("GRUEN" if ok else "ROT", "Urteil claude verfügbar" if ok else "Claude fehlt",
+              "Claude Code installieren oder Urteil-Backend ändern.")
+        elif backend == "codex":
+            ok = bool(shutil.which("codex"))
+            z("GRUEN" if ok else "GELB", "Urteil codex verfügbar" if ok else "Codex fehlt",
+              "belege einrichten-urteil ausführen, dann codex login.")
+        elif backend == "lokal":
+            modell = str(urteil_cfg.get("modell_lokal", "qwen3:14b")).strip() or "qwen3:14b"
+            host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+            try:
+                tags = requests.get(f"{host}/api/tags", timeout=15)
+            except requests.RequestException:
+                z("ROT", "Ollama läuft nicht", "Ollama-App öffnen.")
+            else:
+                if tags.status_code != 200:
+                    z("ROT", "Ollama läuft nicht", "Ollama-App öffnen.")
+                else:
+                    namen = {m.get("name") for m in tags.json().get("models", [])}
+                    ok = modell in namen
+                    z("GRUEN" if ok else "GELB",
+                      f"Urteil lokal: Modell {modell} verfügbar" if ok else f"Urteil lokal: Modell {modell} fehlt",
+                      None if ok else f"ollama pull {modell}")
+        elif backend in {"anthropic", "ohne"}:
+            z("GRUEN", f"Urteil {backend} verfügbar")
+        else:
+            z("ROT", f"Unbekanntes Urteil-Backend {backend}")
     except Exception as e:
         z("ROT", f"Urteil nicht prüfbar: {e}")
     try:

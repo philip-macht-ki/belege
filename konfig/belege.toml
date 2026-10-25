@@ -81,8 +81,12 @@ minuten = 15
 tag_uhrzeit = "21:00"
 
 [urteil]
+# claude = Claude-Abo (Standard) | codex = ChatGPT-Abo über Codex |
+# lokal = Ollama nur auf diesem Mac | anthropic = Anthropic-API | ohne = nur Regeln
 backend = "claude"
 modell = "sonnet"
+# modell_codex = "gpt-5.1-codex"
+# modell_lokal = "qwen3:14b"
 
 [dokumente]
 # Verträge, Versicherungen und Briefe, die kein Beleg sind (Modul bh8).

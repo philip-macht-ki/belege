@@ -19,6 +19,7 @@ BEFEHLE = {
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
     "anmelden": ("anmelden", "befehl", "Google-Zugang einrichten"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
+    "einrichten-urteil": ("einrichten", "befehl_urteil", "Starter für das eingestellte Urteil einrichten"),
     "mcp": ("mcp_server", "befehl", "Lokalen Postfach-Server starten"),
     "zeitplan": ("zeitplan", "befehl", "Zeitplan an, aus oder zeigen"),
     "verbrauch": ("urteil", "befehl_verbrauch", "Modellurteile der letzten Tage"),

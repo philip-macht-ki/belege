@@ -23,6 +23,28 @@ def test_claude_starter_ueberschreibt_fremde_datei_nicht(monkeypatch, tmp_path):
     assert ziel.read_text() == "fremd"
 
 
+def test_einrichten_urteil_codex_legt_markierten_starter_an(monkeypatch, tmp_path, repo, capsys):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("URTEIL_BACKEND", raising=False)
+    konfig = repo / "konfig/belege.toml"
+    konfig.write_text(konfig.read_text().replace('backend = "claude"', 'backend = "codex"'))
+    assert einrichten.befehl_urteil(None) == 0
+    ziel = tmp_path / ".local/bin/codex"
+    assert einrichten.CODEX_MARKER in ziel.read_text()
+    assert "/Applications/Codex.app/Contents/Resources/codex" in ziel.read_text()
+    assert "Codex-Starter eingerichtet" in capsys.readouterr().out
+
+
+def test_codex_starter_ueberschreibt_fremde_datei_nicht(monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    ziel = tmp_path / ".local/bin/codex"
+    ziel.parent.mkdir(parents=True)
+    ziel.write_text("fremd")
+    ok, _ = einrichten.anlegen("codex")
+    assert not ok
+    assert ziel.read_text() == "fremd"
+
+
 def test_claude_starter_nimmt_hoehere_versionsnummer(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     original = einrichten.starter_text
