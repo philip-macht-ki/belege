@@ -1,4 +1,4 @@
-"""Die drei regelmäßigen Läufe bei launchd an- und abmelden.
+"""Die regelmäßigen Läufe bei launchd an- und abmelden.
 
 Ohne --echt wird nur gezeigt, was eingerichtet würde. Mit --echt wird vorher
 nachgefragt. Weil der Claude der Person nicht in ein Terminal tippen kann, gilt
@@ -15,6 +15,15 @@ from pathlib import Path
 from .kern import echt, fremder_rechner, konfig, pfad, rechner
 
 LAEUFE = ("takt", "tag", "monat")
+# Optional, nur wenn konfig/moneymoney.toml `an = true` sagt.
+ZUSATZ = ("moneymoney",)
+
+
+def laeufe() -> tuple[str, ...]:
+    """Die Läufe, die `zeitplan an` einrichtet."""
+    from .moneymoney import einstellungen
+
+    return LAEUFE + (("moneymoney",) if einstellungen().get("an") else ())
 
 
 def _label(name: str) -> str:
@@ -66,7 +75,7 @@ def _an() -> int:
         print("nichts: abgebrochen.")
         return 0
     uid = os.getuid()
-    for name in LAEUFE:
+    for name in laeufe():
         ziel = _ziel(name)
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_text(plist_text(name), encoding="utf-8")
@@ -80,7 +89,7 @@ def _aus() -> int:
     """Abmelden und die Dateien nach arbeit/zeitplan-alt/ verschieben, nicht löschen."""
     alt = pfad("arbeit", "zeitplan-alt")
     alt.mkdir(parents=True, exist_ok=True)
-    for name in LAEUFE:
+    for name in LAEUFE + ZUSATZ:
         subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{_label(name)}"], capture_output=True)
         ziel = _ziel(name)
         if ziel.exists():
@@ -93,7 +102,7 @@ def befehl(args) -> int:
     """`belege zeitplan an|aus|zeigen`."""
     aktion = (getattr(args, "ziel", None) or ["zeigen"])[0]
     if aktion == "zeigen":
-        for name in LAEUFE:
+        for name in laeufe():
             print(f"{'an ' if angemeldet(name) else 'aus'}: {_label(name)}")
         return 0
     if aktion not in ("an", "aus"):
@@ -101,7 +110,7 @@ def befehl(args) -> int:
         return 2
     if not echt(args):
         tun = "einrichten" if aktion == "an" else "ausschalten"
-        print(f"trocken: würde {tun}: " + ", ".join(_label(n) for n in LAEUFE))
+        print(f"trocken: würde {tun}: " + ", ".join(_label(n) for n in (laeufe() if aktion == "an" else LAEUFE + ZUSATZ)))
         if aktion == "an":
             print(plist_text("takt"))
         return 0

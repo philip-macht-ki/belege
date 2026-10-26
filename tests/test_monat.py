@@ -83,7 +83,7 @@ def _monat_mit_belegen(repo):
 
 def test_auszug_wird_ueber_deutsches_datum_gefunden(repo):
     monat_wert = _monat_mit_belegen(repo)
-    assert monat._auszug(_args(), monat_wert).name == "konto.csv"
+    assert [d.name for d in monat._auszuege(_args(), monat_wert)] == ["konto.csv"]
 
 
 def test_betraege_aendern_keine_namen():

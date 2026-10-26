@@ -1,0 +1,24 @@
+# Optional: Kontoumsätze automatisch aus MoneyMoney holen (einrichten_moneymoney.md).
+# Wer MoneyMoney nicht nutzt, lässt das hier aus und lädt die Kontoauszüge
+# weiter selbst als CSV herunter. Beides ist gleich gut für `belege monat`.
+an = false
+
+# So viele Monate schreibt jeder Lauf neu: der laufende und der Vormonat.
+monate = 2
+
+# Ist ein Konto länger nicht abgerufen worden, steht das im Tagesbericht.
+warnen_nach_tagen = 3
+
+# Ein Block je Konto. Dein Claude trägt sie mit dir ein.
+# kennung: IBAN, Kontonummer oder deren Ende, so wie MoneyMoney sie zeigt.
+#          Kreditkarten zeigen oft nur die letzten Ziffern, etwa "XXX-12345".
+# name:    kurzer Name für die Datei, z.B. "Girokonto" oder "Amex"
+# format:  "bank" (Girokonto) oder "amex" (Kreditkarte, Spalten wie der Export von amex.de;
+#          "kreditkarte" ist dasselbe und passt für jede Karte)
+# ordner:  leer heißt [monat] auszuege aus belege.toml
+#
+# [[konto]]
+# kennung = "DE00 0000 0000 0000 0000 00"
+# name = "Girokonto"
+# format = "bank"
+# ordner = ""
