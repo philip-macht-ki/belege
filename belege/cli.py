@@ -17,6 +17,7 @@ BEFEHLE = {
     "downloads": ("takt", "befehl_downloads", "Nur Downloads abarbeiten"),
     "bericht": ("bericht", "befehl", "Tagesbericht erstellen"),
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
+    "moneymoney": ("moneymoney", "befehl", "Optional: Kontoumsätze aus MoneyMoney als CSV holen"),
     "anmelden": ("anmelden", "befehl", "Google-Zugang einrichten"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
     "einrichten-urteil": ("einrichten", "befehl_urteil", "Starter für das eingestellte Urteil einrichten"),
@@ -41,7 +42,7 @@ BEFEHLE = {
 
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "ablegen", "dokumente", "jahr"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -57,6 +58,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--konto")
     argumente.add_argument("--monat")
     argumente.add_argument("--auszug")
+    argumente.add_argument("--testordner", metavar="PFAD", help="MoneyMoney: alle CSVs in diesen Ordner statt in den Auszugsordner")
     argumente.add_argument("--uebergabe", action="store_true")
     argumente.add_argument("--anfragen", action="store_true")
     argumente.add_argument("--tage", type=int)

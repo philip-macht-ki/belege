@@ -30,29 +30,8 @@ def _auszugsdateien() -> list[Path]:
 
 
 def _buchungen_dedupliziert(dateien: list[Path], monat_str: str) -> list[dict]:
-    """Liest einen Monat aus allen Kontoauszug-Dateien und zählt Dubletten nur einmal.
-
-    Mehrere CSVs können sich überschneiden (eine Jahres-CSV neben einer
-    einzelnen Monats-CSV); dieselbe Buchung (Datum, Betrag, Name, Zweck) soll
-    dann nicht doppelt in den Abgleich einfließen.
-    """
-    gesehen: set[tuple] = set()
-    ergebnis: list[dict] = []
-    for datei in dateien:
-        try:
-            gefunden = monat.buchungen(datei, monat_str)
-        except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV stoppt das Jahr nicht
-            kern.log(f"Kontoauszug {datei.name} für {monat_str} nicht lesbar: {fehler}")
-            continue
-        for buchung in gefunden:
-            schluessel = (
-                buchung["datum"], buchung["betrag"], buchung["name"], buchung["zweck"]
-            )
-            if schluessel in gesehen:
-                continue
-            gesehen.add(schluessel)
-            ergebnis.append(buchung)
-    return ergebnis
+    """Ein Monat aus allen Kontoauszug-Dateien, Dubletten nur einmal (siehe monat.buchungen_aus)."""
+    return monat.buchungen_aus(dateien, monat_str)
 
 
 def _schreibe_jahresausgaben(
