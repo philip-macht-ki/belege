@@ -14,7 +14,8 @@ from . import kern
 BEKANNTE = {
     "datum": ("buchungstag", "datum", "valuta"),
     "betrag": ("betrag", "umsatz"),
-    "name": ("beguenstigter", "zahlungspflichtiger", "name", "empfänger", "empfaenger"),
+    # "beschreibung" zuletzt: so heißt der Name nur im Kreditkartenexport von amex.de.
+    "name": ("beguenstigter", "zahlungspflichtiger", "name", "empfänger", "empfaenger", "beschreibung"),
     "zweck": ("verwendungszweck", "buchungstext"),
     "soll_haben": ("soll/haben", "soll haben", "soll", "haben"),
     "originalbetrag": ("originalbetrag", "betrag in fremdwaehrung", "fremdbetrag"),
@@ -134,11 +135,14 @@ def buchungen(datei: Path, monat: str | None) -> list[dict]:
         raise RuntimeError(
             "Datum, Betrag oder Name sind nicht eindeutig. Prüfe die CSV-Spalten."
         )
+    # Kreditkarte im Format von amex.de (auch aus `belege moneymoney`): Belastungen
+    # stehen dort positiv. Umgedreht gilt wie beim Girokonto: Ausgabe negativ.
+    vorzeichen = -1 if _kreditkarte(leser.fieldnames or [], spalten) else 1
     ergebnis = []
     for zeile in leser:
         try:
             tag = _datum(zeile[spalten["datum"]])
-            menge = _betrag(
+            menge = vorzeichen * _betrag(
                 zeile[spalten["betrag"]], zeile.get(spalten.get("soll_haben") or "", "")
             )
         except (KeyError, ValueError):
@@ -154,6 +158,40 @@ def buchungen(datei: Path, monat: str | None) -> list[dict]:
                     if spalten.get("originalbetrag") and zeile.get(spalten["originalbetrag"], "").strip() else None,
                 }
             )
+    return ergebnis
+
+
+def _kreditkarte(kopf: list[str], spalten: dict) -> bool:
+    """Kopf wie beim CSV-Export von amex.de: Datum, Beschreibung, Betrag."""
+    normal = {_normal(wert) for wert in kopf}
+    return (
+        {"datum", "beschreibung", "betrag"} <= normal
+        and _normal(spalten.get("name") or "") == "beschreibung"
+        and not spalten.get("soll_haben")
+    )
+
+
+def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
+    """Liest einen Monat aus mehreren Auszügen und zählt Dubletten nur einmal.
+
+    Mehrere CSVs sind normal: ein Girokonto und eine Kreditkarte, oder eine
+    Jahres-CSV neben einer Monats-CSV. Dieselbe Buchung (Datum, Betrag, Name,
+    Zweck) fließt nur einmal in den Abgleich.
+    """
+    gesehen: set[tuple] = set()
+    ergebnis: list[dict] = []
+    for datei in dateien:
+        try:
+            gefunden = buchungen(datei, monat)
+        except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV stoppt den Rest nicht
+            kern.log(f"Kontoauszug {datei.name} für {monat} nicht lesbar: {fehler}")
+            continue
+        for buchung in gefunden:
+            schluessel = (buchung["datum"], buchung["betrag"], buchung["name"], buchung["zweck"])
+            if schluessel in gesehen:
+                continue
+            gesehen.add(schluessel)
+            ergebnis.append(buchung)
     return ergebnis
 
 
@@ -185,23 +223,19 @@ def _datum(wert: str) -> date:
     raise ValueError(wert)
 
 
-def _auszug(args, monat: str) -> Path | None:
-    """Der angegebene Kontoauszug, sonst der jüngste im Auszugsordner mit Buchungen im Monat.
-
-    Gesucht wird über die gelesenen Buchungen, nicht über den Dateitext: deutsche
-    Banken schreiben das Datum als 12.09.2026, nicht als 2026-09-12.
-    """
+def _auszuege(args, monat: str) -> list[Path]:
+    """Der angegebene Kontoauszug, sonst alle im Auszugsordner mit Buchungen im Monat."""
     if getattr(args, "auszug", None):
-        return Path(args.auszug).expanduser()
+        return [Path(args.auszug).expanduser()]
     ordner = kern.erweitert(kern.konfig("belege").get("monat", {}).get("auszuege", ""))
     treffer = []
-    for datei in ordner.glob("*.csv"):
+    for datei in sorted(ordner.glob("*.csv")):
         try:
             if buchungen(datei, monat):
                 treffer.append(datei)
         except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV soll die Suche nicht stoppen
             kern.log(f"Kontoauszug {datei.name} nicht lesbar: {fehler}")
-    return max(treffer, key=lambda p: p.stat().st_mtime) if treffer else None
+    return treffer
 
 
 def _lieferanten(beleg: dict) -> list[str]:
@@ -698,8 +732,8 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
 def befehl(args) -> int:
     """Führt Monatsabgleich, optionale Übergabe und Rechnungsanfragen aus."""
     monat = _monat(getattr(args, "monat", None))
-    auszug = _auszug(args, monat)
-    if not auszug or not auszug.exists():
+    auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
+    if not auszuege:
         ordner = kern.erweitert(
             kern.konfig("belege").get("monat", {}).get("auszuege", "")
         )
@@ -708,7 +742,7 @@ def befehl(args) -> int:
         print(f"nichts: {text}")
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
-    daten = abgleichen(buchungen(auszug, monat), index)
+    daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
     mahnungen = _mahnungen()
     ziel = kern.pfad("arbeit", "monat", monat)

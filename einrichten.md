@@ -121,6 +121,9 @@ Kontoauszüge, Monatsabschluss, Steuerberater und Jahresübersicht richten wir
 erst in Teil 2 ein.
 `belege monat` sucht dann fehlende Belege selbst in Postfach, Downloads,
 Eingängen und Scan-Ordner und gleicht Mahnungen gegen das Konto ab.
+Die Kontoauszüge lädt die Person von Hand als CSV herunter. Wer möchte, holt sie
+stattdessen automatisch aus MoneyMoney (kostenpflichtig, optional):
+`einrichten_moneymoney.md`. Claude bietet das nur an, er drängt nicht.
 
 ## Erst in Teil 3: Handy, Downloads, Cloud und Ablage
 

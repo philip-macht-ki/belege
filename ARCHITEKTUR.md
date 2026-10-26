@@ -163,6 +163,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Bericht) |
 | `mcp_server.py` | `belege mcp` (lokaler Postfach-Server über stdio) |
 | `zeitplan.py` | `belege zeitplan [an|aus|zeigen]` |
+| `moneymoney.py` | optional: `belege moneymoney [konten] [--echt] [--testordner PFAD]`, Konfig `konfig/moneymoney.toml` |
 | `pruefen.py` | `belege pruefen` Ampel |
 | `beispiel.py` | `belege beispiel` erzeugt den Musterbetrieb |
 | `cli.py` | Befehlsverteiler |
@@ -282,6 +283,13 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
   Verwendungszweck, Buchungstext, Währung); wenn unklar, Urteil
   (`zweck="spalten"`) einmal je Kopfzeile, zwischengespeichert.
   Deutsche und englische Zahlenformate.
+- Kreditkarte im Format von amex.de (Kopf mit `Datum`, `Beschreibung`,
+  `Betrag`, Name nur in `Beschreibung`, kein Soll/Haben): Belastungen stehen
+  dort positiv und werden beim Lesen umgedreht. Danach gilt überall: Ausgabe
+  negativ.
+- Ohne `--auszug` liest der Abgleich **alle** CSV-Dateien im Auszugsordner mit
+  Buchungen im Monat (Girokonto und Kreditkarte nebeneinander). Dieselbe
+  Buchung (Datum, Betrag, Name, Zweck) zählt nur einmal (`buchungen_aus`).
 - Buchung ohne Beleg: `konfig/regeln.toml` `[monat].ohne_beleg` (Muster wie
   „Finanzamt“, „Gehalt“, „Umbuchung“, „Privatentnahme“) → ignoriert, aber in
   `abgleich.json` sichtbar.
@@ -340,7 +348,9 @@ Konsole plus Zähler aus dem Index.
   liegt; sonst Bericht-Ereignis „Kontoauszug fehlt“.
 - launchd: `de.belege.takt` (alle `[takt].minuten` × 60 s, Standard 15),
   `de.belege.tag` (`[takt].tag_uhrzeit`, Standard 21:00), `de.belege.monat`
-  (Tag `[uebergabe].tag`, 09:00). Vorlagen in `zeitplan/`, PATH fest gesetzt.
+  (Tag `[uebergabe].tag`, 09:00), optional `de.belege.moneymoney` (07:00 und
+  19:00, nur bei `an = true` in `konfig/moneymoney.toml`). Vorlagen in
+  `zeitplan/`, PATH fest gesetzt.
   `belege zeitplan an` fragt vorher mit `[ja]` nach und verweigert auf einem
   anderen Rechner als `[rechner].erlaubt`.
 - `belege pruefen` meldet doppelte Ordner in der Ablage (`10 (1)`, `10 2`
@@ -380,6 +390,26 @@ Test „erst trocken (nichts passiert), dann echt“.
   Apple Vision. Am 29.09.2026 verworfen: Das System läuft wegen Zeitplan,
   Mitteilungen und Bildumwandlung ohnehin nur auf dem Mac, und dort ist Apple
   Vision da. Ein Windows-Ersatz nur für die Texterkennung hilft niemandem.
+
+## MoneyMoney (`belege moneymoney`, optional)
+
+- Wer MoneyMoney nicht nutzt, legt die CSV-Dateien selbst in `[monat].auszuege`.
+  Nichts sonst hängt an diesem Modul.
+- Liest nur über AppleScript: `export accounts` und `export transactions … as
+  "plist"`. Die Konto-Kennung geht als Argument an `osascript`, nie in den
+  Skripttext. Kein Befehl, der Geld bewegt oder MoneyMoney ändert.
+- `konfig/moneymoney.toml`: `an`, `monate` (Standard 2: laufender und
+  Vormonat), `warnen_nach_tagen` (3), je `[[konto]]` `kennung` (IBAN,
+  Kontonummer oder deren Ende, Leerzeichen egal, nie mehrdeutig), `name`,
+  `format` (`bank` | `amex` = `kreditkarte`), optional `ordner`.
+- Datei je Konto und Monat: `<JJJJ-MM>_<name>_MoneyMoney.csv`, UTF-8 mit BOM,
+  nur gebuchte Umsätze. `bank`: Semikolon, Spalten wie beim Sparkassen-Export,
+  Ausgabe negativ. `amex`: `Datum,Beschreibung,Betrag` wie amex.de, Belastung
+  positiv. Ersetzt nur bei geändertem Inhalt, atomar.
+- Ohne `--echt` nur Anzeige. `--testordner` schreibt alles dorthin und geht auch
+  bei `an = false`. Nicht erreichbar, Konto nicht gefunden, Konto länger als
+  `warnen_nach_tagen` nicht abgerufen → Ereignis `monat` für den Tagesbericht.
+- `belege moneymoney konten`: Name, Kennung, Art je Konto, ohne Kontostand.
 
 ## Jahresende (`belege jahr`, Modul bh7)
 
