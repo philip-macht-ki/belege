@@ -201,3 +201,15 @@ def test_konten_zeigt_kennungen_ohne_kontostand(repo, monkeypatch, capsys):
     aus = capsys.readouterr().out
     assert aus.strip() == "Girokonto | DE00123 | Girokonto"
     assert "1234" not in aus
+
+
+def test_gleiche_buchungen_in_einer_datei_bleiben_dubletten_ueber_dateien_nicht(repo):
+    kopf = "Buchungstag;Beguenstigter/Zahlungspflichtiger;Verwendungszweck;Betrag\n"
+    zwei_kaffee = "05.09.2026;Cafe Morgenrot;;-3,50\n05.09.2026;Cafe Morgenrot;;-3,50\n"
+    monatsdatei = repo / "auszuege" / "a_monat.csv"
+    jahresdatei = repo / "auszuege" / "b_jahr.csv"
+    monatsdatei.write_text(kopf + zwei_kaffee, encoding="utf-8")
+    jahresdatei.write_text(kopf + zwei_kaffee + "06.09.2026;Pixelwerk;Abo;-59,50\n", encoding="utf-8")
+    assert len(monat.buchungen_aus([monatsdatei], "2026-09")) == 2
+    gelesen = monat.buchungen_aus([monatsdatei, jahresdatei], "2026-09")
+    assert sorted(b["betrag"] for b in gelesen) == [-59.5, -3.5, -3.5]

@@ -176,9 +176,10 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
 
     Mehrere CSVs sind normal: ein Girokonto und eine Kreditkarte, oder eine
     Jahres-CSV neben einer Monats-CSV. Dieselbe Buchung (Datum, Betrag, Name,
-    Zweck) fließt nur einmal in den Abgleich.
+    Zweck) fließt nur einmal in den Abgleich. Zwei gleiche Buchungen in
+    derselben Datei (zweimal Kaffee am selben Tag) bleiben zwei.
     """
-    gesehen: set[tuple] = set()
+    gesehen: dict[tuple, int] = {}
     ergebnis: list[dict] = []
     for datei in dateien:
         try:
@@ -186,11 +187,14 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
         except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV stoppt den Rest nicht
             kern.log(f"Kontoauszug {datei.name} für {monat} nicht lesbar: {fehler}")
             continue
+        in_datei: dict[tuple, int] = {}
         for buchung in gefunden:
             schluessel = (buchung["datum"], buchung["betrag"], buchung["name"], buchung["zweck"])
-            if schluessel in gesehen:
+            in_datei[schluessel] = in_datei.get(schluessel, 0) + 1
+            # Neu ist nur, was diese Datei öfter enthält als jede Datei davor.
+            if in_datei[schluessel] <= gesehen.get(schluessel, 0):
                 continue
-            gesehen.add(schluessel)
+            gesehen[schluessel] = in_datei[schluessel]
             ergebnis.append(buchung)
     return ergebnis
 
