@@ -12,7 +12,7 @@ import importlib
 import traceback
 from collections import Counter
 
-from .kern import Ergebnis, Sperre, echt, ereignis, konten, log
+from .kern import Ergebnis, Sperre, echt, ereignis, konfig, konten, log
 
 
 def _weiterreichen(args) -> argparse.Namespace:
@@ -122,23 +122,48 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
         return f"fehler: {fehler}", []
 
 
-def _lauf(args, schritte: tuple[str, ...], sperre: str) -> int:
-    """Führt mehrere Schritte nacheinander aus, jeden für sich abgesichert."""
+def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
+    """Führt mehrere Schritte nacheinander aus, jeden für sich abgesichert.
+
+    Gibt zurück, ob alle Schritte ohne Fehler durchliefen.
+    """
+    fehlerfrei = True
     try:
         with Sperre(sperre):
             for name in schritte:
                 zustand, _ = _schritt(name, args)
                 print(f"{name}: {zustand}")
+                fehlerfrei = fehlerfrei and not zustand.startswith(("fehler", "Exit"))
     except RuntimeError:
         print("nichts: Ein Lauf ist schon aktiv.")
-    return 0
+    return fehlerfrei
+
+
+def lebenszeichen() -> None:
+    """Meldet einen fehlerfreien Lauf an die Adresse aus `[takt] lebenszeichen`.
+
+    Bleibt die Meldung länger aus, schickt der Dienst dahinter eine Mail. So fällt
+    ein stehengebliebener Zeitplan auf, auch wenn der Mac aus ist.
+    """
+    import urllib.request
+
+    adresse = str(konfig("belege").get("takt", {}).get("lebenszeichen", "")).strip()
+    if not adresse.startswith("https://"):
+        return
+    try:
+        urllib.request.urlopen(adresse, timeout=10).close()
+    except Exception as fehler:  # noqa: BLE001 - ein fehlendes Netz stoppt keinen Lauf
+        log(f"Lebenszeichen nicht gesendet: {fehler}")
 
 
 def befehl(args) -> int:
     """`belege takt`: Postfach, Handy, Papierpost und Wächter."""
-    return _lauf(args, ("postfach", "handy", "scan", "waechter"), "takt")
+    if _lauf(args, ("postfach", "handy", "scan", "waechter"), "takt") and echt(args):
+        lebenszeichen()
+    return 0
 
 
 def befehl_tag(args) -> int:
     """`belege tag`: Downloads-Ordner, dann Tagesbericht."""
-    return _lauf(args, ("downloads", "bericht"), "tag")
+    _lauf(args, ("downloads", "bericht"), "tag")
+    return 0

@@ -132,3 +132,59 @@ def test_gmail_metadata_liest_anhaenge_und_label_quoted(monkeypatch):
     monkeypatch.setattr(box, "suchen", lambda abfrage: aufrufe.append(abfrage) or [])
     box.mit_label("Beleg/Neu")
     assert aufrufe == ['label:"Beleg-Neu"']
+
+
+@pytest.mark.parametrize(("mx", "imap", "smtp"), [
+    (["aspmx.l.google.com"], ("imap.gmail.com", 993), ("smtp.gmail.com", 465)),
+    (["mx00.ionos.de"], ("imap.ionos.de", 993), ("smtp.ionos.de", 465)),
+    (["smtpin.rzone.de"], ("imap.strato.de", 993), ("smtp.strato.de", 465)),
+    (["w0123456.kasserver.com"], ("w0123456.kasserver.com", 993), ("w0123456.kasserver.com", 465)),
+    (["www42.your-server.de"], ("mail.your-server.de", 993), ("mail.your-server.de", 465)),
+])
+def test_eigene_domain_am_mx_erkannt(monkeypatch, mx, imap, smtp):
+    monkeypatch.setattr("belege.postfach._mx", lambda domain: mx)
+    monkeypatch.setattr("belege.postfach._ispdb", lambda domain: pytest.fail("ISPDB nicht nötig"))
+    assert _server("studio-beispiel.de", {}) == (imap, smtp)
+
+
+def test_eigene_domain_konfig_hat_vorrang(monkeypatch):
+    monkeypatch.setattr("belege.postfach._mx", lambda domain: pytest.fail("kein DNS nötig"))
+    konto = {"imap_server": "mail.example.de", "smtp_server": "mail.example.de:587"}
+    assert _server("example.de", konto) == (("mail.example.de", 993), ("mail.example.de", 587))
+
+
+def test_eigene_domain_ueber_thunderbird_oder_klare_meldung(monkeypatch):
+    monkeypatch.setattr("belege.postfach._mx", lambda domain: ["mx.unbekannt.example"])
+    monkeypatch.setattr("belege.postfach._ispdb", lambda domain: ("imap.anbieter.example:993", "smtp.anbieter.example:587"))
+    assert _server("firma.example", {}) == (("imap.anbieter.example", 993), ("smtp.anbieter.example", 587))
+    monkeypatch.setattr("belege.postfach._ispdb", lambda domain: ("", ""))
+    with pytest.raises(RuntimeError, match="imap_server und smtp_server"):
+        _server("firma.example", {})
+
+
+def test_eigene_domain_bei_microsoft_365(monkeypatch):
+    monkeypatch.setattr("belege.postfach._mx", lambda domain: ["firma-de.mail.protection.outlook.com"])
+    with pytest.raises(RuntimeError, match="Microsoft 365"):
+        _server("firma.de", {})
+
+
+def test_ispdb_liest_ssl_server(monkeypatch):
+    from belege.postfach import _ispdb
+
+    xml = b"""<clientConfig><emailProvider>
+      <incomingServer type="pop3"><hostname>pop.x.example</hostname><port>995</port><socketType>SSL</socketType></incomingServer>
+      <incomingServer type="imap"><hostname>imap.x.example</hostname><port>143</port><socketType>STARTTLS</socketType></incomingServer>
+      <incomingServer type="imap"><hostname>imap.x.example</hostname><port>993</port><socketType>SSL</socketType></incomingServer>
+      <outgoingServer type="smtp"><hostname>smtp.x.example</hostname><port>465</port><socketType>SSL</socketType></outgoingServer>
+    </emailProvider></clientConfig>"""
+
+    class Antwort:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def read(self):
+            return xml
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: Antwort())
+    assert _ispdb("x.example") == ("imap.x.example:993", "smtp.x.example:465")

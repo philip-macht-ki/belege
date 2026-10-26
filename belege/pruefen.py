@@ -44,10 +44,10 @@ def _imap(k):
     pw = passwort(str(k.get("name", "")))
     if not pw:
         raise RuntimeError("Passwort fehlt in .env")
-    server = (
-        k.get("imap_server") or "imap." + str(k.get("adresse", "")).partition("@")[2]
-    )
-    p = imaplib.IMAP4_SSL(server, 993, timeout=15)
+    from .postfach import _server
+
+    (server, port), _ = _server(str(k.get("adresse", "")).rpartition("@")[2].lower(), k)
+    p = imaplib.IMAP4_SSL(server, port, timeout=15)
     try:
         p.login(k.get("adresse", ""), pw)
     finally:

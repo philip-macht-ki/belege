@@ -63,6 +63,48 @@ def dokumente_suchen(abfrage: str = "", max: int = 10) -> list[dict]:
     return suchen(abfrage, max=min(max, 10))
 
 
+def belege_suchen(
+    abfrage: str = "",
+    von: str = "",
+    bis: str = "",
+    betrag_ab: float | None = None,
+    betrag_bis: float | None = None,
+    max: int = 20,
+) -> dict:
+    """Sucht abgelegte Belege im Belegverzeichnis nach Lieferant, Beschreibung,
+    Zeitraum und Betrag; liefert Pfad und Metadaten, nie den Dateiinhalt."""
+    index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
+    woerter = abfrage.lower().split()
+    treffer = []
+    for eintrag in index.values():
+        heuhaufen = " ".join(
+            str(eintrag.get(feld, "")) for feld in ("lieferant", "beschreibung", "pfad", "art", "bereich")
+        ).lower()
+        if any(wort not in heuhaufen for wort in woerter):
+            continue
+        datum = str(eintrag.get("datum") or "")
+        if (von and datum < von) or (bis and datum > bis):
+            continue
+        betrag = eintrag.get("betrag")
+        if betrag_ab is not None and (betrag is None or betrag < betrag_ab):
+            continue
+        if betrag_bis is not None and (betrag is None or betrag > betrag_bis):
+            continue
+        treffer.append({
+            "pfad": str(kern.ablage_ordner() / eintrag["pfad"]) if eintrag.get("pfad") else None,
+            "datum": datum or None,
+            "lieferant": eintrag.get("lieferant"),
+            "beschreibung": eintrag.get("beschreibung"),
+            "betrag": betrag,
+            "waehrung": eintrag.get("waehrung"),
+            "bereich": eintrag.get("bereich"),
+            "status": eintrag.get("status"),
+        })
+    treffer.sort(key=lambda t: t["datum"] or "", reverse=True)
+    summe = round(sum(t["betrag"] or 0 for t in treffer), 2)
+    return {"anzahl": len(treffer), "summe": summe, "treffer": treffer[: min(max, 50)]}
+
+
 def fristen(tage: int = 365) -> dict:
     """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
     from .dokumente import fristen_liste
@@ -150,6 +192,13 @@ def befehl(args) -> int:
             dokumente_suchen,
             "Sucht Verträge, Versicherungen und Briefe (keine Buchhaltungsbelege). "
             "Parameter: abfrage, max (höchstens 10).",
+        ),
+        (
+            belege_suchen,
+            "Sucht abgelegte Buchhaltungsbelege (Rechnungen, Quittungen). Parameter: "
+            "abfrage (Wörter aus Lieferant oder Beschreibung), von und bis (JJJJ-MM-TT), "
+            "betrag_ab, betrag_bis, max (höchstens 50). Gibt Anzahl, Summe aller Treffer "
+            "und Pfade zurück. Beispiel: belege_suchen(abfrage='Telekom', von='2026-01-01').",
         ),
         (
             fristen,

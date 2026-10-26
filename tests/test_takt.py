@@ -71,3 +71,26 @@ def test_sperre(repo, capsys):
     (repo / "arbeit" / ".takt.pid").write_text(str(os.getpid()))
     assert takt.befehl(Namespace(echt=False, tage=None, konto=None)) == 0
     assert "schon aktiv" in capsys.readouterr().out
+
+
+def test_lebenszeichen_nur_nach_fehlerfreiem_echten_takt(repo, monkeypatch):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace(
+        'lebenszeichen = ""', 'lebenszeichen = "https://beispiel.example/l/abc"'), encoding="utf-8")
+    aufrufe = []
+
+    class Antwort:
+        def close(self):
+            pass
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda adresse, timeout: aufrufe.append(adresse) or Antwort())
+    zustaende = {"postfach": "0 abgelegt", "handy": "0 abgelegt", "scan": "0 abgelegt", "waechter": "ok"}
+    monkeypatch.setattr(takt, "_schritt", lambda name, args: (zustaende[name], []))
+
+    takt.befehl(Namespace(echt=False))
+    assert aufrufe == []
+    takt.befehl(Namespace(echt=True))
+    assert aufrufe == ["https://beispiel.example/l/abc"]
+    zustaende["postfach"] = "fehler: Anmeldung abgelehnt"
+    takt.befehl(Namespace(echt=True))
+    assert len(aufrufe) == 1
