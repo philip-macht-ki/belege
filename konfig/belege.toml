@@ -79,6 +79,9 @@ auszuege = "~/Belege/Kontoauszuege"
 [takt]
 minuten = 15
 tag_uhrzeit = "21:00"
+# Adresse deines Lebenszeichens (vom Kurs-Connector, Werkzeug lebenszeichen).
+# Nach jedem fehlerfreien Takt meldet sich belege dort. Leer = aus.
+lebenszeichen = ""
 
 [urteil]
 # claude = Claude-Abo (Standard) | codex = ChatGPT-Abo über Codex |

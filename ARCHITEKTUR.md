@@ -337,7 +337,8 @@ Konsole plus Zähler aus dem Index.
 ### Takt und Zeitplan
 
 - `belege takt --echt`: Postfach, Handy-Ordner, Wächter (je Schritt einzeln
-  abgefangen, unter `Sperre("takt")`).
+  abgefangen, unter `Sperre("takt")`). Läuft er fehlerfrei, ruft er die
+  HTTPS-Adresse aus `[takt].lebenszeichen` auf (leer = aus).
 - `belege tag --echt`: Downloads, Bericht.
 - `belege monat --uebergabe --echt`: am `[uebergabe].tag` des Monats für den
   Vormonat, nur wenn ein Kontoauszug für den Monat in `[monat].auszuege`

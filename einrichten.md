@@ -124,6 +124,13 @@ dass der Wächter jede neue Mail einmal ansieht (Absender, Betreff, Anfang des
 Textes gehen dafür an Claude) und wie man ihn ausschaltet (`waechter = false` beim Konto). Zum Schluss zeigt er
 `uv run belege zeitplan zeigen` und `uv run belege pruefen` noch einmal.
 
+Lebenszeichen: Ist der Kurs-Connector „Philip macht KI“ verbunden, legt Claude
+mit dessen Werkzeug `lebenszeichen` eines an (Name „Belege aus dem Postfach“,
+`max_stunden` 3 auf einem Dauerrechner, 36 auf einem Laptop). Aus der Zeile, die
+das Werkzeug zurückgibt, trägt er nur die Adresse in Anführungszeichen als
+`[takt] lebenszeichen` in `konfig/belege.toml` ein. Nach jedem fehlerfreien Takt
+meldet sich belege dort. Bleibt das aus, bekommt die Person eine Mail.
+
 Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 
 ## Teil 2: Monat und Jahr
