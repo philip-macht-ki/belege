@@ -69,6 +69,17 @@ Postfach kann hier nicht direkt verbunden werden. Richte dort eine Weiterleitung
 an ein Google-Konto ein; dieses Google-Konto verwenden wir dann für Rechnungen.
 Leite nur Rechnungen weiter, nicht das ganze Postfach.
 
+Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
+Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
+Hetzner am MX-Eintrag, alle übrigen über die öffentliche Anbieterliste von
+Thunderbird. `uv run belege pruefen` zeigt danach, ob die Anmeldung klappt.
+Meldet belege, dass die Server unbekannt sind, fragt Claude nach dem Anbieter,
+schlägt dessen IMAP- und SMTP-Server in der Hilfe des Anbieters nach und trägt
+sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
+`mail.anbieter.de:993`). Liegt die Domain bei Microsoft 365, gilt der
+Weiterleitungsweg oben. Bei Google Workspace muss der Admin App-Passwörter
+erlauben.
+
 Bevor Claude zum ersten Mal ins Postfach schaut, fragt er: Gibt es Absender mit
 vertraulichen Unterlagen, etwa Mandanten oder Patienten? Die trägt er in
 `ausschluss` in `konfig/regeln.toml` ein. Von ihnen lädt das System keinen
@@ -115,35 +126,85 @@ Textes gehen dafür an Claude) und wie man ihn ausschaltet (`waechter = false` b
 
 Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 
-## Erst in Teil 2: Monat und Jahr
+## Teil 2: Monat und Jahr
 
-Kontoauszüge, Monatsabschluss, Steuerberater und Jahresübersicht richten wir
-erst in Teil 2 ein.
-`belege monat` sucht dann fehlende Belege selbst in Postfach, Downloads,
-Eingängen und Scan-Ordner und gleicht Mahnungen gegen das Konto ab.
+Nur wenn die Person Teil 2 hat. Jeder Schritt erst trocken, dann nach einem
+ausdrücklichen Ja mit `--echt`.
 
-## Erst in Teil 3: Handy, Downloads, Cloud und Ablage
+1. **Kontoauszüge.** Claude legt `~/Belege/Kontoauszuege` an (Einstellung
+   `[monat] auszuege`). Die Person lädt im Online-Banking die Umsätze als CSV
+   herunter und legt sie dort ab, je Konto eine Datei, eine Jahres-CSV geht auch.
+   Claude darf sich nicht bei der Bank anmelden.
+   Die Kontoauszüge lädt die Person von Hand als CSV herunter. Wer möchte, holt sie
+   stattdessen automatisch aus MoneyMoney (kostenpflichtig, optional):
+   `einrichten_moneymoney.md`. Claude bietet das nur an, er drängt nicht.
+2. **Abgleich.** `uv run belege monat --monat JJJJ-MM` zeigt, wie viele Buchungen
+   einen Beleg haben. Mit `--echt` entstehen im Monatsordner `fehlt_noch.md/.csv`
+   (Zahlung ohne Beleg, mit Summe), `pruefen.md`, `klaerung.md` und
+   `mahnungen.md`. Fehlende Belege sucht `monat` selbst in Postfach, Downloads,
+   Eingängen und Scan-Ordner. Die Klärungsliste geht Claude Zeile für Zeile mit
+   der Person durch und trägt ihre Antworten ein.
+3. **Übergabeweg.** Claude fragt, wohin die Belege gehen, und trägt `[uebergabe]`
+   ein: `weg = "mail"` mit `adresse` (Steuerberater, DATEV Upload Mail, Lexware
+   Office, sevDesk `autobox@sevdesk.email`) oder `weg = "ordner"` mit `ordner`
+   (ein freigegebener Ordner). Bei DATEV setzt er `nur_pdf_tif = true`. Die
+   Adresse kommt erst nach einem ausdrücklichen Ja der Person in `[senden] erlaubt`.
+4. **Probelauf.** `uv run belege monat --monat JJJJ-MM --uebergabe` zeigt Text und
+   Anhänge. Erst geht eine Testübergabe an die eigene Adresse der Person, dann die
+   echte. `--anfragen --echt` legt Entwürfe an Lieferanten mit fehlender Rechnung an.
+5. **Automatisch.** Der Monatstermin im Zeitplan (am 3. um 9 Uhr) gleicht ab und
+   übergibt, sobald ein Kontoauszug für den Vormonat vorliegt.
+6. **Jahr.** `uv run belege jahr --jahr JJJJ` rechnet alle zwölf Monate.
+   `uv run belege postfach --tage 400 --echt` holt ältere Belege nach,
+   `jahr --anfragen --echt` legt Entwürfe für die übrigen Lücken an,
+   `jahr --paket` baut das Jahrespaket, `jahr --uebergabe` übergibt es (als Mail
+   immer nur als Entwurf).
 
-Handy-Ordner, Downloads, Cloud-Ordner, Verträge und Fristen gehören zu Teil 3.
-Dann braucht der tatsächlich gestartete Zeitplan möglicherweise
-Festplattenvollzugriff. Die Vorlagen starten `/bin/zsh`, das wiederum `uv run
-belege` ausführt. Claude öffnet die Systemeinstellungen mit:
+## Teil 3: Handy, Downloads, Cloud und Ablage
 
-```sh
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
-```
+Nur wenn die Person Teil 3 hat.
 
-Claude erklärt dort, welchem gestarteten Programm der Schalter gilt, du setzt
-ihn selbst, danach folgt ein harmloser Lesetest. Das Verhalten auf einem frischen
-Mac wird vor dem Einsatz noch einmal geprüft.
+1. **Cloud-Ordner.** Claude fragt, welchen Dienst die Person auf Handy und Mac
+   nutzt (iCloud Drive, Google Drive, Dropbox, OneDrive), legt dort `Belege/Eingang`
+   an und trägt den Pfad als `[quellen] handy_ordner` ein. Die Person prüft am
+   Handy, dass der Ordner erscheint. Fotos landen dort über die Dateien-App
+   (iPhone) oder die App des Dienstes (Android).
+2. **Festplattenvollzugriff.** Der Zeitplan braucht für Cloud-Ordner und
+   Downloads möglicherweise Festplattenvollzugriff. Die Vorlagen starten
+   `/bin/zsh`, das wiederum `uv run belege` ausführt. Claude öffnet die
+   Systemeinstellungen mit:
 
-Papierpost (optional): **Frag**, ob Briefe auf Papier kommen. Bei wenigen Briefen genügt ein Foto
-wie bei einem Kassenbon im Handy-Eingang. Bei vielen oder regelmäßigen Briefen
-nutzt du einen Scan-Dienst (zum Beispiel Dropscan oder Caya, kostenpflichtig)
-oder eine Scan-App. Deren Zielordner kommt unter `[quellen]` als `scan_ordner`
-in `konfig/belege.toml`; danach läuft `uv run belege pruefen`.
+   ```sh
+   open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+   ```
 
-## Erst in Teil 4: weitere Postfachwege
+   Claude erklärt dort, welchem gestarteten Programm der Schalter gilt, du setzt
+   ihn selbst, danach folgt ein harmloser Lesetest: `uv run belege handy` und
+   `uv run belege downloads`, beide trocken. Das Verhalten auf einem frischen
+   Mac wird vor dem Einsatz noch einmal geprüft.
+3. **Downloads.** `uv run belege downloads` zeigt, was verschoben würde, erst
+   nach Ja `--echt`. Danach räumt der Tagestermin um 21 Uhr von allein auf
+   (`[quellen] downloads_an = true`).
+4. **Papierpost (optional).** **Frag**, ob Briefe auf Papier kommen. Bei wenigen
+   Briefen genügt ein Foto wie bei einem Kassenbon im Handy-Eingang. Bei vielen
+   oder regelmäßigen Briefen nutzt du einen Scan-Dienst (zum Beispiel Dropscan
+   oder Caya, kostenpflichtig) oder eine Scan-App. Deren Zielordner kommt unter
+   `[quellen]` als `scan_ordner` in `konfig/belege.toml`; danach läuft
+   `uv run belege pruefen`.
+5. **Regeln.** Wiederkehrende Lieferanten bekommen eine feste Regel in
+   `konfig/regeln.toml`; die USt-IdNr. steht unter `[betrieb] ust_id`. Dateien in
+   `Unsortiert` ordnet Claude nach einem Satz der Person mit
+   `uv run belege ablegen <datei> --echt` ein.
+6. **Ablage für Dokumente.** Verträge, Versicherungen und Briefe:
+   `uv run belege dokumente` (Eingang `~/Belege/Dokumente-Eingang`), Fristen mit
+   `uv run belege fristen --echt` als Kalenderdatei, Notfallordner mit
+   `uv run belege notfall` aus `konfig/notfall.toml` (nie mit Passwörtern).
+   Damit Claude im Chat in Dokumenten und Belegen suchen kann, bindet er den
+   Postfach-Server ein: `claude mcp add belege -s user -- uv --directory
+   ~/Projekte/belege run belege mcp`. Er bringt `dokumente_suchen`, `fristen`
+   und `belege_suchen` mit.
+
+## Teil 4: weitere Postfachwege
 
 Eigene Google-Projekte, weitere Konten und der Postfach-Assistent gehören zu
 Teil 4.

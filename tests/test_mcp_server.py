@@ -88,5 +88,33 @@ def test_server_antwortet_ueber_stdio():
     prozess.kill()
     assert set(namen) == {
         "konten", "suchen", "lesen", "anhaenge_speichern", "entwurf", "senden",
-        "dokumente_suchen", "fristen",
+        "dokumente_suchen", "fristen", "belege_suchen",
     }
+
+
+def test_belege_suchen_nach_lieferant_zeitraum_und_betrag(repo):
+    """Die Belegsuche filtert das Belegverzeichnis und rechnet die Summe."""
+    index = {
+        "a": {"pfad": "Betrieb/2026/03/Eingang/2026-03-02_Telekom_Rechnung.pdf", "datum": "2026-03-02",
+              "lieferant": "Telekom Deutschland", "beschreibung": "Rechnung-Mobilfunk", "betrag": 39.95,
+              "waehrung": "EUR", "bereich": "betrieb", "status": "abgelegt"},
+        "b": {"pfad": "Betrieb/2025/12/Eingang/2025-12-02_Telekom_Rechnung.pdf", "datum": "2025-12-02",
+              "lieferant": "Telekom Deutschland", "beschreibung": "Rechnung-Mobilfunk", "betrag": 39.95,
+              "waehrung": "EUR", "bereich": "betrieb", "status": "abgelegt"},
+        "c": {"pfad": "Betrieb/2026/04/Eingang/2026-04-10_Pixelwerk_Rechnung.pdf", "datum": "2026-04-10",
+              "lieferant": "Pixelwerk", "beschreibung": "Software-Abo", "betrag": 159.0,
+              "waehrung": "EUR", "bereich": "betrieb", "status": "abgelegt"},
+    }
+    ziel = repo / "arbeit" / "index.json"
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    ziel.write_text(json.dumps(index), encoding="utf-8")
+
+    ergebnis = mcp_server.belege_suchen("telekom", von="2026-01-01")
+    assert ergebnis["anzahl"] == 1 and ergebnis["summe"] == 39.95
+    assert ergebnis["treffer"][0]["pfad"].endswith("2026-03-02_Telekom_Rechnung.pdf")
+
+    teuer = mcp_server.belege_suchen(betrag_ab=100)
+    assert [t["lieferant"] for t in teuer["treffer"]] == ["Pixelwerk"]
+
+    alle = mcp_server.belege_suchen()
+    assert alle["anzahl"] == 3 and alle["treffer"][0]["datum"] == "2026-04-10"

@@ -472,10 +472,95 @@ def _server(domain: str, konto: dict):
         domain, (konto.get("imap_server", ""), konto.get("smtp_server", ""))
     )
     if not imap or not smtp:
+        imap, smtp = server_erkennen(domain)
+    if not imap or not smtp:
         raise RuntimeError(
-            "IMAP- und SMTP-Server fehlen in konfig/belege.toml. Trag sie beim Postfach ein."
+            f"Für {domain} sind IMAP- und SMTP-Server nicht bekannt. Trag sie beim Postfach "
+            "als imap_server und smtp_server in konfig/belege.toml ein; dein Mailanbieter "
+            "nennt sie in seiner Hilfe unter IMAP oder E-Mail-Programm."
         )
     return _adresse_port(imap, 993), _adresse_port(smtp, 465)
+
+
+# Eigene Domains liegen meist bei einem Hoster. Woran man ihn am MX-Eintrag erkennt
+# und welche Server er für E-Mail-Programme nennt. "{mx}" heißt: derselbe Rechner
+# wie der MX (all-inkl gibt jedem Kunden einen eigenen).
+HOSTER_NACH_MX = (
+    ("google.com", "imap.gmail.com:993", "smtp.gmail.com:465"),
+    ("googlemail.com", "imap.gmail.com:993", "smtp.gmail.com:465"),
+    ("ionos.", "imap.ionos.de:993", "smtp.ionos.de:465"),
+    ("kundenserver.de", "imap.ionos.de:993", "smtp.ionos.de:465"),
+    ("rzone.de", "imap.strato.de:993", "smtp.strato.de:465"),
+    ("udag.de", "imap.udag.de:993", "smtp.udag.de:465"),
+    ("kasserver.com", "{mx}:993", "{mx}:465"),
+    ("your-server.de", "mail.your-server.de:993", "mail.your-server.de:465"),
+    ("mailbox.org", "imap.mailbox.org:993", "smtp.mailbox.org:465"),
+    ("posteo.de", "posteo.de:993", "posteo.de:465"),
+    ("icloud.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
+)
+
+
+def _mx(domain: str) -> list[str]:
+    """Die MX-Rechner einer Domain, ohne Zusatzpaket über dig vom Mac."""
+    try:
+        r = subprocess.run(
+            ["dig", "+short", "MX", domain], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [
+        zeile.split()[-1].rstrip(".").lower()
+        for zeile in r.stdout.splitlines()
+        if zeile.strip()
+    ]
+
+
+def _ispdb(domain: str) -> tuple[str, str]:
+    """Fragt die öffentliche Anbieterliste von Thunderbird nach IMAP und SMTP."""
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    try:
+        with urllib.request.urlopen(
+            f"https://autoconfig.thunderbird.net/v1.1/{domain}", timeout=10
+        ) as antwort:
+            baum = ET.fromstring(antwort.read())
+    except Exception:  # noqa: BLE001 - keine Antwort heißt nur: nicht erkannt
+        return "", ""
+
+    def server(art: str, typ: str) -> str:
+        for knoten in baum.iter(art):
+            if knoten.get("type") == typ and knoten.findtext("socketType") == "SSL":
+                return f"{knoten.findtext('hostname')}:{knoten.findtext('port')}"
+        for knoten in baum.iter(art):
+            if knoten.get("type") == typ:
+                return f"{knoten.findtext('hostname')}:{knoten.findtext('port')}"
+        return ""
+
+    return server("incomingServer", "imap"), server("outgoingServer", "smtp")
+
+
+def server_erkennen(domain: str) -> tuple[str, str]:
+    """Erkennt IMAP und SMTP einer eigenen Domain am MX-Eintrag, sonst über Thunderbird.
+
+    Gibt ("", "") zurück, wenn nichts sicher erkannt ist. Microsoft 365 bricht ab,
+    weil es kein App-Passwort mehr annimmt.
+    """
+    mx_liste = _mx(domain)
+    for mx in mx_liste:
+        if mx.endswith(("protection.outlook.com", "outlook.com")):
+            raise RuntimeError(
+                f"{domain} liegt bei Microsoft 365. Microsoft-Postfächer gehen seit 2026 nur "
+                "mit OAuth, nicht mit App-Passwort. Leite Rechnungen an ein Google-Konto weiter."
+            )
+        for kennung, imap, smtp in HOSTER_NACH_MX:
+            if mx.endswith(kennung) or kennung.endswith(".") and kennung in mx:
+                return imap.replace("{mx}", mx), smtp.replace("{mx}", mx)
+    imap, smtp = _ispdb(domain)
+    if not (imap and smtp) and mx_liste:
+        # Thunderbird kennt oft nur den Hoster, nicht jede Kundendomain.
+        imap, smtp = _ispdb(".".join(mx_liste[0].split(".")[-2:]))
+    return imap, smtp
 
 
 def _adresse_port(wert: str, standard: int) -> tuple[str, int]:

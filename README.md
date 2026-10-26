@@ -32,7 +32,7 @@ Für die Tests genügt im Projektordner: `uv run pytest -q`.
 | `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege monat --uebergabe` | Belege des Monats an Steuerberater oder Beleg-Adresse |
 | `belege suchen …` | im Postfach suchen |
-| `belege mcp` | Postfach-Server, damit Claude in deinen Mails suchen und Entwürfe schreiben kann |
+| `belege mcp` | Postfach-Server, damit Claude in deinen Mails und abgelegten Belegen suchen und Entwürfe schreiben kann |
 | `belege pruefen` | Selbsttest mit Ampel |
 
 Ohne `--echt` zeigt jeder Befehl nur, was er täte.
@@ -57,7 +57,8 @@ Ohne `--echt` zeigt jeder Befehl nur, was er täte.
 ## Postfach: Weg A oder Weg B
 
 - **Weg A (Standard):** App-Passwort im macOS-Schlüsselbund. Gmail, GMX, web.de,
-  T-Online, iCloud, mailbox.org, freenet.de und Posteo.
+  T-Online, iCloud, mailbox.org, freenet.de und Posteo, dazu eigene Domains
+  (Server werden erkannt, sonst von Hand eingetragen).
   Microsoft-Postfächer gehen seit 2026 nur noch mit OAuth und damit nicht über Weg A.
 - **Weg B (auf Wunsch):** eigenes Google-Projekt. Getrennte Rechte (lesen,
   Entwürfe, senden), Gmail-Labels, einzeln widerrufbar. Komplexer, siehe
