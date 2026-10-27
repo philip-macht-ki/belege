@@ -196,7 +196,7 @@ def test_nach_vier_wochen_ohne_plus_pausiert_automatik_mit_einem_hinweis(tmp_pat
     assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
     assert len(ereignisse) == 1, "Hinweis nur einmal je Version"
     assert "Automatische Updates sind pausiert" in ereignisse[0][1] and "uv run belege aktualisieren --echt" in ereignisse[0][1]
-    assert "Agent Plus → https://philipkleudgen.de/mitglieder/monatszahlen" in ereignisse[0][1]
+    assert "Kassensturz → https://philipkleudgen.de/mitglieder/monatszahlen" in ereignisse[0][1]
 
 
 def test_von_hand_geht_nach_vier_wochen_weiter(tmp_path, monkeypatch, capsys):

@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.5.3] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Das Zusatzpaket mit Monatszahlen und Fragen an deine Zahlen heißt jetzt Kassensturz. Der Hinweis bei pausierten Updates nennt den neuen Namen.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.5.2] – 27.10.2026
 
 aktion: sicherheit
