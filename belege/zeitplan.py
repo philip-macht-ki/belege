@@ -94,6 +94,9 @@ def _an() -> int:
         ziel.write_text(plist_text(name), encoding="utf-8")
         subprocess.run(["launchctl", "bootout", f"gui/{uid}/{_label(name)}"], capture_output=True)
         subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(ziel)], check=True)
+    from .update import einrichtung_merken
+
+    einrichtung_merken()  # Start der vier Wochen mit automatischen Updates, nur nach echter Einrichtung
     print("ok: Zeitplan eingerichtet. Prüfen mit: uv run belege zeitplan zeigen")
     return 0
 
@@ -128,14 +131,7 @@ def befehl(args) -> int:
             print(plist_text("takt"))
         return 0
     try:
-        if aktion == "an":
-            ergebnis = _an()
-            if ergebnis == 0:
-                from .update import einrichtung_merken
-
-                einrichtung_merken()  # Start der vier Wochen mit automatischen Updates
-            return ergebnis
-        return _aus()
+        return _an() if aktion == "an" else _aus()
     except Exception as fehler:  # noqa: BLE001
         print(f"fehler: Zeitplan nicht geändert: {fehler}")
         return 1

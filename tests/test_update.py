@@ -274,3 +274,27 @@ def test_plus_lizenz_wird_ueber_plus_gefragt(tmp_path, monkeypatch):
     assert aufrufe[0][-2:] == ["plus", "lizenz"]
     monkeypatch.setenv("BELEGE_PLUS", str(tmp_path / "fehlt"))
     assert update._plus_gueltig() is False
+
+
+def test_ohne_changelog_abschnitt_zaehlt_nicht_als_sicherheit(tmp_path, monkeypatch):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    (quelle / "belege/__init__.py").write_text('__version__ = "9.9.0"\n', encoding="utf-8")
+    _run("git", "rm", "--cached", "-r", "konfig", cwd=quelle)
+    _run("git", "add", ".", cwd=quelle)
+    _run("git", "commit", "-m", "ohne Changelog", cwd=quelle)
+    _run("git", "push", str(quelle.parent / "origin.git"), "main", cwd=quelle)
+    _alt_eingerichtet(kunde)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: False)
+    monkeypatch.setattr(update, "_letzte_pruefung_alt_genug", lambda: True)
+    monkeypatch.setattr(update, "ereignis", lambda *a: None)
+    _ohne_pull(monkeypatch)
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+
+
+def test_abgebrochenes_zeitplan_an_startet_die_frist_nicht(repo, monkeypatch):
+    from belege import zeitplan
+
+    monkeypatch.setattr(zeitplan, "_zugestimmt", lambda: False)
+    monkeypatch.setattr(update, "pfad", lambda *teile: repo.joinpath(*map(str, teile)))
+    assert zeitplan._an() == 0
+    assert not (repo / "arbeit/einrichtung.json").exists()

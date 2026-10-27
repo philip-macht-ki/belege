@@ -236,7 +236,8 @@ def befehl(args) -> int:
     if not getattr(args, "echt", False):
         _zeige(alt, neu, neue)
         return 0
-    if getattr(args, "automatisch", False) and not all(a == "sicherheit" for _, a, _ in neue) \
+    nur_sicherheit = bool(neue) and all(a == "sicherheit" for _, a, _ in neue)
+    if getattr(args, "automatisch", False) and not nur_sicherheit \
             and not _automatik_frei():
         hinweis = (f"Automatische Updates sind nach 4 Wochen pausiert. Von Hand: `uv run belege aktualisieren --echt`. "
                    f"Dauerhaft automatisch mit {_plus_name()}.")
