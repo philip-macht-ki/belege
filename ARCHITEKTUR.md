@@ -574,3 +574,19 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   („Das Passwort steht im Tresor.“).
 - Trocken ist Standard: ohne `--echt` wird nichts verschoben und kein
   Verzeichnis, keine ics- und keine Notfalldatei geschrieben.
+
+## Updates (`belege aktualisieren`, belege/update.py)
+
+- CHANGELOG-Abschnitte tragen `aktion: keine | zeitplan | sicherheit | konfig | claude`.
+  Automatisch (`--automatisch`, sonntags) wird nur eingespielt, was keinen Schritt
+  braucht (`keine`, `zeitplan`, `sicherheit`); sonst eine Meldung.
+- **Vier Wochen frei:** `arbeit/einrichtung.json` (`{"seit": JJJJ-MM-TT}`) entsteht bei
+  `belege zeitplan an --echt`, für Bestand beim ersten `aktualisieren`. Ab Tag 28
+  spielt `--automatisch` ohne gültige Plus-Lizenz nur noch Versionen ein, deren neue
+  Abschnitte alle `aktion: sicherheit` tragen; sonst einmal je Version ein
+  `update`-Ereignis mit Hinweis (Name aus `[update].plus_name`, Standard „Agent Plus“).
+  Von Hand (`--echt` ohne `--automatisch`) geht immer.
+- **Plus-Lizenz:** `uv --directory ~/belege-plus run plus lizenz` (Ordner per
+  `BELEGE_PLUS`), Exit 0 = gültig; die Signatur prüft Plus selbst. Fehlt Plus oder
+  scheitert der Aufruf, gilt keine Lizenz.
+- Nach grünem Selbsttest: `plus update --echt [--automatisch]`, Fehler nur als Ereignis.

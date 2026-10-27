@@ -128,7 +128,14 @@ def befehl(args) -> int:
             print(plist_text("takt"))
         return 0
     try:
-        return _an() if aktion == "an" else _aus()
+        if aktion == "an":
+            ergebnis = _an()
+            if ergebnis == 0:
+                from .update import einrichtung_merken
+
+                einrichtung_merken()  # Start der vier Wochen mit automatischen Updates
+            return ergebnis
+        return _aus()
     except Exception as fehler:  # noqa: BLE001
         print(f"fehler: Zeitplan nicht geändert: {fehler}")
         return 1

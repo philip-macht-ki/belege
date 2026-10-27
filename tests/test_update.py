@@ -32,7 +32,7 @@ def _git_repo(tmp_path, monkeypatch):
     return quelle, kunde
 
 
-def _release(quelle, version="1.5.0", aktion="keine"):
+def _release(quelle, version="9.9.0", aktion="keine"):
     p = quelle / "belege/__init__.py"
     p.write_text(f'__version__ = "{version}"\n', encoding="utf-8")
     c = quelle / "CHANGELOG.md"
@@ -53,7 +53,7 @@ def test_fast_forward_mit_lokalem_bare_repo_und_konfig_bleibt(tmp_path, monkeypa
     monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0) if cmd[:2] == ["uv", "sync"] else echt_run(cmd, **kw))
     assert update.befehl(Namespace(echt=True, automatisch=False)) == 0
     assert "persoenlich = true" in (kunde / "konfig/belege.toml").read_text()
-    assert "Version 1.5.0" in capsys.readouterr().out
+    assert "Version 9.9.0" in capsys.readouterr().out
 
 
 def test_lokale_programmdatei_bricht_ohne_aenderung_ab(tmp_path, monkeypatch, capsys):
@@ -168,3 +168,109 @@ def test_plus_auch_ohne_basis_update_bei_gruenem_selbsttest(tmp_path, monkeypatc
     monkeypatch.setattr(update, "_pruefen", lambda: 1)
     update.befehl(Namespace(echt=True, automatisch=False))
     assert aufrufe == [False], "roter Selbsttest: Plus bleibt, wie es ist"
+
+
+def _alt_eingerichtet(kunde, tage=40):
+    import json
+    from datetime import date, timedelta
+
+    (kunde / "arbeit").mkdir(exist_ok=True)
+    (kunde / "arbeit/einrichtung.json").write_text(json.dumps({"seit": (date.today() - timedelta(days=tage)).isoformat()}))
+
+
+def _ohne_pull(monkeypatch):
+    echt_git = update._git
+    monkeypatch.setattr(update, "_git", lambda *a, **k: pytest.fail("Update eingespielt") if a[:1] == ("pull",) else echt_git(*a, **k))
+
+
+def test_nach_vier_wochen_ohne_plus_pausiert_automatik_mit_einem_hinweis(tmp_path, monkeypatch, capsys):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle)
+    _alt_eingerichtet(kunde)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: False)
+    monkeypatch.setattr(update, "_letzte_pruefung_alt_genug", lambda: True)
+    ereignisse = []
+    monkeypatch.setattr(update, "ereignis", lambda *a: ereignisse.append(a))
+    _ohne_pull(monkeypatch)
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+    assert len(ereignisse) == 1, "Hinweis nur einmal je Version"
+    assert "nach 4 Wochen pausiert" in ereignisse[0][1] and "uv run belege aktualisieren --echt" in ereignisse[0][1]
+    assert "Agent Plus" in ereignisse[0][1]
+
+
+def test_von_hand_geht_nach_vier_wochen_weiter(tmp_path, monkeypatch, capsys):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle)
+    _alt_eingerichtet(kunde)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: pytest.fail("von Hand fragt keine Lizenz"))
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_zeitplaene", lambda: None)
+    echt_run = subprocess.run
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0) if cmd[:2] == ["uv", "sync"] else echt_run(cmd, **kw))
+    assert update.befehl(Namespace(echt=True, automatisch=False)) == 0
+    assert "Version 9.9.0" in capsys.readouterr().out
+
+
+def test_sicherheitsupdate_kommt_auch_ohne_plus_automatisch(tmp_path, monkeypatch, capsys):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle, aktion="sicherheit")
+    _alt_eingerichtet(kunde)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: False)
+    monkeypatch.setattr(update, "_letzte_pruefung_alt_genug", lambda: True)
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_zeitplaene", lambda: None)
+    echt_run = subprocess.run
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0) if cmd[:2] == ["uv", "sync"] else echt_run(cmd, **kw))
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+    assert "Version 9.9.0" in capsys.readouterr().out
+
+
+def test_mit_gueltiger_plus_lizenz_laeuft_automatik_weiter(tmp_path, monkeypatch, capsys):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle)
+    _alt_eingerichtet(kunde)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: True)
+    monkeypatch.setattr(update, "_letzte_pruefung_alt_genug", lambda: True)
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_zeitplaene", lambda: None)
+    monkeypatch.setattr(update, "_plus_aktualisieren", lambda automatisch: None)
+    echt_run = subprocess.run
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0) if cmd[:2] == ["uv", "sync"] else echt_run(cmd, **kw))
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+    assert "Version 9.9.0" in capsys.readouterr().out
+
+
+def test_in_den_ersten_vier_wochen_ohne_plus_automatisch(tmp_path, monkeypatch, capsys):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle)
+    _alt_eingerichtet(kunde, tage=27)
+    monkeypatch.setattr(update, "_plus_gueltig", lambda: pytest.fail("in der Frist keine Lizenzfrage"))
+    monkeypatch.setattr(update, "_letzte_pruefung_alt_genug", lambda: True)
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_zeitplaene", lambda: None)
+    echt_run = subprocess.run
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0) if cmd[:2] == ["uv", "sync"] else echt_run(cmd, **kw))
+    assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
+    assert "Version 9.9.0" in capsys.readouterr().out
+
+
+def test_bestand_ohne_datum_startet_heute(tmp_path, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setattr(update, "pfad", lambda *teile: tmp_path.joinpath(*map(str, teile)))
+    assert update.einrichtung_merken() == date.today()
+    assert (tmp_path / "arbeit/einrichtung.json").exists()
+
+
+def test_plus_lizenz_wird_ueber_plus_gefragt(tmp_path, monkeypatch):
+    plus = tmp_path / "plus"
+    plus.mkdir()
+    (plus / "pyproject.toml").write_text("")
+    monkeypatch.setenv("BELEGE_PLUS", str(plus))
+    aufrufe = []
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: aufrufe.append(cmd) or subprocess.CompletedProcess(cmd, 1))
+    assert update._plus_gueltig() is False
+    assert aufrufe[0][-2:] == ["plus", "lizenz"]
+    monkeypatch.setenv("BELEGE_PLUS", str(tmp_path / "fehlt"))
+    assert update._plus_gueltig() is False

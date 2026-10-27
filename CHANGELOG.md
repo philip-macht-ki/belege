@@ -2,6 +2,22 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.5.0] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Vertrauliche Post (Arzt, Gericht, Krankenkasse, Personal) erkennt belege selbst und liest sie nur auf deinem Mac, nie mit einem Cloud-Modell. Du findest sie im Tagesbericht unter „Bitte ansehen“.
+- Dein MacBook darf zu sein: War es länger zu, holt belege alle Mails seitdem nach. Ohne Netz bleibt ein Beleg liegen, statt halb erkannt abgelegt zu werden.
+- Das Lebenszeichen unterscheidet „Mac war zu“ (kein Alarm) von einem echten Fehler.
+- `uv run belege rechner` zeigt, welcher Mac das ist.
+- Automatische Updates laufen vier Wochen ab der Einrichtung. Danach kommen nur noch Sicherheitsupdates von allein, alles andere holst du mit `uv run belege aktualisieren --echt` oder dauerhaft automatisch mit Agent Plus.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.4.1] – 27.10.2026
 
 aktion: keine

@@ -88,6 +88,9 @@ lebenszeichen = ""
 [update]
 # Sonntags nach Verbesserungen schauen. Nur Updates ohne eigenen Schritt werden eingespielt.
 automatisch = true
+# Ohne Plus kommen automatische Updates vier Wochen ab Einrichtung, danach nur
+# Sicherheitsupdates; von Hand geht es immer. Name des Zusatzpakets im Hinweis:
+# plus_name = "Agent Plus"
 
 [urteil]
 # claude = Claude-Abo (Standard) | codex = ChatGPT-Abo über Codex |
