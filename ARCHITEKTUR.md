@@ -75,11 +75,15 @@ arbeit/                   Laufzeit, nie im Git
 ```
 <ablage>/<Bereich>/<JJJJ>/<MM>/<Eingang|Ausgang|Sonstige>/<JJJJ-MM-TT>_<Lieferant>_<Beschreibung>.<ext>
 <ablage>/Unsortiert/<JJJJ-MM-TT>_<ursprünglicher Name>
+<ablage>/Vorsicht Abofalle/<JJJJ-MM-TT>_<ursprünglicher Name>
 ```
 
 - `<Bereich>` = `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
   `[ablage].bereich_privat` (Standard „Privat“; nur wenn `privat = true`,
   sonst geht Privates nach Unsortiert).
+- Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
+  sondern nach `Vorsicht Abofalle`; der Tagesbericht sagt „nicht unterschreiben,
+  nicht zahlen“. Erkennung verlangt mindestens drei unabhängige Merkmale (oder zwei, wenn eines eine bekannte Abofallen-Domain ist). PDFs mit aktiven Inhalten (JavaScript, Launch, RichMedia, XFA, eingebettete Nicht-XML-Dateien) kommen nach `Vorsicht Datei prüfen`; E-Rechnungen mit eingebettetem XML gehen normal durch.
 - Ordner werden angelegt, wenn sie fehlen (einfacher als bei Philip, der sie
   bewusst getrennt anlegt).
 - Namensteile über `ablegen.sauber()`: Umlaute bleiben (ä ö ü ß erlaubt),

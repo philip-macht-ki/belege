@@ -140,3 +140,71 @@ def test_downloads_duplikat_trocken_meldet_nichts(repo):
     zeilen = "".join(p.read_text() for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
     assert zeilen.count('"doppelt"') == 1
     assert datei.exists()
+
+
+def test_abofalle_wird_getrennt_abgelegt(repo, monkeypatch):
+    datei = repo / "offerte.pdf"
+    datei.write_bytes(b"%PDF harmlos")
+    fund = Fund(datei, "handy", datei.name, date(2026, 10, 27), verschieben=True)
+    monkeypatch.setattr("belege.text.auslesen", lambda _, **__: Text(
+        "Offerte Branchenbuch Rheinland-Pfalz\\nEintragungsart\\nServicefax 0041 615 684 400", "klartext", 1))
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "befund"
+    assert "Vorsicht Abofalle" in ergebnis.daten["pfad"]
+    assert not datei.exists()
+
+
+def test_einzelwort_offerte_ist_keine_abofalle():
+    from belege.abofalle import erkennen
+    assert erkennen("Ihre Offerte für Software", name="angebot.pdf") == (False, "")
+
+
+def test_e_rechnung_mit_xml_geht_durch(tmp_path):
+    from pypdf import PdfWriter
+    from belege.abofalle import aktive_pdf_inhalte
+    w = PdfWriter(); w.add_blank_page(100, 100)
+    w.add_attachment("factur-x.xml", b"<rsm:CrossIndustryInvoice/>")
+    datei = tmp_path / "zugferd.pdf"
+    with datei.open("wb") as f: w.write(f)
+    assert not aktive_pdf_inhalte(datei)[0]
+
+
+def test_fremder_anhang_im_pdf_wird_angehalten(tmp_path):
+    from pypdf import PdfWriter
+    from belege.abofalle import aktive_pdf_inhalte
+    w = PdfWriter(); w.add_blank_page(100, 100)
+    w.add_attachment("tool.exe", b"MZ")
+    datei = tmp_path / "anhang.pdf"
+    with datei.open("wb") as f: w.write(f)
+    assert aktive_pdf_inhalte(datei)[0]
+
+
+def test_bestellte_verzeichnis_rechnung_ist_keine_abofalle():
+    from belege.abofalle import erkennen
+    assert not erkennen("Gelbe Seiten Branchenbuch\nRechnung Nr. 4711\nEintragungsart: Premium")[0]
+
+
+def test_javascript_beim_oeffnen_wird_erkannt(tmp_path):
+    from pypdf import PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+    from belege.abofalle import aktive_pdf_inhalte
+    w = PdfWriter(); w.add_blank_page(100, 100)
+    w._root_object[NameObject("/OpenAction")] = DictionaryObject({
+        NameObject("/S"): NameObject("/JavaScript"), NameObject("/JS"): TextStringObject("app.alert(1)")})
+    w.compress_identical_objects()
+    datei = tmp_path / "oeffnen.pdf"
+    with datei.open("wb") as f: w.write(f)
+    assert aktive_pdf_inhalte(datei)[0]
+
+
+def test_aktive_pdf_aus_downloads_wird_verschoben(tmp_path, monkeypatch):
+    from belege import ablegen
+    from belege.typen import Fund
+    monkeypatch.setattr(ablegen, "ablage_ordner", lambda: tmp_path / "Ablage")
+    quelle = tmp_path / "Downloads" / "x.pdf"; quelle.parent.mkdir(); quelle.write_bytes(b"%PDF")
+    fund = Fund.__new__(Fund)
+    for k, v in {"datei": quelle, "name": "x.pdf", "verschieben": True}.items(): object.__setattr__(fund, k, v)
+    from datetime import datetime
+    object.__setattr__(fund, "eingang", datetime(2026, 10, 27))
+    erg = ablegen.abofalle_ablegen(fund, "JS", True, ordner="Vorsicht Datei prüfen", status="aktiv", hinweis="h")
+    assert not quelle.exists() and "Vorsicht Datei prüfen" in erg.daten["pfad"]

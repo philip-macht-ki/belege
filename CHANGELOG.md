@@ -2,6 +2,19 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.5.2] – 27.10.2026
+
+aktion: sicherheit
+
+### Was ist neu für dich
+
+- Verdächtige Branchenbuch- und Adressbuch-Angebote landen im Ordner `Vorsicht Abofalle`, nicht zwischen deinen Belegen. Im Tagesbericht steht: nicht unterschreiben, nicht zahlen.
+- PDFs mit aktiven Inhalten (Skripte, eingebettete Programme) landen im Ordner `Vorsicht Datei prüfen` und werden nicht an DATEV oder den Steuerberater übergeben. E-Rechnungen mit eingebetteten Rechnungsdaten (ZUGFeRD, XRechnung) gehen wie gewohnt durch.
+
+### Musst du etwas tun?
+
+Nein. Sieh bei einem Hinweis kurz in den Ordner `Vorsicht Abofalle` oder `Vorsicht Datei prüfen`.
+
 ## [1.5.1] – 27.10.2026
 
 aktion: keine

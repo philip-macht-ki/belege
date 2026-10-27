@@ -139,6 +139,18 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         begleit = None
         geheim = None
+        from .abofalle import aktive_pdf_inhalte, erkennen as abofalle_erkennen
+        aktiv, aktiv_grund = aktive_pdf_inhalte(fund.datei)
+        if aktiv:
+            # Aus der Quelle nehmen, damit Handy- und Downloads-Ordner sie nicht jeden Lauf neu melden.
+            from .ablegen import abofalle_ablegen
+            hinweis = "Nicht als Beleg abgelegt und nicht an DATEV oder den Steuerberater gegeben; öffne sie nur, wenn du den Absender kennst."
+            ergebnis = abofalle_ablegen(fund, aktiv_grund, echt, ordner="Vorsicht Datei prüfen", status="aktiv", hinweis=hinweis)
+            if echt:
+                ziel = Path(ergebnis.daten["pfad"])
+                kern.ereignis("zweifel", f"Vorsicht, PDF mit aktiven Inhalten ({aktiv_grund}): {fund.name} liegt unter {ziel}. {hinweis}",
+                              quelle=fund.quelle, pfad=str(ziel), grund=aktiv_grund)
+            return ergebnis
         zugferd = _zugferd(fund)
         if zugferd:
             # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
@@ -163,6 +175,16 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             else:
                 # Ohne Text (Texterkennung aus, Foto ohne Schrift) ist nichts prüfbar: auch dann lokal.
                 einordnung = einordnen(fund, text, nur_lokal=geheim.vertraulich or not text.text.strip())
+        abofalle, grund = abofalle_erkennen(text.text, name=fund.name,
+                                             absender=str((fund.mail or {}).get("von", "")))
+        if abofalle:
+            from .ablegen import abofalle_ablegen
+            ergebnis = abofalle_ablegen(fund, grund, echt)
+            if echt:
+                ziel = Path(ergebnis.daten["pfad"])
+                kern.ereignis("zweifel", f"Vorsicht Abofalle: {fund.name} liegt unter {ziel}. Nicht unterschreiben, nicht zahlen.",
+                              quelle=fund.quelle, pfad=str(ziel), grund=grund)
+            return ergebnis
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:

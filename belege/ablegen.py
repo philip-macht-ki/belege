@@ -69,6 +69,22 @@ def _freier_pfad(kandidat: Path, weitere_endungen: tuple[str, ...] = ()) -> Path
         nummer += 1
 
 
+def abofalle_ablegen(fund: Fund, grund: str, echt: bool, *, ordner: str = "Vorsicht Abofalle",
+                     status: str = "abofalle", hinweis: str = "Nicht unterschreiben, nicht zahlen.") -> Ergebnis:
+    """Legt Verdachtsfälle getrennt ab; nie zwischen Buchhaltungsbelege."""
+    kandidat = ablage_ordner() / ordner / f"{fund.eingang:%Y-%m-%d}_{sauber(Path(fund.name).stem)}{fund.datei.suffix.lower()}"
+    pfad = _freier_pfad(kandidat)
+    daten = {"pfad": str(pfad), "status": status, "grund": grund}
+    if not echt:
+        return Ergebnis("befund", f"{ordner}: würde unter {pfad} ablegen.", daten)
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    if fund.verschieben:
+        shutil.move(str(fund.datei), str(pfad))
+    else:
+        shutil.copy2(fund.datei, pfad)
+    return Ergebnis("befund", f"{ordner}: unter {pfad} abgelegt. {hinweis}", daten)
+
+
 def ablegen(fund: Fund, e: Einordnung, text: Text, echt: bool) -> Ergebnis:
     """Legt einen Fund nur mit ``echt`` ab und überschreibt niemals eine Datei.
 
