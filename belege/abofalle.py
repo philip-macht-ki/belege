@@ -10,8 +10,6 @@ FORMULAR = ("eintragungsofferte", "offerten nummer", "offerten-nummer", "eintrag
 RUECK = ("rücksendung", "ruecksendung", "servicefax", "per fax", "zurückfaxen",
          "zurueckfaxen", "return@", "antwort per fax")
 DOMAINS = ("businesseintrag.info",)
-_AKTION = re.compile(rb"/S\s*/(JavaScript|Launch)\b")
-_JS_CODE = re.compile(rb"/JS\s*[(<]")
 FAX = re.compile(r"(?:00|\+)4(?:1|3)\D*(?:\d[\s-]*){6,}")
 
 
@@ -27,6 +25,49 @@ def erkennen(text: str, *, name: str = "", absender: str = "") -> tuple[bool, st
     # Rechnung eines Verzeichnisverlags nennt selten Offertenformular UND Rückfax.
     bekannt = "bekannte Abofallen-Domain" in merkmale
     return len(merkmale) >= 3 or (bekannt and len(merkmale) >= 2), "; ".join(merkmale)
+
+
+_AKTION = re.compile(rb"/S\s*/(JavaScript|Launch)\b")
+_JS_CODE = re.compile(rb"/JS\s*[(<]")
+_AKTIONSTYPEN = {"/JavaScript": "/JavaScript-Aktion", "/Launch": "/Launch-Aktion"}
+
+
+def _objektbaum_pruefen(leser, gefunden: list[str], grenze: int = 50000) -> None:
+    """Läuft vom Katalog aus durch alle erreichbaren Objekte, auch in komprimierten
+    Objektströmen: OpenAction, AA, Seiten- und Annotationsaktionen, Namensbäume."""
+    from pypdf.generic import ArrayObject, DictionaryObject, IndirectObject
+
+    gesehen: set[tuple[int, int]] = set()
+    stapel = [leser.trailer["/Root"]]
+    schritte = 0
+    while stapel and schritte < grenze:
+        schritte += 1
+        obj = stapel.pop()
+        if isinstance(obj, IndirectObject):
+            schluessel = (obj.idnum, obj.generation)
+            if schluessel in gesehen:
+                continue
+            gesehen.add(schluessel)
+            try:
+                obj = obj.get_object()
+            except Exception:
+                continue
+        if isinstance(obj, DictionaryObject):
+            art = obj.get("/S")
+            if art in _AKTIONSTYPEN and _AKTIONSTYPEN[art] not in gefunden:
+                gefunden.append(_AKTIONSTYPEN[art])
+            if "/JS" in obj and "/JavaScript-Aktion" not in gefunden:
+                gefunden.append("/JavaScript-Aktion")
+            for name in ("/RichMedia", "/XFA"):
+                if (name in obj or obj.get("/Subtype") == name) and name not in gefunden:
+                    gefunden.append(name)
+            for wert in obj.values():
+                if isinstance(wert, (IndirectObject, DictionaryObject, ArrayObject)):
+                    stapel.append(wert)
+        elif isinstance(obj, ArrayObject):
+            stapel.extend(w for w in obj if isinstance(w, (IndirectObject, DictionaryObject, ArrayObject)))
+    if stapel:
+        gefunden.append("zu viele Objekte zum Prüfen")
 
 
 def aktive_pdf_inhalte(datei: Path) -> tuple[bool, str]:
@@ -45,14 +86,13 @@ def aktive_pdf_inhalte(datei: Path) -> tuple[bool, str]:
     gefunden = sorted({f"/{m.decode()}-Aktion" for m in _AKTION.findall(roh)})
     if _JS_CODE.search(roh) and "/JavaScript-Aktion" not in gefunden:
         gefunden.append("/JavaScript-Aktion")
-    gefunden += [m.decode("ascii") for m in (b"/RichMedia", b"/XFA") if m in roh]
+    gefunden += [m.decode("ascii") for m in (b"/RichMedia", b"/XFA") if m in roh and m.decode("ascii") not in gefunden]
     try:
+        import logging
         from pypdf import PdfReader
+        logging.getLogger("pypdf").setLevel(logging.ERROR)
         leser = PdfReader(str(datei), strict=False)
-        wurzel = leser.trailer["/Root"]
-        namen = wurzel.get("/Names", {})
-        if "/JavaScript" in namen and "/JavaScript-Aktion" not in gefunden:
-            gefunden.append("/JavaScript-Aktion")
+        _objektbaum_pruefen(leser, gefunden)
         fremd = [n for n in leser.attachments if not n.lower().endswith(".xml")]
         if fremd:
             gefunden.append("eingebettete Datei: " + ", ".join(fremd[:3]))

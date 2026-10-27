@@ -142,10 +142,15 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         from .abofalle import aktive_pdf_inhalte, erkennen as abofalle_erkennen
         aktiv, aktiv_grund = aktive_pdf_inhalte(fund.datei)
         if aktiv:
-            meldung = f"{fund.name}: PDF mit aktiven Inhalten ({aktiv_grund}); nicht als Beleg oder an DATEV/Steuerberater weitergegeben."
+            # Aus der Quelle nehmen, damit Handy- und Downloads-Ordner sie nicht jeden Lauf neu melden.
+            from .ablegen import abofalle_ablegen
+            hinweis = "Nicht als Beleg abgelegt und nicht an DATEV oder den Steuerberater gegeben; öffne sie nur, wenn du den Absender kennst."
+            ergebnis = abofalle_ablegen(fund, aktiv_grund, echt, ordner="Vorsicht Datei prüfen", status="aktiv", hinweis=hinweis)
             if echt:
-                kern.ereignis("zweifel", meldung, quelle=fund.quelle, datei=fund.name)
-            return kern.Ergebnis("befund", meldung)
+                ziel = Path(ergebnis.daten["pfad"])
+                kern.ereignis("zweifel", f"Vorsicht, PDF mit aktiven Inhalten ({aktiv_grund}): {fund.name} liegt unter {ziel}. {hinweis}",
+                              quelle=fund.quelle, pfad=str(ziel), grund=aktiv_grund)
+            return ergebnis
         zugferd = _zugferd(fund)
         if zugferd:
             # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.

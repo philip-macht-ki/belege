@@ -83,7 +83,7 @@ arbeit/                   Laufzeit, nie im Git
   sonst geht Privates nach Unsortiert).
 - Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
   sondern nach `Vorsicht Abofalle`; der Tagesbericht sagt „nicht unterschreiben,
-  nicht zahlen“. Erkennung verlangt mindestens zwei unabhängige Merkmale.
+  nicht zahlen“. Erkennung verlangt mindestens drei unabhängige Merkmale (oder zwei, wenn eines eine bekannte Abofallen-Domain ist). PDFs mit aktiven Inhalten (JavaScript, Launch, RichMedia, XFA, eingebettete Nicht-XML-Dateien) kommen nach `Vorsicht Datei prüfen`; E-Rechnungen mit eingebettetem XML gehen normal durch.
 - Ordner werden angelegt, wenn sie fehlen (einfacher als bei Philip, der sie
   bewusst getrennt anlegt).
 - Namensteile über `ablegen.sauber()`: Umlaute bleiben (ä ö ü ß erlaubt),
