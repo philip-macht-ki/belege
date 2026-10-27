@@ -178,7 +178,7 @@ def test_mcp_suche_und_fristen_geben_vertrauliches_nicht_heraus(repo, monkeypatc
                                 "fristen": [{"art": "termin", "datum": None, "text": "Kontrolle Diabetes"}]}})
     frist = mcp_server.fristen()["pruefen"][0]
     assert "Diabetes" not in str(frist) and frist["titel"] == "vertraulich" and frist["art"] == "termin"
-    assert set(frist) == {"art", "datum", "pfad", "text", "titel", "gegenueber"}
+    assert set(frist) == {"art", "datum", "pfad", "text", "titel", "gegenueber", "vertraulich", "hinweis"}
 
 
 def test_altbestand_erkennt_vertrauliches_auch_am_gegenueber():

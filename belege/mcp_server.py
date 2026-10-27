@@ -143,7 +143,8 @@ def fristen(tage: int = 365) -> dict:
             from .dokumente import grober_ordner
 
             sicher = {"art": frist.get("art"), "datum": frist.get("datum"), "pfad": grober_ordner(frist.get("pfad", "")),
-                      "text": "vertraulich", "titel": "vertraulich", "gegenueber": "vertraulich"}
+                      "text": "vertraulich", "titel": "vertraulich", "gegenueber": "vertraulich",
+                      "vertraulich": True, "hinweis": "Inhalt und Name nur auf diesem Mac."}
             frist.clear()
             frist.update(sicher)
     return liste
