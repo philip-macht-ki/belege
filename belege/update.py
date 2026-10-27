@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 from argparse import Namespace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import __version__
@@ -116,8 +117,33 @@ def _zeige(alt: str, neu: str, neue: list[tuple[str, str, str]]) -> None:
         print("\n" + text)
 
 
+_FAELLIG_TAGE = 6
+
+
+def _letzte_pruefung_alt_genug() -> bool:
+    """Automatische Läufe höchstens einmal pro Woche: sonntags planmäßig, sonst beim
+    nächsten Start, wenn der Sonntag verpasst wurde (Mac aus oder zugeklappt)."""
+    datei = pfad("arbeit", "update-letzte-pruefung.txt")
+    try:
+        letzte = datetime.fromisoformat(datei.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return True
+    return datetime.now() - letzte >= timedelta(days=_FAELLIG_TAGE)
+
+
+def _pruefung_merken() -> None:
+    datei = pfad("arbeit", "update-letzte-pruefung.txt")
+    datei.parent.mkdir(parents=True, exist_ok=True)
+    datei.write_text(datetime.now().isoformat(timespec="seconds") + "\n", encoding="utf-8")
+
+
 def befehl(args) -> int:
     """`belege aktualisieren`: trocken erklären, mit --echt sicher einspielen."""
+    if getattr(args, "automatisch", False):
+        if not _letzte_pruefung_alt_genug():
+            print("nichts: Update wurde in den letzten Tagen schon geprüft.")
+            return 0
+        _pruefung_merken()
     try:
         _git("fetch", "origin")
         remote = _git("show", "origin/main:belege/__init__.py").stdout
