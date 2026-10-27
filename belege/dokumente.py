@@ -306,6 +306,10 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
 
     text = auslesen(datei)
     geheim = pruefen(text.text, datei.name)
+    if not text.text.strip() and not geheim.vertraulich:
+        from .vertraulich import Urteil
+
+        geheim = Urteil(True, "kein Text lesbar")
     eintrag = dokument_einordnen(text.text, datei.name, nur_lokal=geheim.vertraulich)
     if geheim.vertraulich:
         print(f"{datei.name}: vertraulich ({geheim.grund}), nur auf diesem Mac gelesen.")
@@ -387,6 +391,15 @@ def befehl(args) -> int:
     return 0
 
 
+def ist_vertraulich(eintrag: dict) -> bool:
+    """Merker aus der Ablage; ältere Einträge ohne Merker prüft die Wortregel nach."""
+    if eintrag.get("vertraulich") is not None:
+        return bool(eintrag["vertraulich"])
+    from .vertraulich import offen_im_text
+
+    return eintrag.get("art") == "gesundheit" or offen_im_text(f'{eintrag.get("titel", "")} {eintrag.get("text", "")}')
+
+
 def _alle_fristen() -> list[dict]:
     """Baut eine flache Liste aller Fristen mit Bezug zu ihrem Dokument."""
     alle = []
@@ -399,6 +412,7 @@ def _alle_fristen() -> list[dict]:
                     "gegenueber": eintrag.get("gegenueber", "Unbekannt"),
                     "titel": eintrag.get("titel", ""),
                     "pfad": eintrag.get("pfad", ""),
+                    "vertraulich": ist_vertraulich(eintrag),
                 }
             )
     return alle
@@ -429,12 +443,7 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
     abfrage_klein = abfrage.lower().strip()
     treffer = []
     for eintrag in _index().values():
-        # Ältere Einträge ohne Merker: Wortregel auf dem gespeicherten Text nachholen.
-        geheim = eintrag.get("vertraulich")
-        if geheim is None:
-            from .vertraulich import offen_im_text
-
-            geheim = offen_im_text(f'{eintrag.get("art", "")} {eintrag.get("text", "")}') or eintrag.get("art") == "gesundheit"
+        geheim = ist_vertraulich(eintrag)
         # Bei vertraulichen Dokumenten nie im Text suchen: schon ein Treffer verrät den Inhalt.
         felder = ("gegenueber", "titel", "art") if geheim else ("gegenueber", "titel", "art", "text")
         heuhaufen = " ".join(str(eintrag.get(feld, "")) for feld in felder).lower()

@@ -156,3 +156,20 @@ def test_alte_dokumente_ohne_merker_werden_nachgeprueft(repo):
     assert dokumente.suchen("diabetes") == []
     assert dokumente.suchen("laufzeit")[0]["auszug"].startswith("Laufzeit")
     assert len(dokumente.suchen("", max=1)) == 1
+
+
+def test_mcp_suche_und_fristen_geben_vertrauliches_nicht_heraus(repo, monkeypatch):
+    from belege import dokumente, mcp_server
+
+    class Postfach:
+        def suchen(self, abfrage, max):
+            return [{"von": "praxis@example.de", "betreff": "Befund", "auszug": "Diagnose Diabetes"},
+                    {"von": "info@hetzner.com", "betreff": "Rechnung", "auszug": "Ihre Rechnung 4,51 EUR"}]
+
+    monkeypatch.setattr("belege.postfach.oeffnen", lambda konto: Postfach())
+    treffer = mcp_server.suchen("x")
+    assert "Diabetes" not in str(treffer) and treffer[1]["auszug"].startswith("Ihre Rechnung")
+    dokumente._speichere({"a": {"pfad": "p", "art": "gesundheit", "titel": "Befund Dr. X", "gegenueber": "Praxis",
+                                "fristen": [{"art": "termin", "datum": None, "text": "Kontrolle Diabetes"}]}})
+    frist = mcp_server.fristen()["pruefen"][0]
+    assert "Diabetes" not in str(frist) and frist["titel"] == "vertraulich" and frist["art"] == "termin"

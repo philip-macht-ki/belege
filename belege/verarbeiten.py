@@ -156,7 +156,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             elif text.stufe == "ohne_text":
                 einordnung = _ohne_text()
             else:
-                einordnung = einordnen(fund, text, nur_lokal=geheim.vertraulich)
+                # Ohne Text (Texterkennung aus, Foto ohne Schrift) ist nichts prüfbar: auch dann lokal.
+                einordnung = einordnen(fund, text, nur_lokal=geheim.vertraulich or not text.text.strip())
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:

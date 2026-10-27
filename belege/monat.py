@@ -576,11 +576,11 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen
     kern.schreiben(ordner / "abgleich.json", ergebnis)
 
 
-def _fund_passt(datei: Path, buchung: dict) -> bool:
+def _fund_passt(datei: Path, buchung: dict, mail: dict | None = None) -> bool:
     """Prüft Nachsuche konservativ über Betrag und Lieferantenbezug im Fund."""
     try:
         from .text import auslesen
-        erkannt = auslesen(datei).text
+        erkannt = auslesen(datei, mail=mail).text
         text = erkannt + " " + datei.name
         # Alte, beschädigte Pseudo-PDFs bleiben für die Nachsuche lesbar; echte
         # PDFs gehen stets durch die Text-Kaskade (auch bei Flate-Kompression).
@@ -620,7 +620,7 @@ def _nachsuche(daten: list[dict], args) -> None:
         except Exception:  # ein nicht eingerichtetes Postfach soll Monatsende nicht bremsen
             continue
     for buchung in (x for x in daten if x["status"] == "fehlt"):
-        passende = [fund for fund in funde if _fund_passt(fund.datei, buchung)]
+        passende = [fund for fund in funde if _fund_passt(fund.datei, buchung, fund.mail)]
         if not passende:
             continue
         if len(passende) > 1:

@@ -25,8 +25,14 @@ def konten() -> list[dict]:
 def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[dict]:
     """Durchsucht ein Postfach mit höchstens 20 Treffern und kurzen Auszügen."""
     from .postfach import oeffnen
+    from .vertraulich import pruefen
 
-    return oeffnen(konto).suchen(abfrage, max=min(max, 20))
+    treffer = oeffnen(konto).suchen(abfrage, max=min(max, 20))
+    for kopf in treffer:
+        # Auszüge vertraulicher Mails gehen nicht ins Gespräch; lesen() auf ausdrücklichen Wunsch bleibt möglich.
+        if pruefen(str(kopf.get("auszug", "")), "", kopf, modell=False).vertraulich:
+            kopf["auszug"] = "(vertraulich, Auszug nur auf diesem Mac)"
+    return treffer
 
 
 def lesen(ident: str, konto: str | None = None) -> dict:
@@ -109,7 +115,12 @@ def fristen(tage: int = 365) -> dict:
     """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
     from .dokumente import fristen_liste
 
-    return fristen_liste(tage)
+    liste = fristen_liste(tage)
+    for frist in liste["kommend"] + liste["pruefen"]:
+        if frist.pop("vertraulich", False):
+            # Datum und Art bleiben, damit die Frist nicht untergeht; Inhalt nicht.
+            frist.update(text="vertraulich", titel="vertraulich", gegenueber="vertraulich")
+    return liste
 
 
 def _antwort(ergebnis: kern.Ergebnis) -> dict:
