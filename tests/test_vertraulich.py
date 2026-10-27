@@ -164,16 +164,19 @@ def test_mcp_suche_und_fristen_geben_vertrauliches_nicht_heraus(repo, monkeypatc
 
     class Postfach:
         def suchen(self, abfrage, max):
-            return [{"von": "praxis@example.de", "betreff": "Befund", "auszug": "Diagnose Diabetes"},
+            return [{"id": "1", "von": "praxis@example.de", "an": "ich@example.de", "betreff": "Befund",
+                     "anhaenge": ["Laborwerte.pdf"], "auszug": "Diagnose Diabetes"},
                     {"von": "info@hetzner.com", "betreff": "Rechnung", "auszug": "Ihre Rechnung 4,51 EUR"}]
 
     monkeypatch.setattr("belege.postfach.oeffnen", lambda konto: Postfach())
     treffer = mcp_server.suchen("x")
-    assert "Diabetes" not in str(treffer) and "Befund" not in str(treffer) and treffer[1]["auszug"].startswith("Ihre Rechnung")
+    assert set(treffer[0]) == {"id", "von", "datum", "vertraulich", "hinweis"}
+    assert treffer[1]["auszug"].startswith("Ihre Rechnung")
     dokumente._speichere({"a": {"pfad": "p", "art": "gesundheit", "titel": "Befund Dr. X", "gegenueber": "Praxis",
                                 "fristen": [{"art": "termin", "datum": None, "text": "Kontrolle Diabetes"}]}})
     frist = mcp_server.fristen()["pruefen"][0]
     assert "Diabetes" not in str(frist) and frist["titel"] == "vertraulich" and frist["art"] == "termin"
+    assert set(frist) == {"art", "datum", "pfad", "text", "titel", "gegenueber"}
 
 
 def test_altbestand_erkennt_vertrauliches_auch_am_gegenueber():

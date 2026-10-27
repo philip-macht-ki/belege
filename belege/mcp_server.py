@@ -27,13 +27,14 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
     from .postfach import oeffnen
     from .vertraulich import pruefen
 
-    treffer = oeffnen(konto).suchen(abfrage, max=min(max, 20))
-    for kopf in treffer:
-        # Auszüge vertraulicher Mails gehen nicht ins Gespräch; lesen() auf ausdrücklichen Wunsch bleibt möglich.
+    treffer = []
+    for kopf in oeffnen(konto).suchen(abfrage, max=min(max, 20)):
+        # Vertrauliche Mails: nur Absender, Datum und ID, damit der Mensch sie findet
+        # (ARCHITEKTUR.md, Grenze). lesen() auf ausdrücklichen Wunsch bleibt möglich.
         if pruefen(str(kopf.get("auszug", "")), "", kopf, modell=False).vertraulich:
-            # Absender und ID bleiben, damit der Mensch die Mail findet; Betreff und Auszug nicht.
-            kopf["auszug"] = "(vertraulich, Auszug nur auf diesem Mac)"
-            kopf["betreff"] = "(vertraulich)"
+            kopf = {k: kopf.get(k) for k in ("id", "von", "datum")} | {
+                "vertraulich": True, "hinweis": "Betreff und Inhalt nur auf diesem Mac."}
+        treffer.append(kopf)
     return treffer
 
 
@@ -123,8 +124,10 @@ def fristen(tage: int = 365) -> dict:
             # Datum und Art bleiben, damit die Frist nicht untergeht; Inhalt, Name und Datei nicht.
             from .dokumente import grober_ordner
 
-            frist.update(text="vertraulich", titel="vertraulich", gegenueber="vertraulich",
-                         pfad=grober_ordner(frist.get("pfad", "")))
+            sicher = {"art": frist.get("art"), "datum": frist.get("datum"), "pfad": grober_ordner(frist.get("pfad", "")),
+                      "text": "vertraulich", "titel": "vertraulich", "gegenueber": "vertraulich"}
+            frist.clear()
+            frist.update(sicher)
     return liste
 
 
