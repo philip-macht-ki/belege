@@ -397,7 +397,14 @@ def ist_vertraulich(eintrag: dict) -> bool:
         return bool(eintrag["vertraulich"])
     from .vertraulich import offen_im_text
 
-    return eintrag.get("art") == "gesundheit" or offen_im_text(f'{eintrag.get("titel", "")} {eintrag.get("text", "")}')
+    felder = " ".join(str(eintrag.get(k, "")) for k in ("titel", "gegenueber", "pfad", "text"))
+    return eintrag.get("art") == "gesundheit" or offen_im_text(felder)
+
+
+def grober_ordner(pfad: str) -> str:
+    """Für vertrauliche Dokumente im Gespräch: nur Dokumente/<Art>, ohne Gegenüber und Dateiname."""
+    teile = [t for t in str(pfad).split("/") if t]
+    return "/".join(teile[:2])
 
 
 def _alle_fristen() -> list[dict]:
@@ -452,8 +459,8 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
         if geheim:
             # Über den MCP-Server landet das im Gespräch, also bei einem Cloud-Modell:
             # nur der Pfad, damit der Mensch die Datei selbst öffnen kann.
-            treffer.append({"pfad": eintrag.get("pfad"), "vertraulich": True,
-                            "hinweis": "Vertraulich, nur auf diesem Mac lesbar. Datei selbst öffnen."})
+            treffer.append({"ordner": grober_ordner(eintrag.get("pfad", "")), "vertraulich": True,
+                            "hinweis": "Vertraulich: Name und Inhalt nur auf diesem Mac. Ordner selbst öffnen."})
         else:
             treffer.append({
                 "pfad": eintrag.get("pfad"),

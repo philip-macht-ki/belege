@@ -31,7 +31,9 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
     for kopf in treffer:
         # Auszüge vertraulicher Mails gehen nicht ins Gespräch; lesen() auf ausdrücklichen Wunsch bleibt möglich.
         if pruefen(str(kopf.get("auszug", "")), "", kopf, modell=False).vertraulich:
+            # Absender und ID bleiben, damit der Mensch die Mail findet; Betreff und Auszug nicht.
             kopf["auszug"] = "(vertraulich, Auszug nur auf diesem Mac)"
+            kopf["betreff"] = "(vertraulich)"
     return treffer
 
 
@@ -118,8 +120,11 @@ def fristen(tage: int = 365) -> dict:
     liste = fristen_liste(tage)
     for frist in liste["kommend"] + liste["pruefen"]:
         if frist.pop("vertraulich", False):
-            # Datum und Art bleiben, damit die Frist nicht untergeht; Inhalt nicht.
-            frist.update(text="vertraulich", titel="vertraulich", gegenueber="vertraulich")
+            # Datum und Art bleiben, damit die Frist nicht untergeht; Inhalt, Name und Datei nicht.
+            from .dokumente import grober_ordner
+
+            frist.update(text="vertraulich", titel="vertraulich", gegenueber="vertraulich",
+                         pfad=grober_ordner(frist.get("pfad", "")))
     return liste
 
 

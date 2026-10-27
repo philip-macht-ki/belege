@@ -144,6 +144,7 @@ def test_vertrauliche_dokumente_geben_ueber_mcp_keinen_text_heraus(repo):
     assert dokumente.suchen("diabetes") == [], "kein Treffer über den Text"
     treffer = dokumente.suchen("befund")
     assert treffer and "auszug" not in treffer[0] and treffer[0]["vertraulich"] is True
+    assert treffer[0]["ordner"] == "Dokumente/Gesundheit" and "x.pdf" not in str(treffer)
 
 
 def test_alte_dokumente_ohne_merker_werden_nachgeprueft(repo):
@@ -168,8 +169,15 @@ def test_mcp_suche_und_fristen_geben_vertrauliches_nicht_heraus(repo, monkeypatc
 
     monkeypatch.setattr("belege.postfach.oeffnen", lambda konto: Postfach())
     treffer = mcp_server.suchen("x")
-    assert "Diabetes" not in str(treffer) and treffer[1]["auszug"].startswith("Ihre Rechnung")
+    assert "Diabetes" not in str(treffer) and "Befund" not in str(treffer) and treffer[1]["auszug"].startswith("Ihre Rechnung")
     dokumente._speichere({"a": {"pfad": "p", "art": "gesundheit", "titel": "Befund Dr. X", "gegenueber": "Praxis",
                                 "fristen": [{"art": "termin", "datum": None, "text": "Kontrolle Diabetes"}]}})
     frist = mcp_server.fristen()["pruefen"][0]
     assert "Diabetes" not in str(frist) and frist["titel"] == "vertraulich" and frist["art"] == "termin"
+
+
+def test_altbestand_erkennt_vertrauliches_auch_am_gegenueber():
+    from belege.dokumente import ist_vertraulich
+
+    assert ist_vertraulich({"art": "sonstiges", "gegenueber": "Psychotherapeutische Praxis Kurz", "text": ""})
+    assert not ist_vertraulich({"art": "vertrag", "gegenueber": "Netzfunk", "pfad": "Dokumente/Vertrag/x.pdf", "text": "Laufzeit"})
