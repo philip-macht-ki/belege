@@ -1,0 +1,25 @@
+# Optionales Register für den Monatsabgleich. Ohne diese Datei bleibt das bisherige Verhalten.
+# quelle: moneymoney | csv | pdf; muster ist ein Dateimuster, ordner überschreibt [monat].auszuege.
+# [[konto]]
+# kuerzel = "giro"
+# name = "Girokonto CSV"
+# quelle = "csv"
+# muster = "giro*.csv"
+# ordner = ""
+# aktiv_ab = "2026-01"
+#
+# [[konto]]
+# kuerzel = "mm"
+# name = "MoneyMoney-Konto"
+# quelle = "moneymoney"
+# muster = "mm-*.csv"
+# ordner = ""
+# aktiv_ab = "2026-01"
+#
+# [[konto]]
+# kuerzel = "karte"
+# name = "Kreditkarte"
+# quelle = "pdf"
+# muster = "karte-*.pdf"
+# ordner = ""
+# aktiv_ab = "2026-01"

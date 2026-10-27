@@ -350,6 +350,13 @@ def befehl(args) -> int:
     except Exception as e:
         z("GELB", f"Rechner-Sperre nicht prüfbar: {e}")
     try:
+        lebenszeichen = str(konfig("belege").get("takt", {}).get("lebenszeichen", "")).strip()
+        z("GRUEN" if lebenszeichen else "GELB",
+          "Lebenszeichen eingerichtet" if lebenszeichen else "Lebenszeichen nicht eingerichtet",
+          None if lebenszeichen else "In [takt] lebenszeichen die Adresse des Kurs-Connectors eintragen.")
+    except Exception as e:
+        z("GELB", f"Lebenszeichen nicht prüfbar: {e}")
+    try:
         doppelt = _doppelordner(ablage_ordner())
         z(
             "GELB" if doppelt else "GRUEN",

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .kern import echt, fremder_rechner, konfig, pfad, rechner
 
-LAEUFE = ("takt", "tag", "monat")
+LAEUFE = ("takt", "tag", "monat", "posten")
 # Optional, nur wenn konfig/moneymoney.toml `an = true` sagt.
 ZUSATZ = ("moneymoney",)
 

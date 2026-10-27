@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "fehler")
+         "gesendet", "entwurf", "monat", "jahr", "fehler")
 
 
 def _gesehen() -> dict:

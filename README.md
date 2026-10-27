@@ -32,11 +32,22 @@ Für die Tests genügt im Projektordner: `uv run pytest -q`.
 | `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege moneymoney` | optional: Kontoumsätze aus MoneyMoney als CSV holen (`einrichten_moneymoney.md`) |
 | `belege monat --uebergabe` | Belege des Monats an Steuerberater oder Beleg-Adresse |
+| `belege posten --mail` | zeigt die Rückfrage zu offenen Posten; mit `--echt` an die eigene erlaubte Adresse |
 | `belege suchen …` | im Postfach suchen |
 | `belege mcp` | Postfach-Server, damit Claude in deinen Mails und abgelegten Belegen suchen und Entwürfe schreiben kann |
 | `belege pruefen` | Selbsttest mit Ampel |
 
 Ohne `--echt` zeigt jeder Befehl nur, was er täte.
+
+## Offene Posten und Konten
+
+Der Monatsabgleich merkt offene Posten in `arbeit/posten.json`. `belege posten --mail`
+zeigt die Mail vorab; Antworten auf den Betreff `[Belege-Posten]` mit der Kurz-ID und
+`privat`, `kein Beleg`, `liegt bei` oder `andere Firma` übernimmt `belege posten --antworten`.
+
+Wer mehrere Konten hat, kopiert die Beispiele aus `konfig/konten.toml` und trägt je
+Konto Quelle, Dateimuster und Startmonat ein. Fehlt ein Auszug, meldet der Monatslauf
+das einmal und danach höchstens wöchentlich; nach einer Nachlieferung folgt Entwarnung.
 
 ## Grundsätze
 

@@ -6,8 +6,6 @@
   <string>de.belege.monat</string>
   <key>StartCalendarInterval</key>
   <dict>
-    <key>Day</key>
-    <integer>__TAG__</integer>
     <key>Hour</key>
     <integer>9</integer>
     <key>Minute</key>
@@ -17,7 +15,7 @@
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd "__REPO__" &amp;&amp; PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin "__UV__" run belege monat --uebergabe --echt</string>
+    <string>cd "__REPO__" &amp;&amp; if [ "$(/bin/date +%d)" -ge 3 ]; then PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin "__UV__" run belege monat --uebergabe --echt; fi</string>
   </array>
   <key>StandardOutPath</key>
   <string>__REPO__/arbeit/logs/launchd-monat.log</string>

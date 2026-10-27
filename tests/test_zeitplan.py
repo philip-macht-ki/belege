@@ -20,7 +20,7 @@ def test_plists_sind_gueltig_und_gefuellt(repo):
     tag = plistlib.loads(zeitplan.plist_text("tag").encode())
     assert tag["StartCalendarInterval"] == {"Hour": 21, "Minute": 0}
     monat = plistlib.loads(zeitplan.plist_text("monat").encode())
-    assert monat["StartCalendarInterval"]["Day"] == 3
+    assert monat["StartCalendarInterval"] == {"Hour": 9, "Minute": 0}
     assert "monat --uebergabe --echt" in monat["ProgramArguments"][2]
 
 
