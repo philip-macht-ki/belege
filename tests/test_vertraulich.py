@@ -218,3 +218,16 @@ def test_belege_suche_gibt_vertrauliche_belege_nur_als_erlaubnisliste(repo):
     alle = mcp_server.belege_suchen()
     assert "Weber" not in str(alle) and "Psycho" not in str(alle) and "Hetzner" in str(alle)
     assert mcp_server.belege_suchen("weber")["anzahl"] == 0
+
+
+def test_vertrauliche_e_rechnung_bekommt_den_merker(repo, monkeypatch):
+    from belege.typen import Einordnung
+
+    e = Einordnung(ist_beleg=True, art="eingang", bereich="betrieb", datum=date(2026, 10, 1), lieferant="Praxis Dr. med. Weber",
+                   beschreibung="Privatliquidation", betrag=80.0, waehrung="EUR", sicherheit="hoch", grund="XML", quelle="xml")
+    monkeypatch.setattr(verarbeiten, "_zugferd", lambda fund: (e, Text("Privatliquidation", "xml", 1)))
+    datei = repo / "handy" / "rechnung.pdf"
+    datei.write_bytes(b"pdf")
+    verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 1)), True)
+    index = kern.lesen(kern.pfad("arbeit", "index.json"), {})
+    assert any(x.get("vertraulich") for x in index.values())

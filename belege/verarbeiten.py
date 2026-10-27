@@ -141,7 +141,12 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         geheim = None
         zugferd = _zugferd(fund)
         if zugferd:
+            # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
+            from .vertraulich import pruefen
+
             einordnung, text = zugferd
+            geheim = pruefen(f"{einordnung.lieferant} {einordnung.beschreibung} {text.text}", fund.name, fund.mail,
+                             modell=False)
         else:
             from .text import auslesen
             from .einordnen import einordnen
