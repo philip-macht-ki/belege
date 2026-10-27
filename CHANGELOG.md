@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.4.1] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- War dein Mac am Sonntagmorgen zugeklappt oder aus, holt er die Update-Prüfung beim nächsten Start nach.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.4.0] – 27.10.2026
 
 aktion: keine
