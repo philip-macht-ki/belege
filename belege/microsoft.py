@@ -193,8 +193,9 @@ class MicrosoftPostfach(Postfach):
 
     def _anfrage(self, art: str, pfad: str, **kwargs) -> requests.Response:
         url = pfad if pfad.startswith("http") else GRAPH + pfad
+        extra = kwargs.pop("headers", None) or {}
         for versuch in range(3):
-            kopf = {"Authorization": f"Bearer {token(self.konto)}", **kwargs.pop("headers", {})}
+            kopf = {"Authorization": f"Bearer {token(self.konto)}", **extra}
             antwort = self.sitzung.request(art, url, headers=kopf, timeout=60, **kwargs)
             if antwort.status_code in (429, 503, 504) and versuch < 2:
                 time.sleep(min(int(antwort.headers.get("Retry-After", "5") or 5), 60))

@@ -101,7 +101,7 @@ Meldet belege, dass die Server unbekannt sind, fragt Claude nach dem Anbieter,
 schlägt dessen IMAP- und SMTP-Server in der Hilfe des Anbieters nach und trägt
 sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
 `mail.anbieter.de:993`). Liegt die Domain bei Microsoft 365, gilt der
-Weiterleitungsweg oben. Bei Google Workspace muss der Admin App-Passwörter
+Abschnitt „Microsoft-Postfach“ unten. Bei Google Workspace muss der Admin App-Passwörter
 erlauben.
 
 Bevor Claude zum ersten Mal ins Postfach schaut, sagt er in einem Satz: Briefe
@@ -136,7 +136,11 @@ Claude Pro). Sonst sage ich dir jeden Klick einzeln an.“ Lehnt die Person ab,
 fragt Claude bei einem Hänger noch einmal. Passwörter, Codes und die Zustimmung
 klickt immer die Person selbst.
 
-**Eigene App (etwa 15 Minuten, einmalig).** Das macht ein Admin der Firma, bei
+**Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
+Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Ein privates
+Outlook.com-, Hotmail- oder Live-Postfach geht direkt nur mit Philips App; bis es
+sie gibt, nimmt Claude dort den Rückfall unten (bei privaten Postfächern sperrt
+Microsoft die Umleitung nicht). Die eigene App legt ein Admin der Firma an, bei
 kleinen Firmen meist die Geschäftsführung:
 
 1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.

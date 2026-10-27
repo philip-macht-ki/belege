@@ -115,6 +115,9 @@ def test_drosselung_wird_abgewartet_und_401_erklaert(box, monkeypatch):
     monkeypatch.setattr(microsoft.time, "sleep", lambda s: None)
     box.sitzung = Sitzung([Antwort(status=429, headers={"Retry-After": "1"}), Antwort(content=_roh())])
     assert box.lesen("x")["betreff"] == "Ihre Rechnung Oktober"
+    box.sitzung = Sitzung([Antwort(status=503), Antwort(status=202)])
+    box._senden("a@b.example", "T", "Text", [])
+    assert box.sitzung.aufrufe[1][2]["headers"]["Content-Type"] == "text/plain"
     box.sitzung = Sitzung([Antwort(status=401)])
     with pytest.raises(RuntimeError, match="belege anmelden --microsoft firma"):
         box.lesen("x")
