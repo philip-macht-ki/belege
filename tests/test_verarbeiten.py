@@ -177,3 +177,8 @@ def test_fremder_anhang_im_pdf_wird_angehalten(tmp_path):
     datei = tmp_path / "anhang.pdf"
     with datei.open("wb") as f: w.write(f)
     assert aktive_pdf_inhalte(datei)[0]
+
+
+def test_bestellte_verzeichnis_rechnung_ist_keine_abofalle():
+    from belege.abofalle import erkennen
+    assert not erkennen("Gelbe Seiten Branchenbuch\nRechnung Nr. 4711\nEintragungsart: Premium")[0]
