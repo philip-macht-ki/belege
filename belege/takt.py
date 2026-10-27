@@ -63,10 +63,11 @@ def quelle_abarbeiten(name: str, args) -> list[Ergebnis]:
         for (konto, mail_id), alles_gut in je_mail.items():
             if alles_gut:
                 quellen.mail_erledigt(konto, mail_id, echt(args))
-        # Nur ein Lauf ohne Liegengebliebenes verschiebt den Rückblick nach vorn.
+        # Offene Mails bleiben im Suchfenster; erst ohne offene rückt der Rückblick vor.
+        daten = {(f.mail["konto"], f.mail["id"]): f.eingang.isoformat() for f in funde if f.mail}
         for konto in _postfach_konten(args):
-            if all(gut for (k, _), gut in je_mail.items() if k == konto):
-                quellen.lauf_erledigt(konto, echt(args))
+            liegen = {i: daten[(k, i)] for (k, i), gut in je_mail.items() if k == konto and not gut}
+            quellen.lauf_abschliessen(konto, liegen, echt(args))
     return ergebnisse
 
 

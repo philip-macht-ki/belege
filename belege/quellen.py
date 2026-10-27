@@ -97,15 +97,44 @@ def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
         seit = datetime.fromisoformat(str(letzter)).date()
     except ValueError:
         return minimum
+    # Liegengebliebene Mails (Netz weg, Fehler) bleiben im Fenster, solange sie offen sind.
+    for datum in (stand.get("offen") or {}).values():
+        try:
+            seit = min(seit, date.fromisoformat(str(datum)[:10]))
+        except ValueError:
+            continue
     return max(minimum, min(maximum, (kern.jetzt().date() - seit).days + 2))
 
 
-def lauf_erledigt(konto: str, echt: bool) -> None:
-    """Merkt, dass ein Postfachlauf für dieses Konto ohne liegengebliebenen Fund endete."""
+def lauf_abschliessen(konto: str, liegen: dict[str, str], echt: bool) -> None:
+    """Schreibt nach einem Postfachlauf fort, welche Mails noch offen sind.
+
+    ``liegen`` sind Mail-IDs mit Maildatum, deren Funde diesmal nicht erledigt
+    wurden. Der Rückblick rückt nur vor, wenn keine Mail mehr offen ist. Eine
+    Mail, die länger offen ist als ``max_tage``, fiele aus dem Suchfenster: Sie
+    wird einmal als „zweifel“ gemeldet und dann losgelassen, nie still verloren.
+    """
     if not echt:
         return
     gesehen = _gesehen()
-    gesehen.setdefault(konto, {"mails": []})["lauf"] = kern.jetzt().isoformat()
+    daten = gesehen.setdefault(konto, {"mails": []})
+    erledigt = set(daten.get("mails", []))
+    offen = {i: d for i, d in (daten.get("offen") or {}).items() if i not in erledigt}
+    offen.update(liegen)
+    maximum = int(kern.konfig("belege").get("postfach", {}).get("max_tage", 60))
+    grenze = kern.jetzt().date() - timedelta(days=maximum - 2)
+    for mail_id, datum in list(offen.items()):
+        try:
+            zu_alt = date.fromisoformat(str(datum)[:10]) < grenze
+        except ValueError:
+            zu_alt = True
+        if zu_alt:
+            kern.ereignis("zweifel", f"Eine Mail vom {datum} im Postfach {konto} ließ sich {maximum} Tage lang "
+                          "nicht verarbeiten. Bitte den Anhang selbst ansehen und ablegen.", konto=konto, id=mail_id)
+            del offen[mail_id]
+    daten["offen"] = offen
+    if not offen:
+        daten["lauf"] = kern.jetzt().isoformat()
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 

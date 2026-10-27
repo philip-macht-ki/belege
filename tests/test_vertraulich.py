@@ -106,3 +106,14 @@ def test_ocr_notstufe_schickt_vertrauliches_nicht_an_claude(repo, monkeypatch):
     # Ganz leer aus dem Postfach: wie bisher darf Claude abschreiben.
     monkeypatch.setattr(text, "_claude", lambda d: "Rechnung der Hetzner Online GmbH für den Cloud Server im Oktober, bitte bis Monatsende zahlen. " * 3)
     assert text.auslesen(datei).stufe == "claude"
+
+
+def test_vertrauliche_dokumente_geben_ueber_mcp_keinen_text_heraus(repo):
+    from belege import dokumente
+
+    kern_index = {"a": {"pfad": "Dokumente/Gesundheit/x.pdf", "art": "gesundheit", "gegenueber": "Praxis",
+                        "titel": "Befund", "text": "Diagnose Diabetes", "vertraulich": True}}
+    dokumente._speichere(kern_index)
+    assert dokumente.suchen("diabetes") == [], "kein Treffer über den Text"
+    treffer = dokumente.suchen("befund")
+    assert treffer and "auszug" not in treffer[0] and treffer[0]["vertraulich"] is True

@@ -124,10 +124,11 @@ def befehl(args) -> int:
             continue
         from .vertraulich import pruefen
 
-        alle_mails = [{**m, "text": postfach.lesen(m["id"]).get("text", "")[:1500]} for m in neue]
+        voll = {m["id"]: postfach.lesen(m["id"]).get("text", "") for m in neue}
+        alle_mails = [{**m, "text": voll[m["id"]][:1500]} for m in neue]
         # Vertrauliche Mails (Arzt, Gericht, Personal …) sieht kein Cloud-Modell; für sie
-        # gilt nur die Wortregel des Wächters.
-        geheim = [m for m in alle_mails if pruefen(m["text"], "", m).vertraulich]
+        # gilt nur die Wortregel des Wächters. Geprüft wird der ganze Text, nicht der Anfang.
+        geheim = [m for m in alle_mails if pruefen(voll[m["id"]], "", m).vertraulich]
         mails = [m for m in alle_mails if m not in geheim]
         bloecke = "\n".join(
             f'<mail id="{m["id"]}">Von: {m["von"]}\nBetreff: {m["betreff"]}\n{m["text"]}</mail>'

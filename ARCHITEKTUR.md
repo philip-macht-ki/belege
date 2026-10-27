@@ -266,8 +266,11 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
   dem letzten vollständig erledigten Lauf (`gesehen.json[konto].lauf`, sonst
   `stand`) plus 2 Tage Puffer, mindestens `laufend_tage` (3), höchstens
   `max_tage` (60); erster Lauf `erste_tage` (30). So holt ein MacBook, das eine
-  Woche zu war, die ganze Woche nach. `lauf` rückt nur vor, wenn kein Fund des
-  Kontos liegen blieb. Abzüglich `gesehen`. Anhänge: Endungen pdf,
+  Woche zu war, die ganze Woche nach. Mails, deren Funde nicht erledigt wurden,
+  stehen mit Datum in `gesehen.json[konto].offen` und halten das Fenster offen;
+  `lauf` rückt erst vor, wenn keine mehr offen ist. Wäre eine offene Mail älter
+  als `max_tage`, gibt es einmal ein `zweifel`-Ereignis, dann wird sie
+  losgelassen. Abzüglich `gesehen`. Anhänge: Endungen pdf,
   xml, jpg, jpeg, png, heic, tif, tiff, docx; Bilder unter 20 KB sind
   Signaturen/Logos. Weg B zusätzlich: Mails mit Label `[postfach].label`
   (Standard „Beleg“), ohne Zeitfenster, danach Label „Beleg/erledigt“. Eine
@@ -436,7 +439,7 @@ Mandant, vertraulich, Krankenkasse, Behandlung … plus `woerter`); oder, nur we
 Ollama schon mit `qwen3:8b`/`qwen3:14b` läuft und der Mac ≥ 16 GB hat, dem lokalen
 Modell. „Gericht“ zählt nicht (steht in jedem Impressum). Folge: `nur_lokal=True`,
 Ereignis `vertraulich`; die Wächter-Mail wird nur per Wortregel geprüft.
-`[vertraulich].aus = true` schaltet die Weiche ab. Messung 27.10.2026: 9/9
+Vertrauliche Dokumente tragen in `arbeit/dokumente.json` `vertraulich: true`; `dokumente_suchen` (MCP) sucht dort nicht im Text und gibt nur den Pfad zurück. `[vertraulich].aus = true` schaltet die Weiche ab. Messung 27.10.2026: 9/9
 Testfälle, 0/9 Fehlalarm, 2 von 40 echten Eingangsbelegen markiert.
 
 ## Tests

@@ -75,3 +75,23 @@ def test_rechner_erkennt_macbook_am_akku(monkeypatch):
     assert daten["am_netzteil"] is False
     monkeypatch.setattr(rechner, "_aus", lambda cmd: "Now drawing from 'AC Power'\n" if cmd[0] == "pmset" else "")
     assert rechner.art() == "dauerrechner"
+
+
+def test_offene_mail_haelt_das_fenster_und_wird_nie_still_verloren(repo):
+    heute = kern.jetzt().date()
+    alt = (heute - timedelta(days=10)).isoformat()
+    quellen.lauf_abschliessen("k", {"m1": alt}, True)
+    stand = quellen._gesehen()["k"]
+    assert "lauf" not in stand, "mit offener Mail rückt der Rückblick nicht vor"
+    assert quellen.rueckblick_tage({**stand, "lauf": heute.isoformat()}, {"max_tage": 60}) == 12
+    # Erledigt: Mail fällt aus offen, Lauf rückt vor.
+    gesehen = quellen._gesehen()
+    gesehen["k"]["mails"] = ["m1"]  # so hinterlässt es mail_erledigt
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+    quellen.lauf_abschliessen("k", {}, True)
+    assert quellen._gesehen()["k"]["offen"] == {} and quellen._gesehen()["k"]["lauf"]
+    # Zu alt für das Fenster: einmal gemeldet, dann losgelassen.
+    quellen.lauf_abschliessen("k", {"m2": (heute - timedelta(days=70)).isoformat()}, True)
+    zeilen = "".join(p.read_text(encoding="utf-8") for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
+    assert '"art": "zweifel"' in zeilen and "nicht verarbeiten" in zeilen
+    assert quellen._gesehen()["k"]["offen"] == {}

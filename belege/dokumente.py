@@ -349,6 +349,7 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         "fristen": eintrag["fristen"],
         "text": text.text[:6000],
         "abgelegt": not unsicher,
+        "vertraulich": geheim.vertraulich,
     }
     index[sha] = gespeichert
     _speichere(index)
@@ -428,9 +429,16 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
     abfrage_klein = abfrage.lower().strip()
     treffer = []
     for eintrag in _index().values():
-        felder = ("gegenueber", "titel", "art", "text")
+        # Bei vertraulichen Dokumenten nie im Text suchen: schon ein Treffer verrät den Inhalt.
+        felder = ("gegenueber", "titel", "art") if eintrag.get("vertraulich") else ("gegenueber", "titel", "art", "text")
         heuhaufen = " ".join(str(eintrag.get(feld, "")) for feld in felder).lower()
         if abfrage_klein and abfrage_klein not in heuhaufen:
+            continue
+        if eintrag.get("vertraulich"):
+            # Über den MCP-Server landet das im Gespräch, also bei einem Cloud-Modell:
+            # nur der Pfad, damit der Mensch die Datei selbst öffnen kann.
+            treffer.append({"pfad": eintrag.get("pfad"), "vertraulich": True,
+                            "hinweis": "Vertraulich, nur auf diesem Mac lesbar. Datei selbst öffnen."})
             continue
         treffer.append(
             {
