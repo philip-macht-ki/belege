@@ -584,7 +584,7 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   `belege zeitplan an --echt`, für Bestand beim ersten `aktualisieren`. Ab Tag 28
   spielt `--automatisch` ohne gültige Plus-Lizenz nur noch Versionen ein, deren neue
   Abschnitte alle `aktion: sicherheit` tragen; sonst einmal je Version ein
-  `update`-Ereignis mit Hinweis (Name aus `[update].plus_name`, Standard „Agent Plus“).
+  `update`-Ereignis mit Hinweis (`update.pausiert_hinweis()`; Name aus `[update].plus_name`, Standard „Agent Plus“; Kauflink aus `[update].plus_link`, Standard https://philipkleudgen.de/mitglieder/monatszahlen).
   Von Hand (`--echt` ohne `--automatisch`) geht immer.
 - **Plus-Lizenz:** `uv --directory ~/belege-plus run plus lizenz` (Ordner per
   `BELEGE_PLUS`), Exit 0 = gültig; die Signatur prüft Plus selbst. Fehlt Plus oder

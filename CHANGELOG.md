@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.5.1] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Der Hinweis zu pausierten automatischen Updates nennt jetzt, wo es Agent Plus gibt.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.5.0] – 27.10.2026
 
 aktion: keine
