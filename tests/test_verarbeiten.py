@@ -9,7 +9,7 @@ from belege import verarbeiten
 from belege.typen import Fund, Text
 
 
-def _einordnung(fund, text):
+def _einordnung(fund, text, **_):
     from belege.typen import Einordnung
 
     return Einordnung(
@@ -34,7 +34,7 @@ def test_dublette_wird_nicht_zweimal_abgelegt(repo, monkeypatch):
     fund = Fund(datei, "handy", datei.name, date(2026, 9, 10))
     monkeypatch.setattr("belege.einordnen.einordnen", _einordnung)
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: Text("Rechnung", "klartext", 1)
+        "belege.text.auslesen", lambda _, **__: Text("Rechnung", "klartext", 1)
     )
     assert verarbeiten.verarbeite(fund, False).status == "nichts"
     assert not (repo / "ablage").exists() or not list((repo / "ablage").rglob("*"))
@@ -50,7 +50,7 @@ def test_index_wird_nach_echter_ablage_geschrieben(repo, monkeypatch):
     fund = Fund(datei, "postfach", datei.name, date(2026, 9, 10))
     monkeypatch.setattr("belege.einordnen.einordnen", _einordnung)
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: Text("Rechnung", "klartext", 1)
+        "belege.text.auslesen", lambda _, **__: Text("Rechnung", "klartext", 1)
     )
     assert verarbeiten.verarbeite(fund, True).status == "ok"
     index = json.loads((repo / "arbeit" / "index.json").read_text())
@@ -79,9 +79,9 @@ def test_downloads_zweifel_bleibt_liegen(repo, monkeypatch):
         "Nur vorsichtig erkannt.",
         "rueckfall",
     )
-    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_: unsicher)
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_, **__: unsicher)
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: Text("Rechnung", "klartext", 1)
+        "belege.text.auslesen", lambda _, **__: Text("Rechnung", "klartext", 1)
     )
     assert verarbeiten.verarbeite(fund, False).status == "befund"
     assert datei.exists()

@@ -78,7 +78,7 @@ def test_newsletter_ist_kein_beleg(repo):
 def test_pruefe_lehnt_kaputtes_json_ab(monkeypatch, repo):
     from belege import einordnen as modul
 
-    def falsche_frage(auftrag, *, zweck, pruefe, rueckfall):
+    def falsche_frage(auftrag, *, zweck, pruefe, rueckfall, **_):
         assert zweck == "einordnen"
         assert pruefe({"ist_beleg": True}) is not None
         return rueckfall()

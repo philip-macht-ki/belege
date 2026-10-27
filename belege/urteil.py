@@ -37,6 +37,12 @@ class KeinUrteil(RuntimeError):
     """Das Modell hat keine brauchbare Antwort geliefert."""
 
 
+class Unerreichbar(KeinUrteil):
+    """Das Modell war gar nicht erreichbar: kein Netz, VPN, Zeitüberschreitung,
+    Dienst gestört. Dann gibt es keine Rückfallregel, der Fund bleibt liegen und
+    der nächste Lauf versucht es wieder (laptop-fest, siehe ARCHITEKTUR.md)."""
+
+
 def vorlage(name: str, **werte) -> str:
     """Liest vorlagen/prompts/<name>.md und setzt {platzhalter} ein.
     Unbekannte Platzhalter bleiben stehen, statt zu werfen."""
@@ -104,15 +110,18 @@ def _claude(auftrag: str, modell: str) -> str:
         raise KeinUrteil(
             "Der Befehl `claude` fehlt. Claude Code installieren (Werkstatt W0)."
         )
-    r = subprocess.run(
-        ["claude", "-p", "--output-format", "json", "--model", modell, *SCHLANK],
-        input=auftrag,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
+    try:
+        r = subprocess.run(
+            ["claude", "-p", "--output-format", "json", "--model", modell, *SCHLANK],
+            input=auftrag,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        raise Unerreichbar("claude -p hat nach 600 Sekunden nicht geantwortet.") from None
     if r.returncode != 0:
-        raise KeinUrteil(
+        raise Unerreichbar(
             f"claude -p scheiterte: {(r.stderr or r.stdout).strip()[-300:]}"
         )
     try:
@@ -120,7 +129,7 @@ def _claude(auftrag: str, modell: str) -> str:
     except json.JSONDecodeError:
         return r.stdout
     if daten.get("is_error"):
-        raise KeinUrteil(
+        raise Unerreichbar(
             f"claude -p meldet einen Fehler: {str(daten.get('result'))[:300]}"
         )
     u = daten.get("usage") or {}
@@ -140,7 +149,19 @@ def _anthropic(auftrag: str, modell: str) -> str:
     schluessel = os.environ.get("ANTHROPIC_API_KEY")
     if not schluessel:
         raise KeinUrteil("ANTHROPIC_API_KEY fehlt in .env.")
-    r = requests.post(
+    try:
+        r = _anthropic_post(schluessel, auftrag, modell)
+    except requests.RequestException as fehler:
+        raise Unerreichbar(f"Anthropic-API nicht erreichbar: {fehler}") from None
+    if r.status_code == 429 or r.status_code >= 500:
+        raise Unerreichbar(f"Anthropic-API antwortet {r.status_code}: {r.text[:300]}")
+    if r.status_code != 200:
+        raise KeinUrteil(f"Anthropic-API antwortet {r.status_code}: {r.text[:300]}")
+    return "".join(b.get("text", "") for b in r.json().get("content", []))
+
+
+def _anthropic_post(schluessel: str, auftrag: str, modell: str):
+    return requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={
             "x-api-key": schluessel,
@@ -154,9 +175,6 @@ def _anthropic(auftrag: str, modell: str) -> str:
         },
         timeout=300,
     )
-    if r.status_code != 200:
-        raise KeinUrteil(f"Anthropic-API antwortet {r.status_code}: {r.text[:300]}")
-    return "".join(b.get("text", "") for b in r.json().get("content", []))
 
 
 # Codex läuft nur lesend und ohne Netz in einem leeren Arbeitsordner, ohne
@@ -181,10 +199,10 @@ def _codex(auftrag: str, modell: str) -> str:
                 text=True, timeout=600,
             )
         except subprocess.TimeoutExpired:
-            raise KeinUrteil("codex hat nach 600 Sekunden nicht geantwortet.") from None
+            raise Unerreichbar("codex hat nach 600 Sekunden nicht geantwortet.") from None
         if r.returncode != 0 or not ausgabe.exists():
             meldung = (r.stderr or r.stdout).strip()[-300:]
-            raise KeinUrteil(f"codex scheiterte: {meldung or 'keine Antwort'}")
+            raise Unerreichbar(f"codex scheiterte: {meldung or 'keine Antwort'}")
         return ausgabe.read_text(encoding="utf-8")
 
 
@@ -198,7 +216,7 @@ def _lokal(auftrag: str, modell: str) -> str:
             timeout=600,
         )
     except requests.RequestException:
-        raise KeinUrteil("Ollama läuft nicht. Ollama-App öffnen.") from None
+        raise Unerreichbar("Ollama läuft nicht. Ollama-App öffnen.") from None
     if r.status_code != 200:
         if r.status_code == 404 or "not found" in r.text.lower():
             raise KeinUrteil(f"Modell {modell} fehlt: ollama pull {modell}")
@@ -228,6 +246,7 @@ def frage(
     zweck: str,
     rueckfall: Callable[[], object] | None = None,
     pruefe: Callable[[object], str | None] | None = None,
+    nur_lokal: bool = False,
 ):
     """Stellt dem Modell einen Auftrag und gibt geparstes JSON zurück.
 
@@ -236,9 +255,22 @@ def frage(
                Modell zweimal nichts Brauchbares liefert
     pruefe     gibt einen Mangel als Text zurück oder None. Bei Mangel wird
                einmal nachgefragt, mit dem Mangel im Auftrag.
+    nur_lokal  vertraulicher Fund (belege/vertraulich.py): nie ein Cloud-Backend,
+               sondern ein schon vorhandenes Ollama-Modell oder die Rückfallregel.
+
+    Ist das Backend nicht erreichbar (Unerreichbar), gibt es keine Rückfallregel:
+    Die Ausnahme geht an den Aufrufer, damit der Fund liegen bleibt.
     """
     k = konfig("belege").get("urteil", {})
     backend = os.environ.get("URTEIL_BACKEND", k.get("backend", "claude"))
+    if nur_lokal and backend != "ohne":
+        from .vertraulich import lokales_modell
+
+        modell_lokal = lokales_modell()
+        if backend != "lokal" and not modell_lokal:
+            backend = "ohne"
+        elif backend != "lokal":
+            backend, k = "lokal", {**k, "modell_lokal": modell_lokal}
     if backend == "codex":
         modell = str(k.get("modell_codex", "")).strip()
     elif backend == "lokal":
@@ -269,10 +301,13 @@ def frage(
         start = time.time()
         roh = ""
         _verbrauch.clear()
+        unerreichbar = None
         try:
             roh = BACKENDS[backend](text, modell)
             antwort = json_aus(roh)
             mangel = pruefe(antwort) if pruefe else None
+        except Unerreichbar as e:
+            antwort, mangel, unerreichbar = None, str(e), e
         except KeinUrteil as e:
             antwort, mangel = None, str(e)
         _protokoll(
@@ -289,6 +324,12 @@ def frage(
                 "antwort": roh[:4000],
             }
         )
+        if unerreichbar is not None:
+            # Lokal ohne Netz: Die Regel ist dann besser als warten. Sonst bleibt
+            # der Fund liegen, statt mit einer schwachen Regel abgelegt zu werden.
+            if nur_lokal and rueckfall is not None:
+                return rueckfall()
+            raise unerreichbar
         if mangel is None and antwort is not None:
             schreiben(cache, {"zeit": time.time(), "antwort": antwort})
             return antwort

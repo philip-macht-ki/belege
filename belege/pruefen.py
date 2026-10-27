@@ -352,9 +352,12 @@ def befehl(args) -> int:
     try:
         erlaubt = str(konfig("belege").get("rechner", {}).get("erlaubt", "")).strip()
         hier = rechner()
+        from .kern import rechnernamen
+
         if not erlaubt:
-            z("GELB", "Rechner-Sperre nicht gesetzt", f'In konfig/belege.toml unter [rechner] erlaubt = "{hier}" eintragen, wenn dies dein Dauerrechner ist.')
-        elif erlaubt.lower() == hier.lower():
+            z("GRUEN", "Ein Mac: keine Rechner-Sperre nötig",
+              f'Nur bei zwei Macs mit demselben Ordner unter [rechner] erlaubt = "{hier}" eintragen.')
+        elif erlaubt.lower() in {n.lower() for n in rechnernamen()}:
             z("GRUEN", f"Rechner-Sperre: nur {erlaubt} legt ab")
         else:
             z("GELB", f"Dieser Rechner ({hier}) ist nicht der Dauerrechner {erlaubt}", "Hier keinen Zeitplan einschalten. Läuft hier einer, belege zeitplan aus --echt.")

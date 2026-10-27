@@ -22,9 +22,20 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Danach führt Claude `uv sync`, `uv run belege einrichten-urteil` und
 `uv run belege pruefen` aus. Homebrew ist nicht nötig.
 
+## Welcher Mac ist das?
+
+Frag nicht, sondern sieh nach: `uv run belege rechner --echt`. Sag der Person in
+einem Satz, was du gefunden hast („ein MacBook Air mit 16 GB, 120 GB frei“).
+Ein MacBook ist der Normalfall und reicht: Was zugeklappt verpasst wird, holt
+belege beim Aufklappen nach. Nur wenn zusätzlich ein Mac dauerhaft läuft, frag,
+ob belege dorthin soll.
+
 ## Welcher Weg ordnet ein?
 
 Bist du Claude, bleibt `claude` wie bisher eingestellt; frage dazu nichts.
+Vertrauliche Briefe gehen trotzdem nie an Claude (Weiche „vertraulich“). Wer
+dafür zusätzlich ein Modell auf dem Mac will, findet die freiwillige Anleitung
+in `einrichten_lokal.md`; im Workshop ist das kein Schritt.
 Bist du Codex (oder hat die Person kein Claude-Abo), frag sie, ob das Einordnen
 auf ihrem Mac (lokal) oder über ihr ChatGPT-Abo (codex) laufen soll. Prüfe erst
 den Arbeitsspeicher mit `sysctl -n hw.memsize` und gib eine Empfehlung: ab 32 GB
@@ -80,10 +91,13 @@ sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
 Weiterleitungsweg oben. Bei Google Workspace muss der Admin App-Passwörter
 erlauben.
 
-Bevor Claude zum ersten Mal ins Postfach schaut, fragt er: Gibt es Absender mit
-vertraulichen Unterlagen, etwa Mandanten oder Patienten? Die trägt er in
-`ausschluss` in `konfig/regeln.toml` ein. Von ihnen lädt das System keinen
-Anhang, und auch der Wächter liest sie nicht.
+Bevor Claude zum ersten Mal ins Postfach schaut, sagt er in einem Satz: Briefe
+von Arzt, Gericht, Krankenkasse oder über Mitarbeitende erkennt belege selbst
+und liest sie nur auf diesem Mac, nie mit einem Cloud-Modell. Dann fragt er:
+Gibt es Absender mit vertraulichen Unterlagen, etwa Mandanten, Patienten oder
+ein Labor? Die trägt er unter `[vertraulich]` als `absender` in
+`konfig/regeln.toml` ein; solche Belege liest dann nur dein Mac. Absender, deren
+Anhänge gar nicht geladen werden sollen, kommen stattdessen in `ausschluss`.
 
 ### App-Passwort
 
@@ -119,17 +133,21 @@ Postfach: `uv run belege postfach`. Er zeigt die gefundenen Betreffzeilen und
 
 Claude schaltet den Takt erst ein, wenn die Person es ausdrücklich will, etwa
 mit „Richte den Belege-Zeitplan ein“: `BELEGE_JA=1 uv run belege zeitplan an --echt`.
-Er trägt dabei die Rechner-Sperre ein, damit nur dieser Mac ablegt, und sagt,
+Nur wenn die Person zwei Macs mit demselben Ablageordner hat, trägt er die
+Rechner-Sperre ein, damit nur einer ablegt. Er sagt,
 dass der Wächter jede neue Mail einmal ansieht (Absender, Betreff, Anfang des
 Textes gehen dafür an Claude) und wie man ihn ausschaltet (`waechter = false` beim Konto). Zum Schluss zeigt er
 `uv run belege zeitplan zeigen` und `uv run belege pruefen` noch einmal.
 
 Lebenszeichen: Ist der Kurs-Connector „Philip macht KI“ verbunden, legt Claude
 mit dessen Werkzeug `lebenszeichen` eines an (Name „Belege aus dem Postfach“,
-`max_stunden` 3 auf einem Dauerrechner, 36 auf einem Laptop). Aus der Zeile, die
-das Werkzeug zurückgibt, trägt er nur die Adresse in Anführungszeichen als
-`[takt] lebenszeichen` in `konfig/belege.toml` ein. Nach jedem fehlerfreien Takt
-meldet sich belege dort. Bleibt das aus, bekommt die Person eine Mail.
+`max_stunden` 3, auch auf einem MacBook). Aus der Zeile, die das Werkzeug
+zurückgibt, trägt er nur die Adresse in Anführungszeichen als
+`[takt] lebenszeichen` in `konfig/belege.toml` ein. Der Takt meldet sich dort
+beim Start („Mac ist an“, mit MacBook oder Dauerrechner) und nach jedem
+fehlerfreien Lauf. War ein MacBook nur zu, kommt kein Alarm, nach vier Tagen
+Stille höchstens ein freundlicher Hinweis. Ist der Mac an und der Takt scheitert
+zwei Stunden lang, kommt eine Mail.
 
 Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 

@@ -11,6 +11,7 @@ BEFEHLE = {
     "status": ("bericht", "befehl_status", "Kurzübersicht"),
     "beispiel": ("beispiel", "befehl", "Musterbetrieb anlegen"),
     "takt": ("takt", "befehl", "Postfach, Handy und Wächter abarbeiten"),
+    "rechner": ("rechner", "befehl", "Zeigen, welcher Mac das ist (MacBook oder Dauerrechner)"),
     "tag": ("takt", "befehl_tag", "Downloads und Tagesbericht abarbeiten"),
     "postfach": ("takt", "befehl_postfach", "Nur das Postfach abarbeiten"),
     "handy": ("takt", "befehl_handy", "Nur den Handy-Ordner abarbeiten"),
@@ -44,6 +45,7 @@ BEFEHLE = {
 
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
+OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
 SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten"}
 
 
@@ -88,6 +90,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     try:
         befehl = getattr(importlib.import_module(f"belege.{modul}"), funktion)
+        if args.befehl in SCHREIBEND and args.echt:
+            from .kern import Gesamtsperre
+
+            # Beim Aufwachen starten mehrere Zeitpläne zugleich. Sie laufen nacheinander;
+            # der 15-Minuten-Takt wartet nicht, er kommt ohnehin gleich wieder.
+            warten = 0 if args.befehl in OHNE_WARTEN else 30 * 60
+            with Gesamtsperre(warten) as frei:
+                if not frei:
+                    print(f"nichts: {args.befehl} übersprungen, ein anderer Lauf ist noch aktiv.")
+                    return 0
+                return int(befehl(args) or 0)
         return int(befehl(args) or 0)
     except ModuleNotFoundError as fehler:
         print(

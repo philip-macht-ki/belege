@@ -37,6 +37,8 @@ waechter = true
 [postfach]
 erste_tage = 30
 laufend_tage = 3
+# Rückblick ab dem letzten erledigten Lauf, höchstens so viele Tage (MacBook zu, Urlaub)
+max_tage = 60
 label = "Beleg"
 
 [quellen]

@@ -67,6 +67,20 @@ def rechner() -> str:
     return socket.gethostname().split(".")[0]
 
 
+def rechnernamen() -> set[str]:
+    """Alle Namen dieses Macs. Der Hostname kann je nach WLAN wechseln, der
+    lokale Name aus den Systemeinstellungen (scutil LocalHostName) nicht."""
+    namen = {rechner()}
+    try:
+        lokal = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True,
+                               text=True, timeout=5).stdout.strip()
+        if lokal:
+            namen.add(lokal)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return namen
+
+
 def fremder_rechner() -> str | None:
     """Der erlaubte Rechner, wenn dieser hier nicht ablegen darf, sonst None.
 
@@ -74,7 +88,7 @@ def fremder_rechner() -> str | None:
     eine alte Kopie dann neben dem Dauerrechner ablegt (ARCHITEKTUR.md, Rechner-Sperre).
     """
     erlaubt = str(konfig("belege").get("rechner", {}).get("erlaubt", "")).strip()
-    if erlaubt and erlaubt.lower() != rechner().lower():
+    if erlaubt and erlaubt.lower() not in {name.lower() for name in rechnernamen()}:
         return erlaubt
     return None
 
@@ -151,6 +165,40 @@ class Sperre:
         self.p.unlink(missing_ok=True)
 
 
+class Gesamtsperre:
+    """Eine Sperre für alle schreibenden Läufe (flock auf arbeit/.belege.lock).
+
+    Anders als die PID-Datei verschwindet sie mit dem Prozess von selbst, auch
+    nach Absturz oder Neustart. ``warten`` Sekunden wird gewartet, dann gibt der
+    Kontext ``False`` zurück und der Aufrufer überspringt seinen Lauf.
+    """
+
+    def __init__(self, warten: float = 0):
+        self.warten = warten
+        self.datei = None
+
+    def __enter__(self) -> bool:
+        import fcntl
+        import time
+
+        ziel = pfad("arbeit", ".belege.lock")
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        self.datei = open(ziel, "a+")
+        ende = time.monotonic() + self.warten
+        while True:
+            try:
+                fcntl.flock(self.datei, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return True
+            except BlockingIOError:
+                if time.monotonic() >= ende:
+                    return False
+                time.sleep(5)
+
+    def __exit__(self, *_):
+        if self.datei:
+            self.datei.close()  # gibt die Sperre frei
+
+
 def ereignis(art: str, text: str, **daten) -> None:
     """Eine Zeile nach arbeit/ereignisse/<datum>.jsonl. Nur hier wird die Datei geschrieben;
     der Bericht liest ausschließlich dort."""
@@ -160,6 +208,49 @@ def ereignis(art: str, text: str, **daten) -> None:
     zeile = {"zeit": t.isoformat(timespec="seconds"), "art": art, "text": text, "daten": daten}
     with open(ziel, "a", encoding="utf-8") as f:
         f.write(json.dumps(zeile, ensure_ascii=False, default=str) + "\n")
+
+
+def einmal_taeglich(art: str, text: str, **daten) -> bool:
+    """Schreibt ein Ereignis dieser Art höchstens einmal am Tag. Gibt zurück, ob geschrieben wurde.
+
+    Für Dinge, die alle 15 Minuten wieder auftreten würden, etwa „kein Netz“.
+    """
+    datei = pfad("arbeit", "ereignisse", f"{jetzt():%Y-%m-%d}.jsonl")
+    if datei.exists() and f'"art": "{art}"' in datei.read_text(encoding="utf-8"):
+        return False
+    ereignis(art, text, **daten)
+    return True
+
+
+def netz_da(host: str = "api.anthropic.com", port: int = 443) -> bool:
+    """Grobe Prüfung, ob dieser Mac gerade ins Netz kommt."""
+    import socket
+
+    try:
+        socket.create_connection((host, port), timeout=4).close()
+        return True
+    except OSError:
+        return False
+
+
+def netzfehler(fehler: BaseException) -> bool:
+    """Ist der Fehler „kein Netz/Server nicht erreichbar“ statt eines echten Fehlers?"""
+    import errno
+    import imaplib
+    import socket
+
+    if type(fehler).__name__ == "Unerreichbar":
+        return not netz_da()
+    if isinstance(fehler, (socket.gaierror, socket.timeout, TimeoutError, ConnectionError,
+                           imaplib.IMAP4.abort)):
+        return True
+    if isinstance(fehler, OSError) and fehler.errno in {
+        errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN, errno.ETIMEDOUT,
+    }:
+        return True
+    text = str(fehler).lower()
+    return any(t in text for t in ("nodename nor servname", "network is unreachable",
+                                   "name or service not known", "temporary failure in name"))
 
 
 def ereignisse(seit: datetime | None = None) -> list[dict]:

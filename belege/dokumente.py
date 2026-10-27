@@ -241,7 +241,7 @@ def _rueckfall(text: str, dateiname: str) -> dict:
     }
 
 
-def dokument_einordnen(text: str, dateiname: str) -> dict:
+def dokument_einordnen(text: str, dateiname: str, nur_lokal: bool = False) -> dict:
     """Ordnet einen Dokumenttext über das Urteil oder die Regel-Rückfallfunktion
     ein und lässt anschließend ausschließlich den Code die Fristen berechnen."""
     auftrag = vorlage("dokument", text=text[:6000], dateiname=dateiname)
@@ -250,6 +250,7 @@ def dokument_einordnen(text: str, dateiname: str) -> dict:
         zweck="dokument",
         pruefe=pruefe,
         rueckfall=lambda: _rueckfall(text, dateiname),
+        nur_lokal=nur_lokal,
     )
     antwort = dict(antwort)
     antwort["fristen"] = berechne_fristen(antwort.get("fristen") or [])
@@ -301,8 +302,13 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         pfad_bekannt = index[sha].get("pfad", "der Ablage")
         print(f"{datei.name}: liegt schon unter {pfad_bekannt}")
         return
-    text = auslesen(datei)
-    eintrag = dokument_einordnen(text.text, datei.name)
+    from .vertraulich import pruefen
+
+    text = auslesen(datei, leer_in_cloud=False)
+    geheim = pruefen(text.text, datei.name)
+    eintrag = dokument_einordnen(text.text, datei.name, nur_lokal=geheim.vertraulich)
+    if geheim.vertraulich:
+        print(f"{datei.name}: vertraulich ({geheim.grund}), nur auf diesem Mac gelesen.")
     if eintrag["art"] == "beleg":
         handy = erweitert(konfig("belege").get("quellen", {}).get("handy_ordner", ""))
         ziel_pfad = kern.freier_name(handy / datei.name)

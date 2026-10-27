@@ -6,7 +6,7 @@ legt ab oder verschiebt die dafür vorgesehenen Dateien.
 from __future__ import annotations
 
 import hashlib
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import kern
@@ -57,10 +57,7 @@ def postfach_funde(konto: str, tage: int | None = None):
     postfach = oeffnen(konto)
     stand = _gesehen().get(konto, {})
     konfiguration = kern.konfig("belege").get("postfach", {})
-    anzahl_tage = tage
-    if anzahl_tage is None:
-        anzahl_tage = int(konfiguration.get("laufend_tage", 3) if stand.get("stand") else
-                           konfiguration.get("erste_tage", 30))
+    anzahl_tage = tage if tage is not None else rueckblick_tage(stand, konfiguration)
     seit = kern.jetzt().date() - timedelta(days=anzahl_tage)
     mails = postfach.suchen(seit=seit, nur_anhang=True)
     if getattr(postfach, "weg", "") == "b":
@@ -81,6 +78,35 @@ def postfach_funde(konto: str, tage: int | None = None):
             kopf = dict(mail)
             kopf["konto"] = konto
             yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
+
+
+def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
+    """Wie weit das Postfach zurückgelesen wird.
+
+    Ab dem letzten vollständig erledigten Lauf, nicht fest drei Tage: War das
+    MacBook eine Woche zu, holt der erste Lauf danach die ganze Woche nach.
+    Mindestens ``laufend_tage`` (3), höchstens ``max_tage`` (60). Ohne Stand
+    beginnt es mit ``erste_tage`` (30).
+    """
+    minimum = int(konfiguration.get("laufend_tage", 3))
+    maximum = int(konfiguration.get("max_tage", 60))
+    letzter = stand.get("lauf") or stand.get("stand")
+    if not letzter:
+        return int(konfiguration.get("erste_tage", 30))
+    try:
+        seit = datetime.fromisoformat(str(letzter)).date()
+    except ValueError:
+        return minimum
+    return max(minimum, min(maximum, (kern.jetzt().date() - seit).days + 2))
+
+
+def lauf_erledigt(konto: str, echt: bool) -> None:
+    """Merkt, dass ein Postfachlauf für dieses Konto ohne liegengebliebenen Fund endete."""
+    if not echt:
+        return
+    gesehen = _gesehen()
+    gesehen.setdefault(konto, {"mails": []})["lauf"] = kern.jetzt().isoformat()
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
 def mail_erledigt(konto: str, mail_id: str, echt: bool):

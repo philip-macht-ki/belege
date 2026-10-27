@@ -54,9 +54,10 @@ def test_rechner_sperre_und_doppelordner(repo, capsys, monkeypatch):
     assert "GELB: Doppelte Ordner in der Ablage: Betrieb/2026/10 (1)" in out
 
 
-def test_ohne_sperre_gelb(repo, capsys):
+def test_ohne_sperre_gruen_bei_einem_mac(repo, capsys):
+    # Ein einzelnes MacBook braucht keine Sperre; sie würde unterwegs nur stören.
     pruefen.befehl(Namespace())
-    assert "GELB: Rechner-Sperre nicht gesetzt" in capsys.readouterr().out
+    assert "GRUEN: Ein Mac: keine Rechner-Sperre nötig" in capsys.readouterr().out
 
 
 def test_papierpost_leer_ist_ok_und_fehlender_ordner_rot(repo, capsys):

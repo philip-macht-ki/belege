@@ -122,18 +122,24 @@ def befehl(args) -> int:
         ]
         if not neue:
             continue
-        mails = [{**m, "text": postfach.lesen(m["id"]).get("text", "")[:1500]} for m in neue]
+        from .vertraulich import pruefen
+
+        alle_mails = [{**m, "text": postfach.lesen(m["id"]).get("text", "")[:1500]} for m in neue]
+        # Vertrauliche Mails (Arzt, Gericht, Personal …) sieht kein Cloud-Modell; für sie
+        # gilt nur die Wortregel des Wächters.
+        geheim = [m for m in alle_mails if pruefen(m["text"], "", m).vertraulich]
+        mails = [m for m in alle_mails if m not in geheim]
         bloecke = "\n".join(
             f'<mail id="{m["id"]}">Von: {m["von"]}\nBetreff: {m["betreff"]}\n{m["text"]}</mail>'
             for m in mails
         )
-        antwort = frage(
+        antwort = _rueckfall(geheim, alle_regeln) + (frage(
             vorlage("waechter", regeln="\n".join(f"- {r['text']}" for r in alle_regeln), mails=bloecke),
             zweck="waechter",
             rueckfall=lambda: _rueckfall(mails, alle_regeln),
             pruefe=lambda a: pruefe(a, {m["id"] for m in mails}),
-        )
-        nach_id = {m["id"]: m for m in mails}
+        ) if mails else [])
+        nach_id = {m["id"]: m for m in alle_mails}
         for treffer in antwort:
             # Ob sofort gemeldet wird, steht in der Regel, nicht im Ermessen des Modells.
             regel = next((r for r in alle_regeln if r["text"].lower() in treffer["regel"].lower()

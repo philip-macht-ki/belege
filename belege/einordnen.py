@@ -312,7 +312,7 @@ def _sicheres_datum(einordnung: Einordnung, eingang: date) -> Einordnung:
     return einordnung
 
 
-def einordnen(fund: Fund, text: Text) -> Einordnung:
+def einordnen(fund: Fund, text: Text, nur_lokal: bool = False) -> Einordnung:
     """Ordnet einen Fund nach festen Regeln, E-Rechnung und geprüftem Modellurteil ein.
 
     Ohne Modell liefert die Rückfallregel immer ein nachvollziehbares, vorsichtiges
@@ -340,6 +340,7 @@ def einordnen(fund: Fund, text: Text) -> Einordnung:
         zweck="einordnen",
         pruefe=pruefe,
         rueckfall=lambda: _rueckfall(fund, text, regel, zahlungsname),
+        nur_lokal=nur_lokal,
     )
     if regel:
         for feld in ("lieferant", "bereich", "art", "beschreibung"):

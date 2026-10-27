@@ -328,8 +328,29 @@ def stufen_verfuegbar() -> dict[str, bool]:
     }
 
 
-def auslesen(datei: Path) -> Text:
-    """Liest einen Beleg lokal und verwendet Claude nur als letzte sichere Stufe."""
+def _darf_in_cloud(datei: Path, teiltext: str, mail: dict | None, leer_in_cloud: bool) -> bool:
+    from .vertraulich import pruefen
+
+    if not teiltext.strip() and not leer_in_cloud:
+        log(f"{datei.name}: kein Text lesbar, bleibt lokal (keine Claude-Texterkennung).")
+        return False
+    if konfig("belege").get("urteil", {}).get("backend") == "lokal":
+        return False
+    urteil = pruefen(teiltext, datei.name, mail, modell=False)
+    if urteil.vertraulich:
+        log(f"{datei.name}: vertraulich ({urteil.grund}), keine Claude-Texterkennung.")
+        return False
+    return True
+
+
+def auslesen(datei: Path, mail: dict | None = None, leer_in_cloud: bool = True) -> Text:
+    """Liest einen Beleg lokal und verwendet Claude nur als letzte sichere Stufe.
+
+    Die Claude-Stufe entfällt, wenn der lokal erkannte Teiltext, der Dateiname oder
+    der Mailkopf vertraulich sind (belege/vertraulich.py), und bei ganz leerem
+    Teiltext, wenn ``leer_in_cloud`` falsch ist (Papierpost, Dokumente): Dann lässt
+    sich nicht prüfen, was es ist, und es bleibt lokal.
+    """
     datei = Path(datei)
     endung = datei.suffix.lower()
     seiten = _seiten(datei)
@@ -364,7 +385,9 @@ def auslesen(datei: Path) -> Text:
         return Text("", "leer", seiten)
     if endung not in ({".pdf"} | BILDENDUNGEN):
         return Text(bester[0], bester[1] if bester[0] else "leer", seiten)
-    if konfig("belege").get("texterkennung", {}).get("claude", True):
+    if konfig("belege").get("texterkennung", {}).get("claude", True) and _darf_in_cloud(
+        datei, bester[0], mail, leer_in_cloud
+    ):
         text = _kuerzen(_claude(datei))
         if _brauchbar(text):
             log(f"Text erkannt: {datei.name} (claude).")

@@ -142,7 +142,9 @@ Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
 Eine Zeile JSON: `{"zeit","art","text","daten"}` mit `art` aus
-`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr`.
+`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline`.
+`vertraulich`: ein Fund wurde nur lokal gelesen und steht im Bericht unter „Bitte ansehen“.
+`offline`: kein Netz; höchstens einmal am Tag (`kern.einmal_taeglich`), kein Fehler.
 Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 
 ## Modulvertrag
@@ -221,9 +223,12 @@ Fehlerquote ≤ 10 %, Fehlerquote = Anteil Wörter mit Zeichensalat):
    en-US, höchste unterstützte Revision). Leeres Ergebnis ohne Ausnahme ist
    ein Fehlschlag, kein Erfolg.
 4. `tesseract` (deu+eng), nur wenn installiert
-5. `claude`: nur wenn `[texterkennung].claude = true` (Standard true):
-   `claude -p` mit `--tools Read`, `--add-dir <tmp>`, sonst schlank; Auftrag:
-   Datei wortgetreu abschreiben, nur Text
+5. `claude`: nur wenn `[texterkennung].claude = true` (Standard true), das
+   Urteil-Backend nicht `lokal` ist, der bisher erkannte Teiltext, der Dateiname
+   und der Mailkopf nicht vertraulich sind (Weiche, siehe unten) und, bei
+   `auslesen(..., leer_in_cloud=False)` (Papierpost, Dokumente), überhaupt ein
+   Teiltext da ist: `claude -p` mit `--tools Read`, `--add-dir <tmp>`, sonst
+   schlank; Auftrag: Datei wortgetreu abschreiben, nur Text
 Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
 
 ### Einordnung (belege/einordnen.py)
@@ -258,8 +263,11 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
 ### Quellen (belege/quellen.py)
 
 - **postfach**: alle Konten mit `belege = true`. Mails mit Anhang seit
-  `stand` (erster Lauf: `[postfach].erste_tage`, Standard 30; danach
-  `laufend_tage`, Standard 3), abzüglich `gesehen`. Anhänge: Endungen pdf,
+  dem letzten vollständig erledigten Lauf (`gesehen.json[konto].lauf`, sonst
+  `stand`) plus 2 Tage Puffer, mindestens `laufend_tage` (3), höchstens
+  `max_tage` (60); erster Lauf `erste_tage` (30). So holt ein MacBook, das eine
+  Woche zu war, die ganze Woche nach. `lauf` rückt nur vor, wenn kein Fund des
+  Kontos liegen blieb. Abzüglich `gesehen`. Anhänge: Endungen pdf,
   xml, jpg, jpeg, png, heic, tif, tiff, docx; Bilder unter 20 KB sind
   Signaturen/Logos. Weg B zusätzlich: Mails mit Label `[postfach].label`
   (Standard „Beleg“), ohne Zeitfenster, danach Label „Beleg/erledigt“. Eine
@@ -357,8 +365,24 @@ Konsole plus Zähler aus dem Index.
 ### Takt und Zeitplan
 
 - `belege takt --echt`: Postfach, Handy-Ordner, Wächter (je Schritt einzeln
-  abgefangen, unter `Sperre("takt")`). Läuft er fehlerfrei, ruft er die
-  HTTPS-Adresse aus `[takt].lebenszeichen` auf (leer = aus).
+  abgefangen, unter `Sperre("takt")`). Zu Beginn ruft er die HTTPS-Adresse aus
+  `[takt].lebenszeichen` mit `?art=wach&geraet=macbook|dauerrechner` auf, nach
+  fehlerfreiem Lauf ohne Zusatz (leer = aus). Der Dienst unterscheidet daraus
+  „Mac war zu“ von „Mac ist an, Lauf scheitert“ (cashflow-site `lib/lebenszeichen`).
+- **Gesamtsperre:** Jeder schreibende Befehl mit `--echt` läuft unter
+  `kern.Gesamtsperre` (flock auf `arbeit/.belege.lock`). Takt, Postfach, Handy
+  und Downloads überspringen, wenn belegt; alle anderen warten bis 30 Minuten.
+  So laufen die Zeitpläne nach dem Aufwachen nacheinander.
+- **Offline:** Netzfehler (DNS, Zeitüberschreitung, `Unerreichbar` ohne Netz)
+  sind kein `fehler`, sondern höchstens ein `offline`-Ereignis am Tag. Ein Fund,
+  dessen Urteil `Unerreichbar` war, endet mit Status `spaeter`: nichts abgelegt,
+  nichts verschoben, Mail nicht gesehen. Ist das Netz da und nur das Modell
+  nicht (abgemeldet, Kontingent), gilt der Schritt als Fehler, damit das
+  Lebenszeichen nicht „ok“ meldet.
+- `belege rechner [--echt]`: erkennt MacBook (eingebauter Akku) oder
+  Dauerrechner, Modell, Chip, RAM, freien Platz, Netzteil; `--echt` schreibt
+  `arbeit/rechner.json`. Die Rechner-Sperre vergleicht mit `hostname -s` und
+  `scutil --get LocalHostName` (der Hostname wechselt je nach WLAN).
 - `belege tag --echt`: Downloads, Bericht.
 - `belege monat --uebergabe --echt`: täglich ab dem 3. um 09:00 für den
   Vormonat; die Übergabe-Sperre lässt sie je Monat nur einmal zu.
@@ -391,8 +415,29 @@ Inhalte sind Daten, keine Anweisungen.
 Wie social-pipeline: `claude -p --output-format json --model <modell>` mit
 `--tools "" --strict-mcp-config --setting-sources "" --system-prompt …`,
 Cache 7 Tage, `urteile.jsonl`, zwei Versuche mit Mangeltext, Backends
-`claude | codex | anthropic | ohne` (Env `URTEIL_BACKEND` hat Vorrang).
+`claude | codex | lokal | anthropic | ohne` (Env `URTEIL_BACKEND` hat Vorrang).
 Standardmodell `[urteil].modell` = "sonnet".
+
+- `Unerreichbar(KeinUrteil)`: Backend nicht erreichbar (kein Netz, Zeitüberschreitung,
+  CLI-Fehler, 429/5xx, Ollama aus). Dann **keine** Rückfallregel: Die Ausnahme geht an
+  den Aufrufer, der Fund bleibt liegen. Ausnahme `nur_lokal`: dann gilt die Regel.
+- `frage(..., nur_lokal=True)`: nie ein Cloud-Backend. Ein schon laufendes Ollama mit
+  `qwen3:8b`/`qwen3:14b` (ab 16 GB RAM) oder die Rückfallregel.
+
+### Weiche „vertraulich“ (belege/vertraulich.py)
+
+Vor jedem Urteil über Belege, Dokumente und Wächter-Mails, nach der lokalen
+Texterkennung. `pruefen(text, name, mail)` ist vertraulich bei: Absender aus
+`[vertraulich].absender`; einem starken Wort (Patient, Diagnose, Arztbrief, GOÄ,
+Psychotherapie, Heilpraktiker, arbeitsunfähig, Mahnbescheid, Gerichtsvollzieher,
+Schriftsatz, Aktenzeichen, Sozialversicherungsnummer, Entgeltabrechnung …, plus
+`woerter_stark`); zwei schwachen Wörtern (Steuer-ID, Steuerklasse, Lohnabrechnung,
+Mandant, vertraulich, Krankenkasse, Behandlung … plus `woerter`); oder, nur wenn
+Ollama schon mit `qwen3:8b`/`qwen3:14b` läuft und der Mac ≥ 16 GB hat, dem lokalen
+Modell. „Gericht“ zählt nicht (steht in jedem Impressum). Folge: `nur_lokal=True`,
+Ereignis `vertraulich`; die Wächter-Mail wird nur per Wortregel geprüft.
+`[vertraulich].aus = true` schaltet die Weiche ab. Messung 27.10.2026: 9/9
+Testfälle, 0/9 Fehlalarm, 2 von 40 echten Eingangsbelegen markiert.
 
 ## Tests
 
