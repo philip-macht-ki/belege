@@ -276,6 +276,18 @@ def befehl(args) -> int:
                         f"Postfach {name}: Google-Zugänge fehlen",
                         f"belege anmelden --konto {name} --rechte beides ausführen.",
                     )
+            elif weg == "microsoft":
+                from .microsoft import token
+
+                try:
+                    token(k)
+                    z("GRUEN", f"Postfach {name}: Microsoft-Zugang erneuert")
+                except Exception as e:
+                    z(
+                        "ROT",
+                        f"Postfach {name}: Microsoft-Zugang fehlt oder abgelaufen",
+                        f"belege anmelden --microsoft {name} ausführen ({e}).",
+                    )
             else:
                 z(
                     "GELB",

@@ -62,7 +62,7 @@ arbeit/                   Laufzeit, nie im Git
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
   gesehen.json            {"<konto>": {"mails": [message-id …], "stand": iso}, "waechter:<konto>": {...}, "downloads_gemeldet": [sha …]}
-  geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), chmod 600
+  geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600
   ereignisse/<datum>.jsonl  eine Zeile je Ereignis, siehe unten
   monat/<JJJJ-MM>/        abgleich.json, fehlt_noch.csv, fehlt_noch.md, pruefen.md, klaerung.md, paket/
   logs/<datum>.log
@@ -164,9 +164,10 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `ablegen.py` | `sauber(s)`, `dateiname(e, ext)`, `ziel(e, ext) -> Path`, `ablegen(fund, e, text, echt) -> Ergebnis` |
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
+| `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage) `, `handy_funde()`, `downloads_funde()`; je `-> Iterator[Fund]` |
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
-| `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]` |
+| `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
 | `posten.py` | `belege posten [--mail [--echt] | --antworten]` |
 | `waechter.py` | `belege waechter` |
@@ -183,7 +184,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 
 ```python
 class Postfach:
-    name: str; adresse: str; weg: str            # "a" | "b" | "ordner"
+    name: str; adresse: str; weg: str            # "a" | "b" | "microsoft" | "ordner"
     def suchen(self, abfrage: str = "", max: int = 20, seit: date | None = None, nur_anhang: bool = False) -> list[dict]
         # je Mail: {"id","von","von_name","an","betreff","datum" (iso),"anhaenge": [name…],"auszug" (≤300 Zeichen)}
         # abfrage: Weg B = Gmail-Suchsyntax; Weg A/ordner = einfache Wörter, "von:x", "betreff:x", "seit:JJJJ-MM-TT"
@@ -201,7 +202,7 @@ class Postfach:
   `server_erkennen` am MX-Eintrag (`dig`; Google Workspace, IONOS, Strato,
   united-domains, all-inkl, Hetzner, mailbox.org, Posteo, iCloud), sonst über die
   Thunderbird-Anbieterliste (autoconfig.thunderbird.net). MX bei Microsoft 365
-  bricht mit dem OAuth-Hinweis ab.
+  bricht mit dem Hinweis auf `weg = "microsoft"` ab.
   Passwort zuerst aus dem macOS-Schlüsselbund (Dienst `belege-postfach`, Konto =
   Postfachname), `PASSWORT_<NAME>` (Name groß) nur als Rückfall für Bestandskunden.
   Entwürfe per IMAP `APPEND`
@@ -212,6 +213,21 @@ class Postfach:
   `arbeit/geheim/<konto>_lesen.json` (Scope `gmail.modify`) und
   `<konto>_schreiben.json` (Scope `gmail.compose`). Getrennt,
   damit ein Rechtewechsel den laufenden Lesezugang nicht ungültig macht.
+- Weg Microsoft (`belege/microsoft.py`): Microsoft Graph, delegiert, Rechte
+  `Mail.ReadWrite`, `Mail.Send`, `User.Read`. Gemeinsame Multi-Tenant-App „belege“ oder eigene
+  App des Kunden (öffentlicher Client, kein Geheimnis, Redirect `http://localhost`); Kennung
+  aus `[[konto]].client_id`, sonst `BELEGE_MICROSOFT_CLIENT_ID`, sonst
+  `microsoft.CLIENT_ID` (gemeinsame App). Eigene App des Kunden: zusätzlich
+  `[[konto]].tenant_id`, Anmeldung dann gegen diesen Mandanten statt `common`.
+  Keine Kennung → Hinweis auf eigene App oder Gmail-Umleitung. Anmeldung nur
+  im Browser (MSAL interaktiv, PKCE); bewusst kein Device-Code (Phishing-Weg,
+  in der App-Registrierung „Öffentliche Clientflows“ aus). Zugang (MSAL-Cache mit Refresh-Token) in
+  `arbeit/geheim/<konto>_microsoft.json`, chmod 600. Suche:
+  `/me/mailFolders/inbox/messages` mit `$filter` auf Datum und Anhang, mit
+  Suchwörtern `$search` und Filter im Client. `lesen`/`anhaenge` laden die
+  Rohmail (`/me/messages/{id}/$value`) und nutzen dieselbe Auswertung wie IMAP.
+  Entwurf `POST /me/messages`, Senden `POST /me/sendMail`, beides als MIME.
+  429/503 → `Retry-After` abwarten, 401 → Neuanmeldung.
 - `ordner`: liest `.eml`-Dateien aus `[[konto]].ordner`; Entwürfe und
   Gesendetes als `.eml` nach `arbeit/postausgang/`.
 

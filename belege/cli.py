@@ -20,7 +20,7 @@ BEFEHLE = {
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
     "posten": ("posten", "befehl", "Offene Posten und Rückfragen"),
     "moneymoney": ("moneymoney", "befehl", "Optional: Kontoumsätze aus MoneyMoney als CSV holen"),
-    "anmelden": ("anmelden", "befehl", "Google-Zugang einrichten"),
+    "anmelden": ("anmelden", "befehl", "Postfach-Zugang einrichten (App-Passwort, Google, Microsoft)"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
     "einrichten-urteil": ("einrichten", "befehl_urteil", "Starter für das eingestellte Urteil einrichten"),
     "mcp": ("mcp_server", "befehl", "Lokalen Postfach-Server starten"),
@@ -71,6 +71,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
+    argumente.add_argument("--microsoft", metavar="NAME", help="Microsoft-Postfach im Browser anmelden")
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
     argumente.add_argument("--automatisch", action="store_true", help="Nur Updates ohne eigenen Schritt einspielen")

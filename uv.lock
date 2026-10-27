@@ -40,7 +40,7 @@ wheels = [
 
 [[package]]
 name = "belege"
-version = "1.5.3"
+version = "1.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "factur-x" },
@@ -49,6 +49,7 @@ dependencies = [
     { name = "google-auth-httplib2" },
     { name = "google-auth-oauthlib" },
     { name = "mcp" },
+    { name = "msal" },
     { name = "ocrmac", marker = "sys_platform == 'darwin'" },
     { name = "pillow" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
@@ -70,6 +71,7 @@ requires-dist = [
     { name = "google-auth-httplib2", specifier = ">=0.2" },
     { name = "google-auth-oauthlib", specifier = ">=1.2" },
     { name = "mcp", specifier = ">=1.2,<2" },
+    { name = "msal", specifier = ">=1.31" },
     { name = "ocrmac", marker = "sys_platform == 'darwin'", specifier = ">=1.0" },
     { name = "pillow", specifier = ">=10" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10" },
@@ -864,6 +866,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ba/93/0142dc84a666daf8ad51a34268f34c12fd6fda4f3810c4be2504eecc8212/mcp-1.30.0.tar.gz", hash = "sha256:445414625fce5c295faa505bb11bacece661ab6f4028d57c935db57820b7a3e4", size = 680511, upload-time = "2026-09-07T14:34:15.845Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/f4/e58bc33317c92a0203664daaf00bf6f41166cc0149e5d6870a03f7cd004a/mcp-1.30.0-py3-none-any.whl", hash = "sha256:666edb5009503e1047c9d60346a756f94b261f05cc2625f23d41c728ffc484d0", size = 234581, upload-time = "2026-09-07T14:34:14.266Z" },
+]
+
+[[package]]
+name = "msal"
+version = "1.39.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/85/747d28986a44b715cc51cf57aa021c8fd94e9614064261ceec77320e8b0b/msal-1.39.0.tar.gz", hash = "sha256:6ab7de335e6d7f5717e2c7e1dbf86e4dda2f6acf3c56773b78dc53ebc6395b5f", size = 205360, upload-time = "2026-09-17T16:07:45.1Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/32/178457385925ce301c7b3232bd85665d4df57da39568b62dcfc74031873f/msal-1.39.0-py3-none-any.whl", hash = "sha256:2d2577886906cd7293850dffa2da29119966c213bfc6ec0cecf8bf7621e1ca77", size = 131629, upload-time = "2026-09-17T16:07:46.722Z" },
 ]
 
 [[package]]

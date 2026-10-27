@@ -87,12 +87,11 @@ ein und hält wieder an.
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
 dein Betrieb, falls das noch nicht eingetragen ist?
 
-Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Dieses
-Postfach kann hier nicht direkt verbunden werden, Microsoft nimmt seit 2026 kein
-App-Passwort mehr an. Eine eigene Domain erkennt Claude daran, dass
-`dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann führt
-Claude durch den Weg über ein Belegkonto bei Gmail, siehe „Microsoft-Postfach“
-unten, bevor es weitergeht.
+Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Microsoft
+nimmt seit 2026 kein App-Passwort mehr an, dieses Postfach wird stattdessen mit
+einer Anmeldung im Browser verbunden. Eine eigene Domain erkennt Claude daran,
+dass `dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann gilt
+der Abschnitt „Microsoft-Postfach“ unten.
 
 Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
 Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
@@ -102,7 +101,7 @@ Meldet belege, dass die Server unbekannt sind, fragt Claude nach dem Anbieter,
 schlägt dessen IMAP- und SMTP-Server in der Hilfe des Anbieters nach und trägt
 sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
 `mail.anbieter.de:993`). Liegt die Domain bei Microsoft 365, gilt der
-Weiterleitungsweg oben. Bei Google Workspace muss der Admin App-Passwörter
+Abschnitt „Microsoft-Postfach“ unten. Bei Google Workspace muss der Admin App-Passwörter
 erlauben.
 
 Bevor Claude zum ersten Mal ins Postfach schaut, sagt er in einem Satz: Briefe
@@ -115,7 +114,87 @@ Anhänge gar nicht geladen werden sollen, kommen stattdessen in `ausschluss`.
 
 ### Microsoft-Postfach
 
-Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
+Ein Microsoft-Postfach wird direkt verbunden: einmal im Browser anmelden, danach
+liest belege selbst. Dafür braucht es eine App-Kennung bei Microsoft. Es gibt
+zwei Wege; Claude prüft zuerst, ob diese Fassung schon Philips gemeinsame App
+kennt:
+
+```
+uv run python -c "from belege.microsoft import CLIENT_ID; print('gemeinsam' if CLIENT_ID else 'eigene')"
+```
+
+Steht dort `gemeinsam`, fragt Claude in einem Satz: „Willst du den einfachen
+Weg mit Philips App (nur anmelden und zustimmen), oder deine eigene App (mehr
+Kontrolle und Privatsphäre, nur deine Firma kann sie nutzen, etwa 15 Minuten
+mehr)?“ Steht dort `eigene`, gibt es nur die eigene App oder den Rückfall
+unten.
+
+**Hilfe im Browser.** Beide Wege laufen im Browser. Bevor es losgeht, bietet
+Claude einmal an: „Soll ich im Browser mitklicken? Dafür installierst du die
+Erweiterung Claude in Chrome (im Chrome Web Store nach ‚Claude‘ suchen, ab
+Claude Pro). Sonst sage ich dir jeden Klick einzeln an.“ Lehnt die Person ab,
+fragt Claude bei einem Hänger noch einmal. Passwörter, Codes und die Zustimmung
+klickt immer die Person selbst.
+
+**Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
+Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Ein privates
+Outlook.com-, Hotmail- oder Live-Postfach geht direkt nur mit Philips App; bis es
+sie gibt, nimmt Claude dort den Rückfall unten (bei privaten Postfächern sperrt
+Microsoft die Umleitung nicht). Die eigene App legt ein Admin der Firma an, bei
+kleinen Firmen meist die Geschäftsführung:
+
+1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.
+2. Links „Identität“ (oder „Entra ID“), „Anwendungen“, „App-Registrierungen“,
+   oben „Neue Registrierung“.
+3. Name `belege`. Unterstützte Kontotypen: „Nur Konten in diesem
+   Organisationsverzeichnis“. Umleitungs-URI: Plattform „Öffentlicher
+   Client/nativ (mobil und Desktop)“, Adresse `http://localhost`.
+   „Registrieren“.
+4. Auf der Übersichtsseite stehen „Anwendungs-ID (Client)“ und
+   „Verzeichnis-ID (Mandant)“. Beide sind keine Geheimnisse; die Person
+   kopiert sie in den Chat.
+5. Links „API-Berechtigungen“, „Berechtigung hinzufügen“, „Microsoft Graph“,
+   „Delegierte Berechtigungen“: `Mail.ReadWrite`, `Mail.Send` und `User.Read`
+   anhaken, „Berechtigungen hinzufügen“. Dann „Administratorzustimmung für
+   <Firma> erteilen“ und bestätigen. Alle drei Zeilen zeigen danach einen
+   grünen Haken.
+6. Unter „Authentifizierung“ bleibt „Öffentliche Clientflows zulassen“ auf
+   „Nein“. Ein Geheimnis (Client Secret) wird nicht gebraucht.
+
+Claude trägt beim Postfach in `konfig/belege.toml` ein:
+
+```toml
+[[konto]]
+name = "geschaeft"
+adresse = "info@firma.de"
+weg = "microsoft"
+client_id = "<Anwendungs-ID>"
+tenant_id = "<Verzeichnis-ID>"
+```
+
+**Anmelden (beide Wege).** `uv run belege anmelden --microsoft <name>` öffnet
+die Microsoft-Anmeldung im Browser:
+
+1. Mit der Postfachadresse anmelden, wie sonst bei Outlook.
+2. Bei Philips App fragt Microsoft, ob „belege“ Mails lesen, Entwürfe anlegen
+   und senden darf. Wer Admin ist, setzt den Haken **„Im Namen Ihrer
+   Organisation zustimmen“** und bestätigt. Bei der eigenen App ist das schon
+   in Schritt 5 erledigt.
+3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
+   Person kein Admin. Dann meldet sich der Admin einmal selbst an und stimmt
+   zu; danach klappt es für alle Postfächer der Firma.
+
+`uv run belege pruefen` zeigt danach „Microsoft-Zugang erneuert“. Der Zugang
+erneuert sich bei jedem Lauf selbst. Nach einem Passwortwechsel oder wenn ein
+Admin die Zugänge zurücksetzt, meldet `belege pruefen` und der nächste Lauf
+einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die
+Anmeldung läuft immer im Browser dieses Macs; eine Anmeldung per Code auf einer
+fremden Seite gibt es bewusst nicht, das ist ein bekannter Phishing-Weg.
+
+Klappt keiner der beiden Wege (etwa weil niemand Admin-Rechte hat), nimm den
+Rückfall:
+
+**Rückfall: Umleitung an ein Gmail-Konto.** Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
 Gmail-Konto umgeleitet, und belege liest dieses Konto. Claude geht die Schritte
 einzeln durch und wartet nach jedem auf ein Weiter:
 

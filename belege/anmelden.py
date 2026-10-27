@@ -67,6 +67,10 @@ display dialog "App-Passwort für %s einfügen" default answer "" with hidden an
 def befehl(args) -> int:
     """`belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`."""
     name = getattr(args, "konto", None) or kern.konto()["name"]
+    if getattr(args, "microsoft", None):
+        from .microsoft import anmelden
+
+        return anmelden(kern.konto(args.microsoft))
     if getattr(args, "schluesselbund", None):
         return _schluesselbund(getattr(args, "schluesselbund"))
     rechte = getattr(args, "rechte", None) or "beides"

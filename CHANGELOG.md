@@ -2,6 +2,19 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.6.0] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Outlook- und Microsoft-365-Postfächer lassen sich jetzt direkt verbinden: mit einer eigenen App deiner Firma bei Microsoft (etwa 15 Minuten, Claude führt dich durch und klickt auf Wunsch im Browser mit), danach einmal im Browser anmelden. Kein App-Passwort, keine Umleitung an Gmail.
+- Die Umleitung an ein Gmail-Konto bleibt als Rückfall.
+
+### Musst du etwas tun?
+
+Nein. Läuft dein Microsoft-Postfach heute über eine Umleitung an Gmail und willst du sie loswerden, sag deinem Claude: Stell mein Postfach auf den direkten Microsoft-Weg um.
+
 ## [1.5.4] – 27.10.2026
 
 aktion: keine

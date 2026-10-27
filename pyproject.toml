@@ -1,6 +1,6 @@
 [project]
 name = "belege"
-version = "1.5.4"
+version = "1.6.0"
 description = "Belege sortieren sich selbst: Postfach, Handy und Downloads in einen sauberen Ordner, Monatsabgleich, Übergabe an den Steuerberater."
 requires-python = ">=3.11"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
     "pyobjc-framework-Vision>=10; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
     "pypdf>=6.19.0",
+    "msal>=1.31",
 ]
 
 # `uv run pytest` funktioniert ohne Zusatzschalter.
