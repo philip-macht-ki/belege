@@ -93,6 +93,19 @@ def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung
     return None
 
 
+def _ohne_text() -> Einordnung:
+    """Ein Dokument, von dem der Mac lokal keinen Text lesen konnte.
+
+    Es geht nicht zur Texterkennung in die Cloud (es könnte ein Arztbrief sein),
+    sondern nach Unsortiert und in den Bericht unter „Bitte ansehen“.
+    """
+    return Einordnung(
+        ist_beleg=True, art="eingang", bereich="betrieb", datum=None, lieferant="Unbekannt",
+        beschreibung="ohne-Text", betrag=None, waehrung="EUR", sicherheit="niedrig",
+        grund="Kein Text lesbar; nur auf deinem Mac geprüft. Bitte selbst ansehen.", quelle="rueckfall",
+    )
+
+
 def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
     """Verarbeitet einen Fund vom Fingerabdruck bis zum Indexeintrag.
 
@@ -135,10 +148,15 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
 
             from .vertraulich import pruefen
 
-            text = auslesen(fund.datei, mail=fund.mail, leer_in_cloud=fund.quelle != "scan")
+            text = auslesen(fund.datei, mail=fund.mail)
             geheim = pruefen(text.text, fund.name, fund.mail)
             begleit = _begleit_einordnung(fund, text, index)
-            einordnung = begleit[0] if begleit else einordnen(fund, text, nur_lokal=geheim.vertraulich)
+            if begleit:
+                einordnung = begleit[0]
+            elif text.stufe == "ohne_text":
+                einordnung = _ohne_text()
+            else:
+                einordnung = einordnen(fund, text, nur_lokal=geheim.vertraulich)
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:

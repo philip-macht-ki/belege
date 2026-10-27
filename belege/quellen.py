@@ -92,7 +92,7 @@ def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
     maximum = int(konfiguration.get("max_tage", 60))
     letzter = stand.get("lauf") or stand.get("stand")
     if not letzter and not stand.get("offen"):
-        return int(konfiguration.get("erste_tage", 30))
+        return min(int(konfiguration.get("erste_tage", 30)), maximum)
     try:
         seit = datetime.fromisoformat(str(letzter)).date() if letzter else kern.jetzt().date()
     except ValueError:

@@ -100,12 +100,39 @@ def test_ocr_notstufe_schickt_vertrauliches_nicht_an_claude(repo, monkeypatch):
         monkeypatch.setattr(text, stufe, lambda d: "")
     monkeypatch.setattr(text, "_claude", lambda d: pytest.fail("Claude-Texterkennung trotz vertraulich"))
     assert text.auslesen(datei).text == "Mahnbescheid"
-    # Ganz leer und Papierpost: lässt sich nicht prüfen, also auch nicht in die Cloud.
+    # Ganz leer: lässt sich nicht prüfen, also nie in die Cloud, egal aus welcher Quelle.
     monkeypatch.setattr(text, "_pdftotext", lambda d: "")
-    assert text.auslesen(datei, leer_in_cloud=False).stufe == "leer"
-    # Ganz leer aus dem Postfach: wie bisher darf Claude abschreiben.
+    assert text.auslesen(datei).stufe == "ohne_text"
+    # Teilweise gelesen und nicht vertraulich: Claude darf vervollständigen.
+    monkeypatch.setattr(text, "_pdftotext", lambda d: "Hetzner Online GmbH Rechnung")
     monkeypatch.setattr(text, "_claude", lambda d: "Rechnung der Hetzner Online GmbH für den Cloud Server im Oktober, bitte bis Monatsende zahlen. " * 3)
     assert text.auslesen(datei).stufe == "claude"
+
+
+def test_scan_ohne_text_landet_unsortiert_ohne_cloud(repo, monkeypatch):
+    monkeypatch.setenv("URTEIL_BACKEND", "claude")
+    monkeypatch.setattr(urteil, "BACKENDS", {"claude": lambda *a: pytest.fail("Cloud gefragt")})
+    monkeypatch.setattr("belege.text.auslesen", lambda _, **__: Text("", "ohne_text", 1))
+    datei = repo / "handy" / "scan.pdf"
+    datei.write_bytes(b"pdf")
+    ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 12)), True)
+    assert "Unsortiert" in ergebnis.daten.get("pfad", "")
+    zeilen = "".join(p.read_text(encoding="utf-8") for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
+    assert '"art": "unsortiert"' in zeilen
+
+
+def test_monats_nachsuche_schickt_nichts_vertrauliches_an_claude(repo, monkeypatch):
+    from belege import monat, text
+
+    monkeypatch.setenv("URTEIL_BACKEND", "claude")
+    datei = repo / "brief.pdf"
+    datei.write_bytes(b"%PDF")
+    for stufe in ("_pypdf", "_vision", "_tesseract"):
+        monkeypatch.setattr(text, stufe, lambda d: "")
+    monkeypatch.setattr(text, "_claude", lambda d: pytest.fail("Claude-Texterkennung in der Nachsuche"))
+    for teil in ("Mahnbescheid Amtsgericht 120,00", ""):
+        monkeypatch.setattr(text, "_pdftotext", lambda d, t=teil: t)
+        monat._fund_passt(datei, {"betrag": -120.0, "name": "Amtsgericht", "zweck": ""})
 
 
 def test_vertrauliche_dokumente_geben_ueber_mcp_keinen_text_heraus(repo):

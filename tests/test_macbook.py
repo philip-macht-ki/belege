@@ -106,3 +106,7 @@ def test_zu_alte_offene_mail_kommt_nicht_jeden_lauf_wieder(repo):
 def test_offene_mail_ohne_frueheren_lauf_haelt_das_fenster(repo):
     alt = (kern.jetzt().date() - timedelta(days=45)).isoformat()
     assert quellen.rueckblick_tage({"offen": {"m": alt}}, {"max_tage": 60, "erste_tage": 30}) == 47
+
+
+def test_erstlauf_hoechstens_max_tage():
+    assert quellen.rueckblick_tage({}, {"erste_tage": 365, "max_tage": 60}) == 60

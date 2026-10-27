@@ -224,12 +224,11 @@ Fehlerquote ≤ 10 %, Fehlerquote = Anteil Wörter mit Zeichensalat):
    ein Fehlschlag, kein Erfolg.
 4. `tesseract` (deu+eng), nur wenn installiert
 5. `claude`: nur wenn `[texterkennung].claude = true` (Standard true), das
-   Urteil-Backend nicht `lokal` ist, der bisher erkannte Teiltext, der Dateiname
-   und der Mailkopf nicht vertraulich sind (Weiche, siehe unten) und, bei
-   `auslesen(..., leer_in_cloud=False)` (Papierpost, Dokumente), überhaupt ein
-   Teiltext da ist: `claude -p` mit `--tools Read`, `--add-dir <tmp>`, sonst
+   Urteil-Backend nicht `lokal` ist, lokal schon ein Teiltext erkannt wurde und
+   Teiltext, Dateiname und Mailkopf nicht vertraulich sind (Weiche, siehe unten):
+   `claude -p` mit `--tools Read`, `--add-dir <tmp>`, sonst
    schlank; Auftrag: Datei wortgetreu abschreiben, nur Text
-Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
+Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz ohne lokalen Text bei aktiver Claude-Stufe: `stufe="ohne_text"`, nie Cloud; `verarbeiten` legt solche Funde nach Unsortiert („Bitte ansehen“). Gilt für alle Aufrufer, auch die Monats-Nachsuche.
 
 ### Einordnung (belege/einordnen.py)
 

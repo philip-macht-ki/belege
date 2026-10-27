@@ -27,7 +27,7 @@ class Text:
     """
 
     text: str
-    stufe: str  # Texterkennungsstufe, etwa "pdftotext", "vision" oder "leer"
+    stufe: str  # Texterkennungsstufe, etwa "pdftotext", "vision", "leer" oder "ohne_text" (lokal nichts lesbar, bleibt lokal)
     seiten: int = 0
 
 

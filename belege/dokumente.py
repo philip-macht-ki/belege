@@ -304,7 +304,7 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         return
     from .vertraulich import pruefen
 
-    text = auslesen(datei, leer_in_cloud=False)
+    text = auslesen(datei)
     geheim = pruefen(text.text, datei.name)
     eintrag = dokument_einordnen(text.text, datei.name, nur_lokal=geheim.vertraulich)
     if geheim.vertraulich:
