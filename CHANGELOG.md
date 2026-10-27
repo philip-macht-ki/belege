@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.5.4] – 27.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Liegt dein Postfach bei Microsoft (Outlook, Microsoft 365), führt dich Claude jetzt Schritt für Schritt durch die Umleitung deiner Rechnungen an ein eigenes Gmail-Konto, inklusive der Microsoft-Sperre für Weiterleitungen nach außen.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.5.3] – 27.10.2026
 
 aktion: keine
