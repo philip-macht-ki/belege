@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "fehler")
+         "gesendet", "entwurf", "monat", "jahr", "fehler")
 
 
 def _gesehen() -> dict:
@@ -86,10 +86,12 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         absaetze.append("Monatsabschluss\n" + "\n".join(zeilen))
 
     if gruppen["fehler"]:
-        zeilen = ["- " + e.get("text", "") for e in gruppen["fehler"]]
+        zeilen = ["- Etwas ist schiefgelaufen: " + e.get("text", "") for e in gruppen["fehler"]]
+        roh = "\n".join(e.get("text", "") for e in gruppen["fehler"]).splitlines()[-5:]
         absaetze.append(
             "Fehler\n" + "\n".join(zeilen)
-            + "\nSag deinem Claude: Schau dir den Fehler im Belege-Protokoll an."
+            + "\nSag deinem Claude: Prüfe den Fehler im Belege-Protokoll und behebe ihn."
+            + "\n\nFür Claude/Technik\n" + "\n".join(roh)
         )
 
     zahlen = [f"{len(gruppen['abgelegt'])} abgelegt"]
@@ -113,7 +115,7 @@ def befehl(args) -> int:
     """`belege bericht`: ohne --echt nur anzeigen, mit --echt an dich selbst senden."""
     liste = neue_ereignisse()
     text, betreff = text_und_betreff(liste)
-    if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", True):
+    if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", False):
         print("nichts: Heute nichts Neues, kein Bericht.")
         return 0
     if not echt(args):

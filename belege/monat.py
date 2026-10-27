@@ -11,6 +11,11 @@ from pathlib import Path
 
 from . import kern
 
+
+def _monatsname(monat: str) -> str:
+    return ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
+            "September", "Oktober", "November", "Dezember")[int(monat[5:]) - 1]
+
 BEKANNTE = {
     "datum": ("buchungstag", "datum", "valuta"),
     "betrag": ("betrag", "umsatz"),
@@ -240,6 +245,57 @@ def _auszuege(args, monat: str) -> list[Path]:
         except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV soll die Suche nicht stoppen
             kern.log(f"Kontoauszug {datei.name} nicht lesbar: {fehler}")
     return treffer
+
+
+def _konten_pruefen(monat: str, args) -> list[Path]:
+    """Prüft das optionale Register und meldet eine Auszugslücke höchstens wöchentlich."""
+    try:
+        register = kern.konfig("konten").get("konto", [])
+    except FileNotFoundError:
+        return []
+    if not register:
+        return []
+    zustand = kern.lesen(kern.pfad("arbeit", "konten.json"), {}) or {}
+    heute = kern.jetzt().date()
+    dateien = []
+    standard = kern.erweitert(kern.konfig("belege").get("monat", {}).get("auszuege", ""))
+    for konto in register:
+        if konto.get("aktiv_ab", "") and monat < str(konto["aktiv_ab"]):
+            continue
+        ordner = kern.erweitert(konto.get("ordner") or standard)
+        kandidaten = sorted(ordner.glob(konto.get("muster") or "*")) if ordner.exists() else []
+        vorhanden = []
+        for datei in kandidaten:
+            if konto.get("quelle", "csv") in {"csv", "moneymoney"}:
+                try:
+                    if buchungen(datei, monat):
+                        vorhanden.append(datei)
+                except Exception:
+                    continue
+            elif datei.is_file() and (monat in datei.name or not konto.get("muster")):
+                vorhanden.append(datei)
+        kurz = str(konto.get("kuerzel") or konto.get("name"))
+        alt = zustand.get(kurz, {})
+        if vorhanden:
+            dateien.extend(vorhanden)
+            if alt.get("fehlt"):
+                kern.ereignis("monat", f"Kontoauszug {konto.get('name', kurz)} für {_monatsname(monat)} ist da – danke.")
+            zustand[kurz] = {"fehlt": False, "monat": monat}
+            continue
+        letzter = alt.get("gemeldet")
+        erneut = not letzter
+        if letzter:
+            try:
+                erneut = (heute - date.fromisoformat(letzter)).days >= 7
+            except ValueError:
+                erneut = True
+        if not alt.get("fehlt") or erneut:
+            kern.ereignis("monat", f"Für {_monatsname(monat)} fehlt der Kontoauszug von {konto.get('name', kurz)}. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney.")
+            alt["gemeldet"] = heute.isoformat()
+        alt.update(fehlt=True, monat=monat)
+        zustand[kurz] = alt
+    kern.schreiben(kern.pfad("arbeit", "konten.json"), zustand)
+    return dateien
 
 
 def _lieferanten(beleg: dict) -> list[str]:
@@ -523,8 +579,14 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen
 def _fund_passt(datei: Path, buchung: dict) -> bool:
     """Prüft Nachsuche konservativ über Betrag und Lieferantenbezug im Fund."""
     try:
-        text = datei.read_bytes().decode("latin-1", errors="ignore") + " " + datei.name
-    except OSError:
+        from .text import auslesen
+        erkannt = auslesen(datei).text
+        text = erkannt + " " + datei.name
+        # Alte, beschädigte Pseudo-PDFs bleiben für die Nachsuche lesbar; echte
+        # PDFs gehen stets durch die Text-Kaskade (auch bei Flate-Kompression).
+        if not erkannt.strip() and datei.suffix.lower() == ".pdf":
+            text = datei.read_text(encoding="utf-8", errors="ignore") + " " + datei.name
+    except (OSError, ValueError):
         return False
     # Der Buchungsname muss im Fund auftauchen. Ohne sichere Lieferantenangabe
     # wird ein gleich hoher Betrag nie als Fund gemeldet.
@@ -737,17 +799,22 @@ def befehl(args) -> int:
     """Führt Monatsabgleich, optionale Übergabe und Rechnungsanfragen aus."""
     monat = _monat(getattr(args, "monat", None))
     auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
+    register_dateien = _konten_pruefen(monat, args)
+    if register_dateien:
+        auszuege = list(dict.fromkeys(auszuege + register_dateien))
     if not auszuege:
         ordner = kern.erweitert(
             kern.konfig("belege").get("monat", {}).get("auszuege", "")
         )
-        text = f"Kontoauszug für {monat} fehlt, leg die CSV in {ordner}"
+        text = f"Für {_monatsname(monat)} fehlt der Kontoauszug. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney."
         kern.ereignis("monat", text)
         print(f"nichts: {text}")
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
+    from .posten import fortschreiben
+    fortschreiben(daten)
     mahnungen = _mahnungen()
     ziel = kern.pfad("arbeit", "monat", monat)
     _schreibe_ausgaben(ziel, monat, daten, mahnungen)
@@ -761,6 +828,7 @@ def befehl(args) -> int:
         f"ok: {len(daten)} Buchungen, {zugeordnet} zugeordnet, {pruefen} prüfen, "
         f"{len(fehlt)} fehlen noch ({fehlbetrag} €), {privat} privat bezahlt, {ohne_beleg} ohne Beleg nötig"
     )
+    kern.ereignis("monat", f"{_monatsname(monat)}: {zugeordnet} Abbuchungen zugeordnet, {len(fehlt)} fehlen noch ({fehlbetrag} €). Die Liste kommt am 1. und 15. per Mail.")
     if getattr(args, "uebergabe", False):
         _uebergabe(monat, ziel, index, daten, args)
     if getattr(args, "anfragen", False):

@@ -17,6 +17,7 @@ BEFEHLE = {
     "downloads": ("takt", "befehl_downloads", "Nur Downloads abarbeiten"),
     "bericht": ("bericht", "befehl", "Tagesbericht erstellen"),
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
+    "posten": ("posten", "befehl", "Offene Posten und Rückfragen"),
     "moneymoney": ("moneymoney", "befehl", "Optional: Kontoumsätze aus MoneyMoney als CSV holen"),
     "anmelden": ("anmelden", "befehl", "Google-Zugang einrichten"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
@@ -42,7 +43,7 @@ BEFEHLE = {
 
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -61,6 +62,9 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--testordner", metavar="PFAD", help="MoneyMoney: alle CSVs in diesen Ordner statt in den Auszugsordner")
     argumente.add_argument("--uebergabe", action="store_true")
     argumente.add_argument("--anfragen", action="store_true")
+    argumente.add_argument("--zwischenstand", action="store_true")
+    argumente.add_argument("--mail", action="store_true")
+    argumente.add_argument("--antworten", action="store_true")
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
@@ -90,6 +94,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    except Exception as fehler:  # Jeder Befehl hinterlässt einen sichtbaren Befund.
+        from .kern import ereignis
+        ereignis("fehler", f"{args.befehl}: {fehler}")
+        print(f"fehler: {args.befehl}: {fehler}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

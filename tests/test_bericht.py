@@ -18,6 +18,8 @@ def test_text_nennt_abgelegte_und_offene():
     assert "29.09. Pixelwerk 59,50 €" in text
     assert "Bitte ansehen" in text
     assert "Sag deinem Claude" in text
+    assert "Etwas ist schiefgelaufen" in text
+    assert "Für Claude/Technik" in text
     assert betreff == "Belege: 1 abgelegt, 1 zum Ansehen, 1 Fehler"
 
 
@@ -26,6 +28,14 @@ def test_leerer_tag():
         "Heute nichts Neues.",
         "Belege: heute nichts Neues",
     )
+
+
+def test_leerer_tag_wird_standardmaessig_nicht_gesendet(repo, monkeypatch, capsys):
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **k: gesendet.append(a))
+    assert bericht.befehl(Namespace(echt=True)) == 0
+    assert gesendet == []
+    assert "kein Bericht" in capsys.readouterr().out
 
 
 def test_trocken_sendet_nicht(repo, monkeypatch, capsys):

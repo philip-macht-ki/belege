@@ -52,11 +52,15 @@ etwas löschen, nie ungefragt senden.
 ```
 konfig/belege.toml        Betrieb, Ablage, Konten, Quellen, Senden, Übergabe, Urteil
 konfig/regeln.toml        feste Regeln: Absender, Ausschlüsse, Buchungen ohne Beleg
+konfig/konten.toml        optionales Register der Auszugskonten
 konfig/waechter.md        Wächter-Regeln in Klartext, eine je Zeile ("- ...")
 .env                      Passwörter/Schlüssel, nie im Git, nie ausgeben
 beispiel/                 Musterbetrieb (erzeugt von `belege beispiel`)
 arbeit/                   Laufzeit, nie im Git
   index.json              Belegverzeichnis, siehe unten
+  posten.json             offene Posten nach stabiler SHA-1-ID
+  konten.json             Meldestand fehlender Kontoauszüge
+  regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
   gesehen.json            {"<konto>": {"mails": [message-id …], "stand": iso}, "waechter:<konto>": {...}, "downloads_gemeldet": [sha …]}
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), chmod 600
   ereignisse/<datum>.jsonl  eine Zeile je Ereignis, siehe unten
@@ -138,7 +142,7 @@ Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
 Eine Zeile JSON: `{"zeit","art","text","daten"}` mit `art` aus
-`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat`.
+`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr`.
 Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 
 ## Modulvertrag
@@ -158,6 +162,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
 | `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
+| `posten.py` | `belege posten [--mail [--echt] | --antworten]` |
 | `waechter.py` | `belege waechter` |
 | `bericht.py` | `belege bericht` (Tagesbericht per Mail an sich selbst), `belege status` |
 | `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Bericht) |
@@ -320,6 +325,13 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`.
 - `--anfragen`: je `fehlt`-Buchung ein **Entwurf** an den Lieferanten
   (Adresse aus der letzten Mail dieses Absenders im Postfach, sonst ohne
   Empfänger), nie gesendet.
+- `arbeit/posten.json` merkt jede Buchung unter SHA-1 aus Konto, Datum, Betrag
+  und normalisiertem Zweck. Menschliche Klärungen bleiben über Monatsläufe
+  erhalten. Die Posten-Mail enthält nur `offen` und `wartet_mensch`; Antworten
+  mit Kurz-ID erzeugen nur Regelvorschläge in `arbeit/regel_vorschlaege.toml`.
+- Ist `konfig/konten.toml` ausgefüllt, prüft der Lauf jedes ab `aktiv_ab` aktive
+  Konto auf eine Monatsdatei bzw. Buchungen. Fehlmeldungen wiederholen sich
+  frühestens nach sieben Tagen; eine Nachlieferung erzeugt Entwarnung.
 
 ### Wächter (belege/waechter.py)
 
@@ -348,12 +360,11 @@ Konsole plus Zähler aus dem Index.
   abgefangen, unter `Sperre("takt")`). Läuft er fehlerfrei, ruft er die
   HTTPS-Adresse aus `[takt].lebenszeichen` auf (leer = aus).
 - `belege tag --echt`: Downloads, Bericht.
-- `belege monat --uebergabe --echt`: am `[uebergabe].tag` des Monats für den
-  Vormonat, nur wenn ein Kontoauszug für den Monat in `[monat].auszuege`
-  liegt; sonst Bericht-Ereignis „Kontoauszug fehlt“.
+- `belege monat --uebergabe --echt`: täglich ab dem 3. um 09:00 für den
+  Vormonat; die Übergabe-Sperre lässt sie je Monat nur einmal zu.
 - launchd: `de.belege.takt` (alle `[takt].minuten` × 60 s, Standard 15),
   `de.belege.tag` (`[takt].tag_uhrzeit`, Standard 21:00), `de.belege.monat`
-  (Tag `[uebergabe].tag`, 09:00), optional `de.belege.moneymoney` (07:00 und
+  (täglich 09:00), `de.belege.posten` (1. und 15., 07:00), optional `de.belege.moneymoney` (07:00 und
   19:00, nur bei `an = true` in `konfig/moneymoney.toml`). Vorlagen in
   `zeitplan/`, PATH fest gesetzt.
   `belege zeitplan an` fragt vorher mit `[ja]` nach und verweigert auf einem

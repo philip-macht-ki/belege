@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from belege import kern, monat
 
@@ -89,6 +89,15 @@ def test_auszug_wird_ueber_deutsches_datum_gefunden(repo):
 def test_betraege_aendern_keine_namen():
     zeile = monat._zeile({"datum": "2026-09-05", "betrag": -34.0, "name": "Schnell & Co. KG", "zweck": ""})
     assert zeile == "- 05.09.2026 · 34,00 € · Schnell & Co. KG"
+
+
+def test_monatsereignis_ist_ohne_pfade_und_alltagssprachlich(repo):
+    monat_wert = _monat_mit_belegen(repo)
+    monat.befehl(_args(monat=monat_wert))
+    ereignisse = (repo / "arbeit/ereignisse" / f"{kern.jetzt():%Y-%m-%d}.jsonl").read_text()
+    assert "Abbuchungen zugeordnet" in ereignisse
+    assert "Die Liste kommt am 1. und 15. per Mail." in ereignisse
+    assert "fehlt_noch.md" not in ereignisse
 
 
 def test_uebergabe_echt_an_erlaubte_adresse_einmal(repo, monkeypatch, capsys):
@@ -243,6 +252,49 @@ def test_monat_nachsuche_braucht_einen_eindeutigen_lieferantenfund(repo, monkeyp
     monkeypatch.setattr("belege.verarbeiten.verarbeite", lambda *args: verarbeitet.append(args))
     monat._nachsuche(daten, _args(echt=True))
     assert daten[0]["status"] == "pruefen" and "mehrdeutig" in daten[0]["hinweis"] and not verarbeitet
+
+
+def test_nachsuche_findet_flate_komprimiertes_pdf(repo):
+    """Der Suchtext kommt aus pypdf, nicht aus den komprimierten Rohbytes."""
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    fund = repo / "downloads" / "rechnung.pdf"
+    writer = PdfWriter()
+    seite = writer.add_blank_page(width=300, height=300)
+    seite[NameObject("/Resources")] = DictionaryObject({
+        NameObject("/Font"): DictionaryObject({NameObject("/F1"): DictionaryObject({
+            NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        })})
+    })
+    stream = DecodedStreamObject()
+    stream.set_data(("BT /F1 12 Tf 20 20 Td (Pixelwerk Rechnung 12,00) Tj ET " * 8).encode())
+    seite[NameObject("/Contents")] = stream.flate_encode()
+    with open(fund, "wb") as datei:
+        writer.write(datei)
+    assert monat._fund_passt(fund, {"betrag": -12, "name": "Pixelwerk"})
+
+
+def test_kontenregister_warnt_woechentlich_und_entwarnt(repo, monkeypatch):
+    (repo / "konfig/konten.toml").write_text(
+        '[[konto]]\nkuerzel = "giro"\nname = "Giro"\nquelle = "csv"\nmuster = "giro*.csv"\naktiv_ab = "2026-01"\n', encoding="utf-8")
+    zeit = [datetime(2026, 1, 4, tzinfo=kern.zone())]
+    monkeypatch.setattr(kern, "jetzt", lambda: zeit[0])
+    monat._konten_pruefen("2026-01", _args())
+    monat._konten_pruefen("2026-01", _args())
+    zeit[0] = datetime(2026, 1, 11, tzinfo=kern.zone())
+    monat._konten_pruefen("2026-01", _args())
+    ereignisse = (repo / "arbeit/ereignisse/2026-01-11.jsonl").read_text()
+    assert ereignisse.count("Für Januar fehlt der Kontoauszug von Giro") == 1
+    (repo / "auszuege/giro-2026-01.csv").write_text("Datum;Name;Betrag\n04.01.2026;Test;-1,00\n", encoding="utf-8")
+    monat._konten_pruefen("2026-01", _args())
+    assert "Kontoauszug Giro für Januar ist da – danke." in (repo / "arbeit/ereignisse/2026-01-11.jsonl").read_text()
+
+
+def test_ohne_kontenregister_bleibt_auszugswahl_unveraendert(repo):
+    (repo / "konfig/konten.toml").unlink()
+    assert monat._konten_pruefen("2026-01", _args()) == []
 
 
 def test_monat_mahnung_ohne_zahlung_ist_offen(repo):

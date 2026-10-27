@@ -159,9 +159,17 @@ ausdrücklichen Ja mit `--echt`.
 4. **Probelauf.** `uv run belege monat --monat JJJJ-MM --uebergabe` zeigt Text und
    Anhänge. Erst geht eine Testübergabe an die eigene Adresse der Person, dann die
    echte. `--anfragen --echt` legt Entwürfe an Lieferanten mit fehlender Rechnung an.
-5. **Automatisch.** Der Monatstermin im Zeitplan (am 3. um 9 Uhr) gleicht ab und
-   übergibt, sobald ein Kontoauszug für den Vormonat vorliegt.
-6. **Jahr.** `uv run belege jahr --jahr JJJJ` rechnet alle zwölf Monate.
+5. **Offene Posten und Konten.** `belege posten --mail` zeigt die Rückfrage zuerst
+   nur an; mit `--echt` geht sie ausschließlich an die eigene erlaubte Adresse.
+   Antworten im Betreff `[Belege-Posten]` mit Kurz-ID und `privat`, `kein Beleg`,
+   `liegt bei` oder `andere Firma` übernimmt `belege posten --antworten`. Für
+   mehrere Konten füllt Claude `konfig/konten.toml` (Kürzel, Quelle, Muster,
+   Startmonat) aus. Ohne diese Datei bleibt der bisherige CSV-Lauf unverändert.
+6. **Automatisch.** Ab dem 3. läuft der Monatsabgleich täglich um 9 Uhr; die
+   Übergabe bleibt je Monat einmalig. Fehlende Auszüge werden zuerst sofort,
+   danach höchstens wöchentlich gemeldet und nach Nachlieferung entwarnt. Am 1.
+   und 15. um 7 Uhr läuft die Posten-Rückfrage nach einem Zwischenstand.
+7. **Jahr.** `uv run belege jahr --jahr JJJJ` rechnet alle zwölf Monate.
    `uv run belege postfach --tage 400 --echt` holt ältere Belege nach,
    `jahr --anfragen --echt` legt Entwürfe für die übrigen Lücken an,
    `jahr --paket` baut das Jahrespaket, `jahr --uebergabe` übergibt es (als Mail
