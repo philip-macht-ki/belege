@@ -200,13 +200,25 @@ def _automatik_frei() -> bool:
     return _plus_gueltig()
 
 
-def _plus_name() -> str:
+PLUS_LINK = "https://philipkleudgen.de/mitglieder/monatszahlen"
+
+
+def _plus_angaben() -> tuple[str, str]:
+    """Name und Kauflink für den Hinweis, aus [update] plus_name / plus_link."""
     try:
         from .kern import konfig
 
-        return str(konfig("belege").get("update", {}).get("plus_name", "")).strip() or "Agent Plus"
-    except Exception:  # noqa: BLE001 - nur ein Name im Hinweis
-        return "Agent Plus"
+        cfg = konfig("belege").get("update", {})
+        return (str(cfg.get("plus_name", "")).strip() or "Agent Plus",
+                str(cfg.get("plus_link", "")).strip() or PLUS_LINK)
+    except Exception:  # noqa: BLE001 - nur Text im Hinweis
+        return "Agent Plus", PLUS_LINK
+
+
+def pausiert_hinweis() -> str:
+    name, link = _plus_angaben()
+    return ("Automatische Updates sind pausiert. Von Hand: `uv run belege aktualisieren --echt`. "
+            f"Dauerhaft automatisch, dazu deine Monatszahlen als PDF und Fragen an deine Zahlen: {name} → {link}")
 
 
 def befehl(args) -> int:
@@ -239,8 +251,7 @@ def befehl(args) -> int:
     nur_sicherheit = bool(neue) and all(a == "sicherheit" for _, a, _ in neue)
     if getattr(args, "automatisch", False) and not nur_sicherheit \
             and not _automatik_frei():
-        hinweis = (f"Automatische Updates sind nach 4 Wochen pausiert. Von Hand: `uv run belege aktualisieren --echt`. "
-                   f"Dauerhaft automatisch mit {_plus_name()}.")
+        hinweis = pausiert_hinweis()
         if f"pausiert:{neu}" not in _gesehen():
             ereignis("update", hinweis)
             _merken(f"pausiert:{neu}")

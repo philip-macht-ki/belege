@@ -195,8 +195,8 @@ def test_nach_vier_wochen_ohne_plus_pausiert_automatik_mit_einem_hinweis(tmp_pat
     assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
     assert update.befehl(Namespace(echt=True, automatisch=True)) == 0
     assert len(ereignisse) == 1, "Hinweis nur einmal je Version"
-    assert "nach 4 Wochen pausiert" in ereignisse[0][1] and "uv run belege aktualisieren --echt" in ereignisse[0][1]
-    assert "Agent Plus" in ereignisse[0][1]
+    assert "Automatische Updates sind pausiert" in ereignisse[0][1] and "uv run belege aktualisieren --echt" in ereignisse[0][1]
+    assert "Agent Plus → https://philipkleudgen.de/mitglieder/monatszahlen" in ereignisse[0][1]
 
 
 def test_von_hand_geht_nach_vier_wochen_weiter(tmp_path, monkeypatch, capsys):
@@ -298,3 +298,12 @@ def test_abgebrochenes_zeitplan_an_startet_die_frist_nicht(repo, monkeypatch):
     monkeypatch.setattr(update, "pfad", lambda *teile: repo.joinpath(*map(str, teile)))
     assert zeitplan._an() == 0
     assert not (repo / "arbeit/einrichtung.json").exists()
+
+
+def test_hinweis_name_und_link_aus_konfig(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8") + '\n[update]\nplus_name = "Plus X"\nplus_link = "https://example.invalid/kauf"\n'
+                    if "[update]" not in toml.read_text(encoding="utf-8") else
+                    toml.read_text(encoding="utf-8").replace("[update]", '[update]\nplus_name = "Plus X"\nplus_link = "https://example.invalid/kauf"'),
+                    encoding="utf-8")
+    assert update.pausiert_hinweis().endswith("Plus X → https://example.invalid/kauf")
