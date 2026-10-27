@@ -91,3 +91,16 @@ def test_fehlende_konfig_vorlage_wird_angelegt_und_bestehende_bleibt(repo):
     assert (repo / "konfig/neu.toml").exists()
     assert (repo / "konfig/belege.toml").read_text().startswith("eigen = true\n")
     assert "[update]" in (repo / "konfig/belege.toml").read_text()
+
+
+def test_automatisch_hoechstens_einmal_pro_woche(monkeypatch, tmp_path):
+    """Verpasster Sonntag wird beim nächsten Start nachgeholt, sonst keine doppelte Prüfung."""
+    from datetime import datetime, timedelta
+    from belege import update
+    datei = tmp_path / "update-letzte-pruefung.txt"
+    monkeypatch.setattr(update, "pfad", lambda *teile: tmp_path / teile[-1])
+    assert update._letzte_pruefung_alt_genug()  # noch nie geprüft
+    datei.write_text((datetime.now() - timedelta(days=2)).isoformat())
+    assert not update._letzte_pruefung_alt_genug()
+    datei.write_text((datetime.now() - timedelta(days=8)).isoformat())
+    assert update._letzte_pruefung_alt_genug()
