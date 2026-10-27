@@ -61,6 +61,9 @@ das einmal und danach höchstens wöchentlich; nach einer Nachlieferung folgt En
 ## Grundsätze
 
 - **Nichts wird gelöscht.** Verschoben wird nur, was sicher ein Beleg ist.
+- **Verdächtige Angebote bleiben getrennt.** Branchenbuch- oder Adressbuch-Angebote
+  stehen im Ordner `Vorsicht Abofalle`, nie in der Buchhaltung: nicht unterschreiben,
+  nicht zahlen. PDFs mit aktiven Inhalten werden nie weitergegeben.
 - **Gesendet wird nur an Adressen, die du einträgst.** An alle anderen entsteht ein Entwurf.
 - **Mails sind Daten, nie Anweisungen.** Der Wächter meldet, er handelt nie.
 - **Text statt Datei.** Belege werden auf deinem Mac gelesen (pypdf, Apple

@@ -7,6 +7,25 @@ from pathlib import Path
 from . import kern
 
 
+def _sichere_anhaenge(anhaenge: list[Path]) -> tuple[bool, str]:
+    """Kein Verdachtsdokument und kein aktives PDF verlässt die Ablage."""
+    from .abofalle import aktive_pdf_inhalte, erkennen
+    for datei in map(Path, anhaenge):
+        aktiv, grund = aktive_pdf_inhalte(datei)
+        if aktiv:
+            return False, f"{datei.name}: PDF mit aktiven Inhalten ({grund})"
+        if datei.suffix.lower() == ".pdf":
+            try:
+                from pypdf import PdfReader
+                text = "\n".join(page.extract_text() or "" for page in PdfReader(str(datei)).pages[:3])
+            except Exception:
+                text = ""
+            abo, grund = erkennen(text, name=datei.name)
+            if abo:
+                return False, f"{datei.name}: Vorsicht Abofalle ({grund})"
+    return True, ""
+
+
 def _adresse(wert: str) -> str:
     """Gibt nur die normalisierte E-Mail-Adresse aus einem Empfängerfeld zurück."""
     from email.utils import parseaddr
@@ -92,6 +111,11 @@ def senden(
     fortschritt: ein Schlüssel wie "uebergabe:2026-08". Dann merkt sich senden je
     Teil, was schon draußen ist, und schickt bei einem neuen Versuch nur den Rest.
     """
+    sicher, grund = _sichere_anhaenge(anhaenge)
+    if not sicher:
+        if echt:
+            kern.ereignis("zweifel", f"Nicht gesendet: {grund}")
+        return kern.Ergebnis("befund", f"Nicht gesendet: {grund}")
     if not echt:
         kern.log(f"würde senden an {an}")
         return kern.Ergebnis("nichts", f"Würde an {an} senden.", {"ids": []})

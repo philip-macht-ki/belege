@@ -140,3 +140,20 @@ def test_downloads_duplikat_trocken_meldet_nichts(repo):
     zeilen = "".join(p.read_text() for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
     assert zeilen.count('"doppelt"') == 1
     assert datei.exists()
+
+
+def test_abofalle_wird_getrennt_abgelegt(repo, monkeypatch):
+    datei = repo / "offerte.pdf"
+    datei.write_bytes(b"%PDF harmlos")
+    fund = Fund(datei, "handy", datei.name, date(2026, 10, 27), verschieben=True)
+    monkeypatch.setattr("belege.text.auslesen", lambda _, **__: Text(
+        "Offerte Branchenbuch Rheinland-Pfalz\\nEintragungsart\\nServicefax 0041 615 684 400", "klartext", 1))
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "befund"
+    assert "Vorsicht Abofalle" in ergebnis.daten["pfad"]
+    assert not datei.exists()
+
+
+def test_einzelwort_offerte_ist_keine_abofalle():
+    from belege.abofalle import erkennen
+    assert erkennen("Ihre Offerte für Software", name="angebot.pdf") == (False, "")
