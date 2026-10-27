@@ -87,12 +87,11 @@ ein und hält wieder an.
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
 dein Betrieb, falls das noch nicht eingetragen ist?
 
-Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Dieses
-Postfach kann hier nicht direkt verbunden werden, Microsoft nimmt seit 2026 kein
-App-Passwort mehr an. Eine eigene Domain erkennt Claude daran, dass
-`dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann führt
-Claude durch den Weg über ein Belegkonto bei Gmail, siehe „Microsoft-Postfach“
-unten, bevor es weitergeht.
+Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Microsoft
+nimmt seit 2026 kein App-Passwort mehr an, dieses Postfach wird stattdessen mit
+einer Anmeldung im Browser verbunden. Eine eigene Domain erkennt Claude daran,
+dass `dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann gilt
+der Abschnitt „Microsoft-Postfach“ unten.
 
 Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
 Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
@@ -115,7 +114,32 @@ Anhänge gar nicht geladen werden sollen, kommen stattdessen in `ausschluss`.
 
 ### Microsoft-Postfach
 
-Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
+**Direkt verbinden (Standard).** Claude trägt das Postfach mit
+`weg = "microsoft"` in `konfig/belege.toml` ein und startet dann
+`uv run belege anmelden --microsoft <name>`. Im Browser öffnet sich die
+Microsoft-Anmeldung:
+
+1. Mit der Postfachadresse anmelden, wie sonst bei Outlook.
+2. Microsoft fragt, ob „belege“ Mails lesen, Entwürfe anlegen und senden darf.
+   Wer Admin der Firma ist (bei kleinen Firmen meist die Geschäftsführung),
+   setzt dort den Haken **„Im Namen Ihrer Organisation zustimmen“** und
+   bestätigt. Das ist einmalig.
+3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
+   Person kein Admin. Dann meldet sich der Admin einmal selbst mit
+   `uv run belege anmelden --microsoft <name>` an und stimmt zu; danach klappt
+   es für alle Postfächer der Firma.
+
+`uv run belege pruefen` zeigt danach „Microsoft-Zugang erneuert“. Der Zugang
+erneuert sich bei jedem Lauf selbst. Nach einem Passwortwechsel oder wenn ein
+Admin die Zugänge zurücksetzt, meldet `belege pruefen` und der nächste Lauf
+einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die Anmeldung läuft immer im Browser dieses Macs; eine Anmeldung
+per Code auf einer fremden Seite gibt es bewusst nicht, das ist ein bekannter
+Phishing-Weg.
+
+Meldet belege „noch keine App-Kennung hinterlegt“ oder klappt die Zustimmung in
+der Firma nicht, nimm den Rückfall unten.
+
+**Rückfall: Umleitung an ein Gmail-Konto.** Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
 Gmail-Konto umgeleitet, und belege liest dieses Konto. Claude geht die Schritte
 einzeln durch und wartet nach jedem auf ein Weiter:
 

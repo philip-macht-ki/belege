@@ -452,7 +452,8 @@ def _server(domain: str, konto: dict):
     if domain == "outlook.com" or domain.startswith(("hotmail.", "live.")):
         raise RuntimeError(
             "Microsoft-Postfächer gehen seit 2026 nur mit OAuth, nicht mit App-Passwort. "
-            "Leite Rechnungen an ein Gmail-Konto um, siehe einrichten.md, Abschnitt Microsoft-Postfach."
+            'Trag beim Postfach weg = "microsoft" ein und melde dich mit '
+            "belege anmelden --microsoft <name> an, siehe einrichten.md, Abschnitt Microsoft-Postfach."
         )
     bekannte = {
         "gmail.com": ("imap.gmail.com:993", "smtp.gmail.com:465"),
@@ -552,7 +553,7 @@ def server_erkennen(domain: str) -> tuple[str, str]:
         if mx.endswith(("protection.outlook.com", "outlook.com")):
             raise RuntimeError(
                 f"{domain} liegt bei Microsoft 365. Microsoft-Postfächer gehen seit 2026 nur "
-                "mit OAuth, nicht mit App-Passwort. Leite Rechnungen an ein Gmail-Konto um, "
+                'mit OAuth, nicht mit App-Passwort. Trag beim Postfach weg = "microsoft" ein, '
                 "siehe einrichten.md, Abschnitt Microsoft-Postfach."
             )
         for kennung, imap, smtp in HOSTER_NACH_MX:
@@ -723,6 +724,10 @@ def _gmail_anhaenge(payload: dict) -> list[str]:
 def oeffnen(konto_name=None):
     """Öffnet das konfigurierte Postfach im passenden Zugriffsweg."""
     konto = kern.konto(konto_name)
+    if konto.get("weg") == "microsoft":
+        from .microsoft import MicrosoftPostfach
+
+        return MicrosoftPostfach(konto)
     klassen = {"a": ImapPostfach, "b": GmailPostfach, "ordner": OrdnerPostfach}
     return klassen.get(konto.get("weg", "a"), ImapPostfach)(konto)
 
