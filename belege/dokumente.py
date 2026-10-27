@@ -429,19 +429,24 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
     abfrage_klein = abfrage.lower().strip()
     treffer = []
     for eintrag in _index().values():
+        # Ältere Einträge ohne Merker: Wortregel auf dem gespeicherten Text nachholen.
+        geheim = eintrag.get("vertraulich")
+        if geheim is None:
+            from .vertraulich import offen_im_text
+
+            geheim = offen_im_text(f'{eintrag.get("art", "")} {eintrag.get("text", "")}') or eintrag.get("art") == "gesundheit"
         # Bei vertraulichen Dokumenten nie im Text suchen: schon ein Treffer verrät den Inhalt.
-        felder = ("gegenueber", "titel", "art") if eintrag.get("vertraulich") else ("gegenueber", "titel", "art", "text")
+        felder = ("gegenueber", "titel", "art") if geheim else ("gegenueber", "titel", "art", "text")
         heuhaufen = " ".join(str(eintrag.get(feld, "")) for feld in felder).lower()
         if abfrage_klein and abfrage_klein not in heuhaufen:
             continue
-        if eintrag.get("vertraulich"):
+        if geheim:
             # Über den MCP-Server landet das im Gespräch, also bei einem Cloud-Modell:
             # nur der Pfad, damit der Mensch die Datei selbst öffnen kann.
             treffer.append({"pfad": eintrag.get("pfad"), "vertraulich": True,
                             "hinweis": "Vertraulich, nur auf diesem Mac lesbar. Datei selbst öffnen."})
-            continue
-        treffer.append(
-            {
+        else:
+            treffer.append({
                 "pfad": eintrag.get("pfad"),
                 "art": eintrag.get("art"),
                 "gegenueber": eintrag.get("gegenueber"),
@@ -449,8 +454,7 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
                 "datum": eintrag.get("datum"),
                 "fristen": eintrag.get("fristen", []),
                 "auszug": str(eintrag.get("text", ""))[:300],
-            }
-        )
+            })
         if len(treffer) >= max:
             break
     return treffer

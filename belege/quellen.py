@@ -91,12 +91,12 @@ def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
     minimum = int(konfiguration.get("laufend_tage", 3))
     maximum = int(konfiguration.get("max_tage", 60))
     letzter = stand.get("lauf") or stand.get("stand")
-    if not letzter:
+    if not letzter and not stand.get("offen"):
         return int(konfiguration.get("erste_tage", 30))
     try:
-        seit = datetime.fromisoformat(str(letzter)).date()
+        seit = datetime.fromisoformat(str(letzter)).date() if letzter else kern.jetzt().date()
     except ValueError:
-        return minimum
+        seit = kern.jetzt().date() - timedelta(days=minimum)
     # Liegengebliebene Mails (Netz weg, Fehler) bleiben im Fenster, solange sie offen sind.
     for datum in (stand.get("offen") or {}).values():
         try:
@@ -132,6 +132,8 @@ def lauf_abschliessen(konto: str, liegen: dict[str, str], echt: bool) -> None:
             kern.ereignis("zweifel", f"Eine Mail vom {datum} im Postfach {konto} ließ sich {maximum} Tage lang "
                           "nicht verarbeiten. Bitte den Anhang selbst ansehen und ablegen.", konto=konto, id=mail_id)
             del offen[mail_id]
+            # Als gesehen merken, sonst käme sie über ein Label (Weg B) jeden Lauf wieder.
+            daten.setdefault("mails", []).append(mail_id)
     daten["offen"] = offen
     if not offen:
         daten["lauf"] = kern.jetzt().isoformat()

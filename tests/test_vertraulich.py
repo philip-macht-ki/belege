@@ -117,3 +117,15 @@ def test_vertrauliche_dokumente_geben_ueber_mcp_keinen_text_heraus(repo):
     assert dokumente.suchen("diabetes") == [], "kein Treffer über den Text"
     treffer = dokumente.suchen("befund")
     assert treffer and "auszug" not in treffer[0] and treffer[0]["vertraulich"] is True
+
+
+def test_alte_dokumente_ohne_merker_werden_nachgeprueft(repo):
+    from belege import dokumente
+
+    dokumente._speichere({
+        "a": {"pfad": "Dokumente/Gesundheit/x.pdf", "art": "gesundheit", "titel": "Brief", "text": "Diagnose Diabetes"},
+        "b": {"pfad": "Dokumente/Vertrag/y.pdf", "art": "vertrag", "titel": "Mietvertrag", "text": "Laufzeit bis 2027"},
+    })
+    assert dokumente.suchen("diabetes") == []
+    assert dokumente.suchen("laufzeit")[0]["auszug"].startswith("Laufzeit")
+    assert len(dokumente.suchen("", max=1)) == 1

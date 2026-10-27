@@ -95,3 +95,14 @@ def test_offene_mail_haelt_das_fenster_und_wird_nie_still_verloren(repo):
     zeilen = "".join(p.read_text(encoding="utf-8") for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
     assert '"art": "zweifel"' in zeilen and "nicht verarbeiten" in zeilen
     assert quellen._gesehen()["k"]["offen"] == {}
+
+
+def test_zu_alte_offene_mail_kommt_nicht_jeden_lauf_wieder(repo):
+    heute = kern.jetzt().date()
+    quellen.lauf_abschliessen("k", {"m3": (heute - timedelta(days=70)).isoformat()}, True)
+    assert "m3" in quellen._gesehen()["k"]["mails"], "als gesehen gemerkt, kein zweites zweifel"
+
+
+def test_offene_mail_ohne_frueheren_lauf_haelt_das_fenster(repo):
+    alt = (kern.jetzt().date() - timedelta(days=45)).isoformat()
+    assert quellen.rueckblick_tage({"offen": {"m": alt}}, {"max_tage": 60, "erste_tage": 30}) == 47
