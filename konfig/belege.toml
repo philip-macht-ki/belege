@@ -59,7 +59,7 @@ erlaubt = []
 [bericht]
 # Leer = die Adresse des ersten Postfachs.
 an = ""
-leer_senden = true
+leer_senden = false
 
 [uebergabe]
 # "mail" an eine Adresse (Steuerberater, DATEV Upload Mail, Lexware Office,

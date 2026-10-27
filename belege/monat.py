@@ -11,6 +11,11 @@ from pathlib import Path
 
 from . import kern
 
+
+def _monatsname(monat: str) -> str:
+    return ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
+            "September", "Oktober", "November", "Dezember")[int(monat[5:]) - 1]
+
 BEKANNTE = {
     "datum": ("buchungstag", "datum", "valuta"),
     "betrag": ("betrag", "umsatz"),
@@ -274,7 +279,7 @@ def _konten_pruefen(monat: str, args) -> list[Path]:
         if vorhanden:
             dateien.extend(vorhanden)
             if alt.get("fehlt"):
-                kern.ereignis("monat", f"Kontoauszug eingetroffen: {konto.get('name', kurz)} {monat}")
+                kern.ereignis("monat", f"Kontoauszug {konto.get('name', kurz)} für {_monatsname(monat)} ist da – danke.")
             zustand[kurz] = {"fehlt": False, "monat": monat}
             continue
         letzter = alt.get("gemeldet")
@@ -285,7 +290,7 @@ def _konten_pruefen(monat: str, args) -> list[Path]:
             except ValueError:
                 erneut = True
         if not alt.get("fehlt") or erneut:
-            kern.ereignis("monat", f"Kontoauszug fehlt: {konto.get('name', kurz)} {monat}")
+            kern.ereignis("monat", f"Für {_monatsname(monat)} fehlt der Kontoauszug von {konto.get('name', kurz)}. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney.")
             alt["gemeldet"] = heute.isoformat()
         alt.update(fehlt=True, monat=monat)
         zustand[kurz] = alt
@@ -801,7 +806,7 @@ def befehl(args) -> int:
         ordner = kern.erweitert(
             kern.konfig("belege").get("monat", {}).get("auszuege", "")
         )
-        text = f"Kontoauszug für {monat} fehlt, leg die CSV in {ordner}"
+        text = f"Für {_monatsname(monat)} fehlt der Kontoauszug. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney."
         kern.ereignis("monat", text)
         print(f"nichts: {text}")
         return 0
@@ -823,7 +828,7 @@ def befehl(args) -> int:
         f"ok: {len(daten)} Buchungen, {zugeordnet} zugeordnet, {pruefen} prüfen, "
         f"{len(fehlt)} fehlen noch ({fehlbetrag} €), {privat} privat bezahlt, {ohne_beleg} ohne Beleg nötig"
     )
-    kern.ereignis("monat", f"Abgleich {monat}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen ({fehlbetrag} €); {ziel / 'fehlt_noch.md'}")
+    kern.ereignis("monat", f"{_monatsname(monat)}: {zugeordnet} Abbuchungen zugeordnet, {len(fehlt)} fehlen noch ({fehlbetrag} €). Die Liste kommt am 1. und 15. per Mail.")
     if getattr(args, "uebergabe", False):
         _uebergabe(monat, ziel, index, daten, args)
     if getattr(args, "anfragen", False):

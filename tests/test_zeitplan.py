@@ -22,6 +22,8 @@ def test_plists_sind_gueltig_und_gefuellt(repo):
     monat = plistlib.loads(zeitplan.plist_text("monat").encode())
     assert monat["StartCalendarInterval"] == {"Hour": 9, "Minute": 0}
     assert "monat --uebergabe --echt" in monat["ProgramArguments"][2]
+    posten = plistlib.loads(zeitplan.plist_text("posten").encode())
+    assert "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin" in posten["ProgramArguments"][2]
 
 
 def test_trocken_schreibt_nichts(repo, monkeypatch):

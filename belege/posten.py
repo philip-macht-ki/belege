@@ -8,6 +8,16 @@ from datetime import date
 from . import kern
 
 
+def _eintraege(zustand: dict) -> list[dict]:
+    """Nur Posten, nicht die technische Markierung bearbeiteter Mails."""
+    return [wert for schluessel, wert in zustand.items()
+            if not schluessel.startswith("__") and isinstance(wert, dict)]
+
+
+def _euro(wert: float) -> str:
+    return f"{wert:.2f}".replace(".", ",") + " €"
+
+
 def posten_id(buchung: dict) -> str:
     """Eine Buchung unabhängig von Dateiname und Reihenfolge wiedererkennen."""
     zweck = re.sub(r"\s+", " ", str(buchung.get("zweck", "")).strip().lower())
@@ -50,16 +60,23 @@ def fortschreiben(buchungen: list[dict]) -> dict:
 
 
 def mailtext(zustand: dict) -> str:
-    offen = [x for x in zustand.values() if x.get("status") in {"offen", "wartet_mensch"}]
+    offen = [x for x in _eintraege(zustand) if x.get("status") in {"offen", "wartet_mensch"}]
     if not offen:
-        return "Hallo,\n\nes gibt derzeit keine offenen Posten.\n"
-    zeilen = ["Hallo,", "", "bitte ordne nur diese offenen Posten zu:", ""]
+        return ""
+    zeilen = [
+        "Hallo,", "",
+        f"Alles andere aus dem Konto ist zugeordnet und liegt im Ordner. Bei diesen {len(offen)} Abbuchungen fehlt noch der Beleg. Antworte einfach auf diese Mail und schreib hinter die Nummer eines dieser Wörter: privat, kein Beleg, liegt bei, andere Firma.",
+        "",
+    ]
     for x in sorted(offen, key=lambda e: (e.get("datum", ""), e["id"])):
-        vorschlag = "Bitte Beleg suchen oder kurz einordnen."
-        if x.get("zweck"):
-            vorschlag = f"Vorschlag: Beleg bei {x.get('name', 'dem Lieferanten')} bzw. zum Verwendungszweck suchen."
-        zeilen += [f"- {x.get('datum', '')} · {abs(float(x.get('betrag', 0))):.2f} € · {x.get('name', '')}",
-                   f"  {vorschlag}", f"  Antwort: [{x['id'][:8]}] privat | kein Beleg | liegt bei | andere Firma", ""]
+        datum = date.fromisoformat(str(x.get("datum", ""))).strftime("%d.%m.%Y")
+        name = x.get("name", "dem Anbieter")
+        zeilen += [
+            f"{datum} · {_euro(abs(float(x.get('betrag', 0))))} · {name}",
+            f"Der Beleg kommt meist als Mail von {name}.",
+            f"[{x['id'][:8]}] → ", "",
+        ]
+    zeilen += ["Was du offen lässt, frage ich in zwei Wochen wieder."]
     return "\n".join(zeilen)
 
 
@@ -72,10 +89,16 @@ def mail(echt: bool) -> int:
     from .senden import senden
     zustand = laden()
     text = mailtext(zustand)
-    if not echt:
-        print(text)
+    if not text:
+        kern.log("nichts offen, keine Mail")
         return 0
-    r = senden(_zieladresse(), "[Belege-Posten] Offene Posten", text, [], True, fortschritt=f"posten:{kern.jetzt():%Y-%m-%d}")
+    offen = [x for x in _eintraege(zustand) if x.get("status") in {"offen", "wartet_mensch"}]
+    betrag = sum(abs(float(x.get("betrag", 0))) for x in offen)
+    betreff = f"[Belege] {len(offen)} Posten brauchen dich ({_euro(betrag)})"
+    if not echt:
+        print(f"{betreff}\n\n{text}")
+        return 0
+    r = senden(_zieladresse(), betreff, text, [], True, fortschritt=f"posten:{kern.jetzt():%Y-%m-%d}")
     print(f"{r.status}: {r.meldung}")
     return 0 if r.gut else 1
 
@@ -85,24 +108,45 @@ def antworten() -> int:
     from .postfach import oeffnen
     zustand = laden()
     postfach = oeffnen()
-    for kopf in postfach.suchen("betreff:[Belege-Posten]", max=100):
+    bearbeitet = set(zustand.get("__bearbeitete_mails__", []))
+    for kopf in postfach.suchen("betreff:[Belege]", max=100):
+        if kopf["id"] in bearbeitet:
+            continue
         nachricht = postfach.lesen(kopf["id"])
-        text = f"{kopf.get('betreff', '')}\n{nachricht.get('text', '')}".lower()
-        for kurz in re.findall(r"\[([0-9a-f]{8})\]", text):
-            treffer = [x for ident, x in zustand.items() if ident.startswith(kurz)]
+        zeilen = []
+        for zeile in str(nachricht.get("text", "")).splitlines():
+            if re.match(r"\s*(Am .+ schrieb.*:|On .+ wrote:)\s*$", zeile, re.I):
+                break
+            if not zeile.lstrip().startswith(">"):
+                zeilen.append(zeile)
+        for nr, zeile in enumerate(zeilen):
+            ids = re.findall(r"\[([0-9a-f]{8})\]", zeile, re.I)
+            if len(ids) != 1:
+                continue
+            antwort = zeile
+            if nr + 1 < len(zeilen) and not re.search(r"\[[0-9a-f]{8}\]", zeilen[nr + 1], re.I):
+                antwort += " " + zeilen[nr + 1]
+            klein = antwort.lower()
+            # Die Vorlage selbst ist keine Antwort.
+            if all(wort in klein for wort in ("privat", "kein beleg", "liegt bei", "andere firma")):
+                continue
+            kurz = ids[0]
+            treffer = [x for ident, x in zustand.items() if not ident.startswith("__") and ident.startswith(kurz)]
             if len(treffer) != 1:
                 continue
             eintrag = treffer[0]
-            if "privat" in text:
+            if "privat" in klein:
                 eintrag.update(status="geklaert", grund="privat", seit=date.today().isoformat())
-            elif "kein beleg" in text or "keinen beleg" in text:
+            elif "kein beleg" in klein or "keinen beleg" in klein:
                 eintrag.update(status="geklaert", grund="ohne_beleg", seit=date.today().isoformat())
-            elif "andere firma" in text:
+            elif "andere firma" in klein:
                 eintrag.update(status="geklaert", grund="andere_firma", seit=date.today().isoformat())
-            elif "liegt bei" in text:
+            elif "liegt bei" in klein:
                 eintrag.update(status="wartet_mensch", grund="Beleg liegt bei", seit=date.today().isoformat())
+        bearbeitet.add(kopf["id"])
+    zustand["__bearbeitete_mails__"] = sorted(bearbeitet)
     # Nur Vorschlag, nie Regel automatisch aktivieren.
-    geklaert = [x for x in zustand.values() if x.get("status") == "geklaert"]
+    geklaert = [x for x in _eintraege(zustand) if x.get("status") == "geklaert"]
     namen = {x.get("name", "") for x in geklaert if x.get("name")}
     vorschlaege = []
     for name in sorted(namen):

@@ -91,6 +91,15 @@ def test_betraege_aendern_keine_namen():
     assert zeile == "- 05.09.2026 · 34,00 € · Schnell & Co. KG"
 
 
+def test_monatsereignis_ist_ohne_pfade_und_alltagssprachlich(repo):
+    monat_wert = _monat_mit_belegen(repo)
+    monat.befehl(_args(monat=monat_wert))
+    ereignisse = (repo / "arbeit/ereignisse" / f"{kern.jetzt():%Y-%m-%d}.jsonl").read_text()
+    assert "Abbuchungen zugeordnet" in ereignisse
+    assert "Die Liste kommt am 1. und 15. per Mail." in ereignisse
+    assert "fehlt_noch.md" not in ereignisse
+
+
 def test_uebergabe_echt_an_erlaubte_adresse_einmal(repo, monkeypatch, capsys):
     monat_wert = _monat_mit_belegen(repo)
     toml = repo / "konfig" / "belege.toml"
@@ -277,10 +286,10 @@ def test_kontenregister_warnt_woechentlich_und_entwarnt(repo, monkeypatch):
     zeit[0] = datetime(2026, 1, 11, tzinfo=kern.zone())
     monat._konten_pruefen("2026-01", _args())
     ereignisse = (repo / "arbeit/ereignisse/2026-01-11.jsonl").read_text()
-    assert ereignisse.count("Kontoauszug fehlt") == 1
+    assert ereignisse.count("Für Januar fehlt der Kontoauszug von Giro") == 1
     (repo / "auszuege/giro-2026-01.csv").write_text("Datum;Name;Betrag\n04.01.2026;Test;-1,00\n", encoding="utf-8")
     monat._konten_pruefen("2026-01", _args())
-    assert "Kontoauszug eingetroffen" in (repo / "arbeit/ereignisse/2026-01-11.jsonl").read_text()
+    assert "Kontoauszug Giro für Januar ist da – danke." in (repo / "arbeit/ereignisse/2026-01-11.jsonl").read_text()
 
 
 def test_ohne_kontenregister_bleibt_auszugswahl_unveraendert(repo):
