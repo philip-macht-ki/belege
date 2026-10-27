@@ -209,10 +209,10 @@ def _plus_angaben() -> tuple[str, str]:
         from .kern import konfig
 
         cfg = konfig("belege").get("update", {})
-        return (str(cfg.get("plus_name", "")).strip() or "Agent Plus",
+        return (str(cfg.get("plus_name", "")).strip() or "Kassensturz",
                 str(cfg.get("plus_link", "")).strip() or PLUS_LINK)
     except Exception:  # noqa: BLE001 - nur Text im Hinweis
-        return "Agent Plus", PLUS_LINK
+        return "Kassensturz", PLUS_LINK
 
 
 def pausiert_hinweis() -> str:

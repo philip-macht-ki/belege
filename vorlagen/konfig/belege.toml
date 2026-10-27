@@ -90,7 +90,7 @@ lebenszeichen = ""
 automatisch = true
 # Ohne Plus kommen automatische Updates vier Wochen ab Einrichtung, danach nur
 # Sicherheitsupdates; von Hand geht es immer. Name des Zusatzpakets im Hinweis:
-# plus_name = "Agent Plus"
+# plus_name = "Kassensturz"
 # plus_link = "https://philipkleudgen.de/mitglieder/monatszahlen"
 
 [urteil]
