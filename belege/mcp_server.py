@@ -27,11 +27,17 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
     from .postfach import oeffnen
     from .vertraulich import pruefen
 
+    index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
+    schon_vertraulich = {str((e.get("mail") or {}).get("id")) for e in index.values() if e.get("vertraulich")}
     treffer = []
     for kopf in oeffnen(konto).suchen(abfrage, max=min(max, 20)):
         # Vertrauliche Mails: nur Absender, Datum und ID, damit der Mensch sie findet
         # (ARCHITEKTUR.md, Grenze). lesen() auf ausdrücklichen Wunsch bleibt möglich.
-        if pruefen(str(kopf.get("auszug", "")), "", kopf, modell=False).vertraulich:
+        # Geprüft werden Auszug, Betreff, Absender (Name, Adresse, Absenderliste) und
+        # Anhangsnamen; der Auszug ist bei Gmail leer. Schon verarbeitete Mails tragen den Merker.
+        anhaenge = " ".join(str(a.get("name", a) if isinstance(a, dict) else a) for a in kopf.get("anhaenge") or [])
+        pruef = f'{kopf.get("auszug", "")} {kopf.get("von", "")} {anhaenge}'
+        if str(kopf.get("id")) in schon_vertraulich or pruefen(pruef, "", kopf, modell=False).vertraulich:
             kopf = {k: kopf.get(k) for k in ("id", "von", "datum")} | {
                 "vertraulich": True, "hinweis": "Betreff und Inhalt nur auf diesem Mac."}
         treffer.append(kopf)
@@ -82,10 +88,17 @@ def belege_suchen(
 ) -> dict:
     """Sucht abgelegte Belege im Belegverzeichnis nach Lieferant, Beschreibung,
     Zeitraum und Betrag; liefert Pfad und Metadaten, nie den Dateiinhalt."""
+    from .vertraulich import offen_im_text
+
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     woerter = abfrage.lower().split()
     treffer = []
     for eintrag in index.values():
+        geheim = eintrag.get("vertraulich")
+        if geheim is None:  # Altbestand ohne Merker: Wortregel nachholen
+            geheim = offen_im_text(" ".join(str(eintrag.get(k, "")) for k in ("lieferant", "beschreibung", "pfad")))
+        if geheim and woerter:
+            continue  # schon ein Treffer über den Namen verriete den Inhalt
         heuhaufen = " ".join(
             str(eintrag.get(feld, "")) for feld in ("lieferant", "beschreibung", "pfad", "art", "bereich")
         ).lower()
@@ -98,6 +111,11 @@ def belege_suchen(
         if betrag_ab is not None and (betrag is None or betrag < betrag_ab):
             continue
         if betrag_bis is not None and (betrag is None or betrag > betrag_bis):
+            continue
+        if geheim:
+            # Erlaubnisliste (ARCHITEKTUR.md, Grenze): Datum und Betrag zählen für die Summe.
+            treffer.append({"datum": datum or None, "betrag": betrag, "waehrung": eintrag.get("waehrung"),
+                            "vertraulich": True, "hinweis": "Lieferant und Datei nur auf diesem Mac."})
             continue
         treffer.append({
             "pfad": str(kern.ablage_ordner() / eintrag["pfad"]) if eintrag.get("pfad") else None,

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from belege import urteil, verarbeiten, vertraulich
+from belege import kern, urteil, verarbeiten, vertraulich
 from belege.typen import Fund, Text
 
 # Die neun vertraulichen und neun normalen Testtexte der Messung vom 27.10.2026.
@@ -87,6 +87,8 @@ def test_vertraulicher_beleg_geht_nicht_in_die_cloud_und_wird_gemeldet(repo, mon
     assert ergebnis.status in {"ok", "befund"}
     zeilen = "".join(p.read_text(encoding="utf-8") for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
     assert '"art": "vertraulich"' in zeilen and "nur auf deinem Mac gelesen" in zeilen
+    index = kern.lesen(kern.pfad("arbeit", "index.json"), {})
+    assert any(e.get("vertraulich") for e in index.values()), "Merker im Index"
 
 
 def test_ocr_notstufe_schickt_vertrauliches_nicht_an_claude(repo, monkeypatch):
@@ -184,3 +186,35 @@ def test_altbestand_erkennt_vertrauliches_auch_am_gegenueber():
 
     assert ist_vertraulich({"art": "sonstiges", "gegenueber": "Psychotherapeutische Praxis Kurz", "text": ""})
     assert not ist_vertraulich({"art": "vertrag", "gegenueber": "Netzfunk", "pfad": "Dokumente/Vertrag/x.pdf", "text": "Laufzeit"})
+
+
+def test_mcp_mailsuche_erkennt_vertrauliches_auch_ohne_auszug(repo, monkeypatch):
+    from belege import mcp_server
+
+    class Postfach:  # Gmail-Weg: kein Auszug
+        def suchen(self, abfrage, max):
+            return [{"id": "g1", "von": "noreply@labor.de", "betreff": "Ihre Unterlagen", "auszug": "",
+                     "anhaenge": ["Befundbericht.pdf"]},
+                    {"id": "g2", "von": "a@b.de", "betreff": "Hallo", "auszug": ""}]
+
+    monkeypatch.setattr("belege.postfach.oeffnen", lambda konto: Postfach())
+    kern.schreiben(kern.pfad("arbeit", "index.json"), {"x": {"mail": {"id": "g2"}, "vertraulich": True}})
+    treffer = mcp_server.suchen("")
+    assert treffer[0].get("vertraulich") and "Befund" not in str(treffer[0])
+    assert treffer[1].get("vertraulich"), "Index-Merker zählt"
+
+
+def test_belege_suche_gibt_vertrauliche_belege_nur_als_erlaubnisliste(repo):
+    from belege import mcp_server
+
+    kern.schreiben(kern.pfad("arbeit", "index.json"), {
+        "a": {"pfad": "2026/10/Eingang/2026-10-12_Praxis-Dr-Weber_Privatliquidation.pdf", "lieferant": "Praxis Dr. Weber",
+              "beschreibung": "Privatliquidation", "datum": "2026-10-12", "betrag": 143.21, "vertraulich": True},
+        "b": {"pfad": "2026/10/Eingang/alt.pdf", "lieferant": "Psychotherapeutische Praxis", "beschreibung": "Sitzung",
+              "datum": "2026-10-01", "betrag": 90.0},
+        "c": {"pfad": "2026/10/Eingang/hetzner.pdf", "lieferant": "Hetzner", "beschreibung": "Server",
+              "datum": "2026-10-02", "betrag": 4.51},
+    })
+    alle = mcp_server.belege_suchen()
+    assert "Weber" not in str(alle) and "Psycho" not in str(alle) and "Hetzner" in str(alle)
+    assert mcp_server.belege_suchen("weber")["anzahl"] == 0

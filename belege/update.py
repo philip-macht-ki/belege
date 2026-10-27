@@ -137,6 +137,32 @@ def _pruefung_merken() -> None:
     datei.write_text(datetime.now().isoformat(timespec="seconds") + "\n", encoding="utf-8")
 
 
+def _plus_ordner() -> Path:
+    return Path(os.environ.get("BELEGE_PLUS", "~/belege-plus")).expanduser()
+
+
+def _plus_vorhanden() -> bool:
+    return (_plus_ordner() / "pyproject.toml").is_file()
+
+
+def _plus_aktualisieren(automatisch: bool) -> None:
+    """Aktualisiert Belege Plus, wenn es installiert ist. Ein Fehler dort ändert nie das Basis-Update."""
+    plus = _plus_ordner()
+    if not _plus_vorhanden():
+        return
+    befehl = ["uv", "--directory", str(plus), "run", "plus", "update", "--echt"]
+    if automatisch:
+        befehl.append("--automatisch")
+    try:
+        ergebnis = subprocess.run(befehl, timeout=600, capture_output=True, text=True)
+        if ergebnis.returncode:
+            ereignis("update", f"Belege Plus konnte nicht aktualisiert werden: Exit-Code {ergebnis.returncode}")
+    except subprocess.TimeoutExpired:
+        ereignis("update", "Belege Plus konnte nicht aktualisiert werden: Zeitüberschreitung")
+    except OSError as fehler:
+        ereignis("update", f"Belege Plus konnte nicht aktualisiert werden: {fehler}")
+
+
 def befehl(args) -> int:
     """`belege aktualisieren`: trocken erklären, mit --echt sicher einspielen."""
     if getattr(args, "automatisch", False):
@@ -156,6 +182,9 @@ def befehl(args) -> int:
     neue = _neu(changelog, alt, neu) if neu != "unbekannt" else []
     if neu == alt:
         print(f"Belege ist schon aktuell (Version {alt}).")
+        # Plus hat eigene Versionen: auch ohne Basis-Update nachsehen, aber nur bei grünem Selbsttest.
+        if getattr(args, "echt", False) and _plus_vorhanden() and _pruefen() == 0:
+            _plus_aktualisieren(getattr(args, "automatisch", False))
         return 0
     if not getattr(args, "echt", False):
         _zeige(alt, neu, neue)
@@ -210,5 +239,6 @@ def befehl(args) -> int:
     extra = f" Neue Vorlage angelegt: {', '.join(angelegt)}." if angelegt else ""
     text = f"Belege ist jetzt auf Version {jetzt}. Neu: {neu_text or 'Verbesserungen im Hintergrund.'} Du musst nichts tun.{extra}"
     ereignis("update", text)
+    _plus_aktualisieren(getattr(args, "automatisch", False))
     print(text)
     return 0

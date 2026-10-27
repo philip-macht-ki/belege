@@ -202,6 +202,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             "mail": fund.mail,
             "am": kern.jetzt().isoformat(),
             "xml": xml,
+            "vertraulich": bool(geheim and geheim.vertraulich),
         }
         index[fingerabdruck] = daten
         _speichere_index(index)

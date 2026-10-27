@@ -10,6 +10,18 @@ Die Claude-App fragt bei einzelnen Schritten nach Erlaubnis, etwa wenn sie
 einen Ordner anlegt. Du kannst für diese Sitzung „immer erlauben“ wählen, wenn
 du das möchtest. Ohne deine Zustimmung passiert nichts.
 
+Claude oder Codex: Diese Anleitung spricht von Claude. Richtest du belege mit
+Codex ein, gilt alles genauso (siehe `AGENTS.md`); nur das Einordnen läuft dann
+über `codex` oder `lokal` statt `claude` (Abschnitt „Welcher Weg ordnet ein?“).
+
+## Vorab, freiwillig: ein Ort für deine Zugänge
+
+Claude empfiehlt einmal kurz einen Passwort-Manager wie 1Password. Wer
+App-Passwörter, Bank-Zugänge und Portal-Logins dort ablegt, hat sie in späteren
+Schritten sofort zur Hand. Pflicht ist das nicht. belege selbst hält das
+App-Passwort fürs Postfach im Schlüsselbund deines Macs, nicht in einer Datei,
+und kein Agent tippt je ein Passwort: Du legst es an und fügst es selbst ein.
+
 ## Erst prüft Claude still
 
 Claude prüft Mac, freien Platz, die Claude-App und `uv`. Fehlt `uv`, nutzt
