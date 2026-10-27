@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "update", "fehler")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline")
 
 
 def _gesehen() -> dict:
@@ -62,7 +62,7 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         zeilen = [_zeile_beleg(e) for e in gruppen["abgelegt"]]
         absaetze.append(f"Abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
 
-    ansehen = gruppen["unsortiert"] + gruppen["zweifel"]
+    ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
     if ansehen:
         zeilen = ["- " + e.get("text", "") for e in ansehen]
         absaetze.append("Bitte ansehen\n" + "\n".join(zeilen))
@@ -84,6 +84,10 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
     if gruppen["monat"]:
         zeilen = ["- " + e.get("text", "") for e in gruppen["monat"]]
         absaetze.append("Monatsabschluss\n" + "\n".join(zeilen))
+
+    if gruppen["offline"]:
+        absaetze.append("Ohne Netz\n- " + gruppen["offline"][-1].get("text", "")
+                        + "\nDas ist kein Fehler. Du musst nichts tun.")
 
     if gruppen["update"]:
         absaetze.append("Belege-Update\n" + "\n".join("- " + e.get("text", "") for e in gruppen["update"]))

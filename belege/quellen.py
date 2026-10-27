@@ -6,7 +6,7 @@ legt ab oder verschiebt die dafür vorgesehenen Dateien.
 from __future__ import annotations
 
 import hashlib
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import kern
@@ -57,10 +57,7 @@ def postfach_funde(konto: str, tage: int | None = None):
     postfach = oeffnen(konto)
     stand = _gesehen().get(konto, {})
     konfiguration = kern.konfig("belege").get("postfach", {})
-    anzahl_tage = tage
-    if anzahl_tage is None:
-        anzahl_tage = int(konfiguration.get("laufend_tage", 3) if stand.get("stand") else
-                           konfiguration.get("erste_tage", 30))
+    anzahl_tage = tage if tage is not None else rueckblick_tage(stand, konfiguration)
     seit = kern.jetzt().date() - timedelta(days=anzahl_tage)
     mails = postfach.suchen(seit=seit, nur_anhang=True)
     if getattr(postfach, "weg", "") == "b":
@@ -81,6 +78,66 @@ def postfach_funde(konto: str, tage: int | None = None):
             kopf = dict(mail)
             kopf["konto"] = konto
             yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
+
+
+def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
+    """Wie weit das Postfach zurückgelesen wird.
+
+    Ab dem letzten vollständig erledigten Lauf, nicht fest drei Tage: War das
+    MacBook eine Woche zu, holt der erste Lauf danach die ganze Woche nach.
+    Mindestens ``laufend_tage`` (3), höchstens ``max_tage`` (60). Ohne Stand
+    beginnt es mit ``erste_tage`` (30).
+    """
+    minimum = int(konfiguration.get("laufend_tage", 3))
+    maximum = int(konfiguration.get("max_tage", 60))
+    letzter = stand.get("lauf") or stand.get("stand")
+    if not letzter and not stand.get("offen"):
+        return min(int(konfiguration.get("erste_tage", 30)), maximum)
+    try:
+        seit = datetime.fromisoformat(str(letzter)).date() if letzter else kern.jetzt().date()
+    except ValueError:
+        seit = kern.jetzt().date() - timedelta(days=minimum)
+    # Liegengebliebene Mails (Netz weg, Fehler) bleiben im Fenster, solange sie offen sind.
+    for datum in (stand.get("offen") or {}).values():
+        try:
+            seit = min(seit, date.fromisoformat(str(datum)[:10]))
+        except ValueError:
+            continue
+    return max(minimum, min(maximum, (kern.jetzt().date() - seit).days + 2))
+
+
+def lauf_abschliessen(konto: str, liegen: dict[str, str], echt: bool) -> None:
+    """Schreibt nach einem Postfachlauf fort, welche Mails noch offen sind.
+
+    ``liegen`` sind Mail-IDs mit Maildatum, deren Funde diesmal nicht erledigt
+    wurden. Der Rückblick rückt nur vor, wenn keine Mail mehr offen ist. Eine
+    Mail, die länger offen ist als ``max_tage``, fiele aus dem Suchfenster: Sie
+    wird einmal als „zweifel“ gemeldet und dann losgelassen, nie still verloren.
+    """
+    if not echt:
+        return
+    gesehen = _gesehen()
+    daten = gesehen.setdefault(konto, {"mails": []})
+    erledigt = set(daten.get("mails", []))
+    offen = {i: d for i, d in (daten.get("offen") or {}).items() if i not in erledigt}
+    offen.update(liegen)
+    maximum = int(kern.konfig("belege").get("postfach", {}).get("max_tage", 60))
+    grenze = kern.jetzt().date() - timedelta(days=maximum - 2)
+    for mail_id, datum in list(offen.items()):
+        try:
+            zu_alt = date.fromisoformat(str(datum)[:10]) < grenze
+        except ValueError:
+            zu_alt = True
+        if zu_alt:
+            kern.ereignis("zweifel", f"Eine Mail vom {datum} im Postfach {konto} ließ sich {maximum} Tage lang "
+                          "nicht verarbeiten. Bitte den Anhang selbst ansehen und ablegen.", konto=konto, id=mail_id)
+            del offen[mail_id]
+            # Als gesehen merken, sonst käme sie über ein Label (Weg B) jeden Lauf wieder.
+            daten.setdefault("mails", []).append(mail_id)
+    daten["offen"] = offen
+    if not offen:
+        daten["lauf"] = kern.jetzt().isoformat()
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
 def mail_erledigt(konto: str, mail_id: str, echt: bool):

@@ -36,6 +36,7 @@ def _falsche_module(monkeypatch, handy_kaputt=False, ergebnisse=None):
 
     quellen.handy_funde = handy
     quellen.mail_erledigt = lambda konto, mail_id, echt: erledigt.append(mail_id)
+    quellen.lauf_abschliessen = lambda konto, liegen, echt: None
     verarbeiten = types.ModuleType("belege.verarbeiten")
     folge = iter(ergebnisse or [Ergebnis("ok"), Ergebnis("ok")])
     verarbeiten.verarbeite = lambda fund, echt: next(folge)
@@ -89,8 +90,10 @@ def test_lebenszeichen_nur_nach_fehlerfreiem_echten_takt(repo, monkeypatch):
 
     takt.befehl(Namespace(echt=False))
     assert aufrufe == []
+    monkeypatch.setattr("belege.rechner.art", lambda: "macbook")
     takt.befehl(Namespace(echt=True))
-    assert aufrufe == ["https://beispiel.example/l/abc"]
+    # Zu Beginn „wach“ mit Gerätetyp, nach fehlerfreiem Lauf „ok“.
+    assert aufrufe == ["https://beispiel.example/l/abc?art=wach&geraet=macbook", "https://beispiel.example/l/abc"]
     zustaende["postfach"] = "fehler: Anmeldung abgelehnt"
     takt.befehl(Namespace(echt=True))
-    assert len(aufrufe) == 1
+    assert aufrufe[2:] == ["https://beispiel.example/l/abc?art=wach&geraet=macbook"], "nur wach, kein ok"

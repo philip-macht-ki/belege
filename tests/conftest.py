@@ -29,3 +29,11 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setenv("BELEGE_ROOT", str(tmp_path))
     monkeypatch.setenv("URTEIL_BACKEND", "ohne")
     yield tmp_path
+
+
+@pytest.fixture(autouse=True)
+def kein_lokales_modell(monkeypatch):
+    """Tests fragen nie ein echtes Ollama; wer das Modell braucht, setzt es selbst."""
+    from belege import vertraulich
+
+    monkeypatch.setattr(vertraulich, "lokales_modell", lambda: None)

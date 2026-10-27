@@ -25,8 +25,23 @@ def konten() -> list[dict]:
 def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[dict]:
     """Durchsucht ein Postfach mit höchstens 20 Treffern und kurzen Auszügen."""
     from .postfach import oeffnen
+    from .vertraulich import pruefen
 
-    return oeffnen(konto).suchen(abfrage, max=min(max, 20))
+    index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
+    schon_vertraulich = {str((e.get("mail") or {}).get("id")) for e in index.values() if e.get("vertraulich")}
+    treffer = []
+    for kopf in oeffnen(konto).suchen(abfrage, max=min(max, 20)):
+        # Vertrauliche Mails: nur Absender, Datum und ID, damit der Mensch sie findet
+        # (ARCHITEKTUR.md, Grenze). lesen() auf ausdrücklichen Wunsch bleibt möglich.
+        # Geprüft werden Auszug, Betreff, Absender (Name, Adresse, Absenderliste) und
+        # Anhangsnamen; der Auszug ist bei Gmail leer. Schon verarbeitete Mails tragen den Merker.
+        anhaenge = " ".join(str(a.get("name", a) if isinstance(a, dict) else a) for a in kopf.get("anhaenge") or [])
+        pruef = f'{kopf.get("auszug", "")} {kopf.get("von", "")} {anhaenge}'
+        if str(kopf.get("id")) in schon_vertraulich or pruefen(pruef, "", kopf).vertraulich:
+            kopf = {k: kopf.get(k) for k in ("id", "von", "datum")} | {
+                "vertraulich": True, "hinweis": "Betreff und Inhalt nur auf diesem Mac."}
+        treffer.append(kopf)
+    return treffer
 
 
 def lesen(ident: str, konto: str | None = None) -> dict:
@@ -73,10 +88,17 @@ def belege_suchen(
 ) -> dict:
     """Sucht abgelegte Belege im Belegverzeichnis nach Lieferant, Beschreibung,
     Zeitraum und Betrag; liefert Pfad und Metadaten, nie den Dateiinhalt."""
+    from .vertraulich import offen_im_text
+
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     woerter = abfrage.lower().split()
     treffer = []
     for eintrag in index.values():
+        geheim = eintrag.get("vertraulich")
+        if geheim is None:  # Altbestand ohne Merker: Wortregel nachholen
+            geheim = offen_im_text(" ".join(str(eintrag.get(k, "")) for k in ("lieferant", "beschreibung", "pfad")))
+        if geheim and woerter:
+            continue  # schon ein Treffer über den Namen verriete den Inhalt
         heuhaufen = " ".join(
             str(eintrag.get(feld, "")) for feld in ("lieferant", "beschreibung", "pfad", "art", "bereich")
         ).lower()
@@ -89,6 +111,11 @@ def belege_suchen(
         if betrag_ab is not None and (betrag is None or betrag < betrag_ab):
             continue
         if betrag_bis is not None and (betrag is None or betrag > betrag_bis):
+            continue
+        if geheim:
+            # Erlaubnisliste (ARCHITEKTUR.md, Grenze): Datum und Betrag zählen für die Summe.
+            treffer.append({"datum": datum or None, "betrag": betrag, "waehrung": eintrag.get("waehrung"),
+                            "vertraulich": True, "hinweis": "Lieferant und Datei nur auf diesem Mac."})
             continue
         treffer.append({
             "pfad": str(kern.ablage_ordner() / eintrag["pfad"]) if eintrag.get("pfad") else None,
@@ -109,7 +136,18 @@ def fristen(tage: int = 365) -> dict:
     """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
     from .dokumente import fristen_liste
 
-    return fristen_liste(tage)
+    liste = fristen_liste(tage)
+    for frist in liste["kommend"] + liste["pruefen"]:
+        if frist.pop("vertraulich", False):
+            # Datum und Art bleiben, damit die Frist nicht untergeht; Inhalt, Name und Datei nicht.
+            from .dokumente import grober_ordner
+
+            sicher = {"art": frist.get("art"), "datum": frist.get("datum"), "pfad": grober_ordner(frist.get("pfad", "")),
+                      "text": "vertraulich", "titel": "vertraulich", "gegenueber": "vertraulich",
+                      "vertraulich": True, "hinweis": "Inhalt und Name nur auf diesem Mac."}
+            frist.clear()
+            frist.update(sicher)
+    return liste
 
 
 def _antwort(ergebnis: kern.Ergebnis) -> dict:

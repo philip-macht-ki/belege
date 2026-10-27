@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from . import kern
+from .urteil import Unerreichbar
 from .typen import Einordnung, Fund, Text
 
 
@@ -92,6 +93,19 @@ def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung
     return None
 
 
+def _ohne_text() -> Einordnung:
+    """Ein Dokument, von dem der Mac lokal keinen Text lesen konnte.
+
+    Es geht nicht zur Texterkennung in die Cloud (es könnte ein Arztbrief sein),
+    sondern nach Unsortiert und in den Bericht unter „Bitte ansehen“.
+    """
+    return Einordnung(
+        ist_beleg=True, art="eingang", bereich="betrieb", datum=None, lieferant="Unbekannt",
+        beschreibung="ohne-Text", betrag=None, waehrung="EUR", sicherheit="niedrig",
+        grund="Kein Text lesbar; nur auf deinem Mac geprüft. Bitte selbst ansehen.", quelle="rueckfall",
+    )
+
+
 def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
     """Verarbeitet einen Fund vom Fingerabdruck bis zum Indexeintrag.
 
@@ -124,16 +138,31 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("doppelt", ergebnis.meldung, quelle=fund.quelle)
             return ergebnis
         begleit = None
+        geheim = None
         zugferd = _zugferd(fund)
         if zugferd:
+            # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
+            from .vertraulich import pruefen
+
             einordnung, text = zugferd
+            geheim = pruefen(f"{einordnung.lieferant} {einordnung.beschreibung} {text.text}", fund.name, fund.mail,
+                             modell=False)
         else:
             from .text import auslesen
             from .einordnen import einordnen
 
-            text = auslesen(fund.datei)
+            from .vertraulich import pruefen
+
+            text = auslesen(fund.datei, mail=fund.mail)
+            geheim = pruefen(text.text, fund.name, fund.mail)
             begleit = _begleit_einordnung(fund, text, index)
-            einordnung = begleit[0] if begleit else einordnen(fund, text)
+            if begleit:
+                einordnung = begleit[0]
+            elif text.stufe == "ohne_text":
+                einordnung = _ohne_text()
+            else:
+                # Ohne Text (Texterkennung aus, Foto ohne Schrift) ist nichts prüfbar: auch dann lokal.
+                einordnung = einordnen(fund, text, nur_lokal=geheim.vertraulich or not text.text.strip())
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:
@@ -178,6 +207,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             "mail": fund.mail,
             "am": kern.jetzt().isoformat(),
             "xml": xml,
+            "vertraulich": bool(geheim and geheim.vertraulich),
         }
         index[fingerabdruck] = daten
         _speichere_index(index)
@@ -191,7 +221,20 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"))
+            if geheim and geheim.vertraulich:
+                kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
+                              f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",
+                              quelle=fund.quelle, pfad=daten["pfad"])
         return ergebnis
+    except Unerreichbar as fehler:
+        # Kein Netz oder Modell gestört: nichts ablegen, nichts als erledigt merken.
+        meldung = f"{fund.name} wartet, weil das Modell nicht erreichbar war. Der nächste Lauf versucht es wieder."
+        if echt:
+            if kern.netzfehler(fehler):
+                kern.einmal_taeglich("offline", "Dein Mac war ohne Netz. Liegengebliebene Belege werden nachgeholt.")
+            else:
+                kern.einmal_taeglich("fehler", f"Modell nicht erreichbar, Belege warten: {fehler}")
+        return kern.Ergebnis("spaeter", meldung)
     except Exception as fehler:  # noqa: BLE001
         meldung = f"Konnte {fund.name} nicht verarbeiten: {fehler}"
         if echt:

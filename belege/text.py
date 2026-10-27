@@ -328,8 +328,31 @@ def stufen_verfuegbar() -> dict[str, bool]:
     }
 
 
-def auslesen(datei: Path) -> Text:
-    """Liest einen Beleg lokal und verwendet Claude nur als letzte sichere Stufe."""
+def _darf_in_cloud(datei: Path, teiltext: str, mail: dict | None) -> bool:
+    from .vertraulich import pruefen
+
+    if not teiltext.strip():
+        # Ohne lokal erkannten Text lässt sich nicht prüfen, ob es vertraulich ist
+        # (Arztbrief als Scan). Dann bleibt es auf dem Mac und kommt zu „Bitte ansehen“.
+        log(f"{datei.name}: kein Text lesbar, bleibt lokal (keine Claude-Texterkennung).")
+        return False
+    if konfig("belege").get("urteil", {}).get("backend") == "lokal":
+        return False
+    urteil = pruefen(teiltext, datei.name, mail)
+    if urteil.vertraulich:
+        log(f"{datei.name}: vertraulich ({urteil.grund}), keine Claude-Texterkennung.")
+        return False
+    return True
+
+
+def auslesen(datei: Path, mail: dict | None = None) -> Text:
+    """Liest einen Beleg lokal und verwendet Claude nur als letzte sichere Stufe.
+
+    Claude darf nur einen lokal schon teilweise gelesenen Text vervollständigen,
+    und nur, wenn Teiltext, Dateiname und Mailkopf nicht vertraulich sind
+    (belege/vertraulich.py). Ganz ohne lokalen Text bleibt die Datei auf dem Mac:
+    Stufe ``ohne_text``, der Aufrufer legt sie zum Ansehen ab.
+    """
     datei = Path(datei)
     endung = datei.suffix.lower()
     seiten = _seiten(datei)
@@ -364,7 +387,11 @@ def auslesen(datei: Path) -> Text:
         return Text("", "leer", seiten)
     if endung not in ({".pdf"} | BILDENDUNGEN):
         return Text(bester[0], bester[1] if bester[0] else "leer", seiten)
-    if konfig("belege").get("texterkennung", {}).get("claude", True):
+    claude_an = konfig("belege").get("texterkennung", {}).get("claude", True)
+    if claude_an and not bester[0].strip():
+        log(f"{datei.name}: kein Text lesbar, bleibt lokal (keine Claude-Texterkennung).")
+        return Text("", "ohne_text", seiten)
+    if claude_an and _darf_in_cloud(datei, bester[0], mail):
         text = _kuerzen(_claude(datei))
         if _brauchbar(text):
             log(f"Text erkannt: {datei.name} (claude).")

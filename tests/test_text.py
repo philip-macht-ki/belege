@@ -102,11 +102,20 @@ def test_xml_wird_ohne_modell_als_erechnung_gelesen(repo, monkeypatch):
 def test_metaantwort_von_claude_wird_verworfen(repo, monkeypatch):
     p = repo / "scan.pdf"
     p.write_bytes(b"kein echtes PDF")
-    monkeypatch.setattr(text, "_pdftotext", lambda _: "")
+    monkeypatch.setattr(text, "_pdftotext", lambda _: "Rechnung")
     monkeypatch.setattr(text, "_vision", lambda _: "")
     monkeypatch.setattr(text, "_tesseract", lambda _: "")
     monkeypatch.setattr(text, "_claude", lambda _: "Ich benötige den Pfad zur Datei.")
-    assert auslesen(p).stufe == "leer"
+    assert auslesen(p).stufe == "pdftotext"
+
+
+def test_leerer_scan_geht_nie_an_claude(repo, monkeypatch):
+    p = repo / "scan.pdf"
+    p.write_bytes(b"kein echtes PDF")
+    for stufe in ("_pdftotext", "_vision", "_tesseract"):
+        monkeypatch.setattr(text, stufe, lambda _: "")
+    monkeypatch.setattr(text, "_claude", lambda _: pytest.fail("leerer Scan an Claude"))
+    assert auslesen(p).stufe == "ohne_text"
 
 
 def test_farbverlauf_bleibt_leer_ohne_claude(repo, monkeypatch):

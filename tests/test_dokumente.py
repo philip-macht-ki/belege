@@ -30,7 +30,7 @@ def test_ablagepfad_und_name_aus_stichwort(repo, monkeypatch):
     datei.write_bytes(b"pdf")
     monkeypatch.setattr(
         "belege.text.auslesen",
-        lambda _: _text("Mietvertrag über Geschäftsräume. Laufzeit bis 31.12.2027."),
+        lambda _, **__: _text("Mietvertrag über Geschäftsräume. Laufzeit bis 31.12.2027."),
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=True))
     eintrag = next(iter(_index(repo).values()))
@@ -49,7 +49,7 @@ def test_unsortiert_bei_unsicherheit(repo, monkeypatch):
     datei.write_bytes(b"pdf")
     monkeypatch.setattr(
         "belege.text.auslesen",
-        lambda _: _text("Ein Text ganz ohne erkennbares Stichwort."),
+        lambda _, **__: _text("Ein Text ganz ohne erkennbares Stichwort."),
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=True))
     eintrag = next(iter(_index(repo).values()))
@@ -63,7 +63,7 @@ def test_beleg_wandert_in_handy_ordner(repo, monkeypatch):
     datei = repo / "rechnung.pdf"
     datei.write_bytes(b"pdf")
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: _text("Rechnung Nr. 123 über 50,00 EUR.")
+        "belege.text.auslesen", lambda _, **__: _text("Rechnung Nr. 123 über 50,00 EUR.")
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=True))
     handy_dateien = list((repo / "handy").iterdir())
@@ -77,7 +77,7 @@ def test_dublette_wird_uebersprungen(repo, monkeypatch):
     datei = repo / "vertrag.pdf"
     datei.write_bytes(b"immer derselbe Inhalt")
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
+        "belege.text.auslesen", lambda _, **__: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=True))
     # verhalten wie eine erneut vorgelegte Kopie
@@ -91,7 +91,7 @@ def test_trockenlauf_aendert_nichts(repo, monkeypatch):
     datei = repo / "vertrag.pdf"
     datei.write_bytes(b"pdf")
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
+        "belege.text.auslesen", lambda _, **__: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=False))
     assert not (repo / "arbeit" / "dokumente.json").exists()
@@ -164,7 +164,7 @@ def test_ics_parsebar_und_uid_stabil_bei_zweitem_lauf(repo, monkeypatch):
     datei = repo / "vertrag.pdf"
     datei.write_bytes(b"pdf")
     monkeypatch.setattr(
-        "belege.text.auslesen", lambda _: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
+        "belege.text.auslesen", lambda _, **__: _text("Mietvertrag. Laufzeit bis 31.12.2027.")
     )
     dokumente.befehl(_args(ziel=[str(datei)], echt=True))
     index_pfad = repo / "arbeit" / "dokumente.json"

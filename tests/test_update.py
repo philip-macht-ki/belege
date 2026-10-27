@@ -1,7 +1,10 @@
 import shutil
 import subprocess
 from argparse import Namespace
+from types import SimpleNamespace
 from pathlib import Path
+
+import pytest
 
 from belege import kern, update
 
@@ -104,3 +107,64 @@ def test_automatisch_hoechstens_einmal_pro_woche(monkeypatch, tmp_path):
     assert not update._letzte_pruefung_alt_genug()
     datei.write_text((datetime.now() - timedelta(days=8)).isoformat())
     assert update._letzte_pruefung_alt_genug()
+
+
+def test_plus_ohne_installation_startet_keinen_subprocess(monkeypatch, tmp_path):
+    monkeypatch.setenv("BELEGE_PLUS", str(tmp_path / "nicht-installiert"))
+    monkeypatch.setattr(update.subprocess, "run", lambda *args, **kwargs: pytest.fail("Subprocess gestartet"))
+    update._plus_aktualisieren(False)
+
+
+def test_plus_wird_mit_automatisch_aktualisiert(monkeypatch, tmp_path):
+    plus = tmp_path / "belege-plus"
+    plus.mkdir()
+    (plus / "pyproject.toml").write_text("[project]\nname = 'belege-plus'\n")
+    aufrufe = []
+    monkeypatch.setenv("BELEGE_PLUS", str(plus))
+    monkeypatch.setattr(update.subprocess, "run", lambda *args, **kwargs: aufrufe.append((args, kwargs)) or subprocess.CompletedProcess(args[0], 0))
+    update._plus_aktualisieren(True)
+    assert aufrufe == [
+        ((["uv", "--directory", str(plus), "run", "plus", "update", "--echt", "--automatisch"],),
+         {"timeout": 600, "capture_output": True, "text": True})
+    ]
+
+
+def test_plus_fehler_rollt_basisupdate_nicht_zurueck(tmp_path, monkeypatch):
+    quelle, kunde = _git_repo(tmp_path, monkeypatch)
+    _release(quelle)
+    plus = tmp_path / "belege-plus"
+    plus.mkdir()
+    (plus / "pyproject.toml").write_text("[project]\nname = 'belege-plus'\n")
+    monkeypatch.setenv("BELEGE_PLUS", str(plus))
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_zeitplaene", lambda: None)
+    ereignisse = []
+    monkeypatch.setattr(update, "ereignis", lambda *args: ereignisse.append(args))
+    echt_run = subprocess.run
+    def lauf(cmd, **kwargs):
+        if cmd[:2] == ["uv", "sync"]:
+            return subprocess.CompletedProcess(cmd, 0)
+        if cmd[:5] == ["uv", "--directory", str(plus), "run", "plus"]:
+            return subprocess.CompletedProcess(cmd, 1)
+        return echt_run(cmd, **kwargs)
+    monkeypatch.setattr(update.subprocess, "run", lauf)
+    assert update.befehl(Namespace(echt=True, automatisch=False)) == 0
+    assert _run("git", "rev-parse", "HEAD", cwd=kunde).stdout == _run("git", "rev-parse", "origin/main", cwd=kunde).stdout
+    assert ("update", "Belege Plus konnte nicht aktualisiert werden: Exit-Code 1") in ereignisse
+
+
+def test_plus_auch_ohne_basis_update_bei_gruenem_selbsttest(tmp_path, monkeypatch):
+    plus = tmp_path / "plus"
+    plus.mkdir()
+    (plus / "pyproject.toml").write_text("[project]\nname='belege-plus'\n")
+    monkeypatch.setenv("BELEGE_PLUS", str(plus))
+    aufrufe = []
+    monkeypatch.setattr(update, "_git", lambda *a, **k: SimpleNamespace(stdout=f'__version__ = "{update.__version__}"', returncode=0))
+    monkeypatch.setattr(update, "_changelog_remote", lambda: "")
+    monkeypatch.setattr(update, "_pruefen", lambda: 0)
+    monkeypatch.setattr(update, "_plus_aktualisieren", lambda automatisch: aufrufe.append(automatisch))
+    assert update.befehl(Namespace(echt=True, automatisch=False)) == 0
+    assert aufrufe == [False]
+    monkeypatch.setattr(update, "_pruefen", lambda: 1)
+    update.befehl(Namespace(echt=True, automatisch=False))
+    assert aufrufe == [False], "roter Selbsttest: Plus bleibt, wie es ist"

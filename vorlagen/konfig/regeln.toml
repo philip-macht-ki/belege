@@ -22,3 +22,11 @@ lohn = ["Gehalt", "Lohn"]
 abgaben = ["Finanzamt", "Krankenkasse", "AOK", "Berufsgenossenschaft", "Gemeinde", "Stadtkasse"]
 bank = ["Kontoführung", "Entgelt", "Zinsen"]
 abschlag = ["Abschlag"]
+
+# Weiche „vertraulich“ (Arzt, Gericht, Personal, Mandanten): Solche Belege und
+# Dokumente liest nur dein Mac, kein Cloud-Modell. Feste Wörter sind eingebaut.
+# [vertraulich]
+# absender = ["@labor-beispiel.de"]   # Teil der Absenderadresse
+# woerter_stark = ["PraxisSoft"]      # ein Treffer genügt
+# woerter = []                        # zählen erst zu zweit
+# aus = false

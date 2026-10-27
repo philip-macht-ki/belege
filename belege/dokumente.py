@@ -241,7 +241,7 @@ def _rueckfall(text: str, dateiname: str) -> dict:
     }
 
 
-def dokument_einordnen(text: str, dateiname: str) -> dict:
+def dokument_einordnen(text: str, dateiname: str, nur_lokal: bool = False) -> dict:
     """Ordnet einen Dokumenttext über das Urteil oder die Regel-Rückfallfunktion
     ein und lässt anschließend ausschließlich den Code die Fristen berechnen."""
     auftrag = vorlage("dokument", text=text[:6000], dateiname=dateiname)
@@ -250,6 +250,7 @@ def dokument_einordnen(text: str, dateiname: str) -> dict:
         zweck="dokument",
         pruefe=pruefe,
         rueckfall=lambda: _rueckfall(text, dateiname),
+        nur_lokal=nur_lokal,
     )
     antwort = dict(antwort)
     antwort["fristen"] = berechne_fristen(antwort.get("fristen") or [])
@@ -301,8 +302,17 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         pfad_bekannt = index[sha].get("pfad", "der Ablage")
         print(f"{datei.name}: liegt schon unter {pfad_bekannt}")
         return
+    from .vertraulich import pruefen
+
     text = auslesen(datei)
-    eintrag = dokument_einordnen(text.text, datei.name)
+    geheim = pruefen(text.text, datei.name)
+    if not text.text.strip() and not geheim.vertraulich:
+        from .vertraulich import Urteil
+
+        geheim = Urteil(True, "kein Text lesbar")
+    eintrag = dokument_einordnen(text.text, datei.name, nur_lokal=geheim.vertraulich)
+    if geheim.vertraulich:
+        print(f"{datei.name}: vertraulich ({geheim.grund}), nur auf diesem Mac gelesen.")
     if eintrag["art"] == "beleg":
         handy = erweitert(konfig("belege").get("quellen", {}).get("handy_ordner", ""))
         ziel_pfad = kern.freier_name(handy / datei.name)
@@ -343,6 +353,7 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         "fristen": eintrag["fristen"],
         "text": text.text[:6000],
         "abgelegt": not unsicher,
+        "vertraulich": geheim.vertraulich,
     }
     index[sha] = gespeichert
     _speichere(index)
@@ -380,6 +391,22 @@ def befehl(args) -> int:
     return 0
 
 
+def ist_vertraulich(eintrag: dict) -> bool:
+    """Merker aus der Ablage; ältere Einträge ohne Merker prüft die Wortregel nach."""
+    if eintrag.get("vertraulich") is not None:
+        return bool(eintrag["vertraulich"])
+    from .vertraulich import offen_im_text
+
+    felder = " ".join(str(eintrag.get(k, "")) for k in ("titel", "gegenueber", "pfad", "text"))
+    return eintrag.get("art") == "gesundheit" or offen_im_text(felder)
+
+
+def grober_ordner(pfad: str) -> str:
+    """Für vertrauliche Dokumente im Gespräch: nur Dokumente/<Art>, ohne Gegenüber und Dateiname."""
+    teile = [t for t in str(pfad).split("/") if t]
+    return "/".join(teile[:2])
+
+
 def _alle_fristen() -> list[dict]:
     """Baut eine flache Liste aller Fristen mit Bezug zu ihrem Dokument."""
     alle = []
@@ -392,6 +419,7 @@ def _alle_fristen() -> list[dict]:
                     "gegenueber": eintrag.get("gegenueber", "Unbekannt"),
                     "titel": eintrag.get("titel", ""),
                     "pfad": eintrag.get("pfad", ""),
+                    "vertraulich": ist_vertraulich(eintrag),
                 }
             )
     return alle
@@ -422,12 +450,19 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
     abfrage_klein = abfrage.lower().strip()
     treffer = []
     for eintrag in _index().values():
-        felder = ("gegenueber", "titel", "art", "text")
+        geheim = ist_vertraulich(eintrag)
+        # Bei vertraulichen Dokumenten nie im Text suchen: schon ein Treffer verrät den Inhalt.
+        felder = ("gegenueber", "titel", "art") if geheim else ("gegenueber", "titel", "art", "text")
         heuhaufen = " ".join(str(eintrag.get(feld, "")) for feld in felder).lower()
         if abfrage_klein and abfrage_klein not in heuhaufen:
             continue
-        treffer.append(
-            {
+        if geheim:
+            # Über den MCP-Server landet das im Gespräch, also bei einem Cloud-Modell:
+            # nur der Pfad, damit der Mensch die Datei selbst öffnen kann.
+            treffer.append({"ordner": grober_ordner(eintrag.get("pfad", "")), "vertraulich": True,
+                            "hinweis": "Vertraulich: Name und Inhalt nur auf diesem Mac. Ordner selbst öffnen."})
+        else:
+            treffer.append({
                 "pfad": eintrag.get("pfad"),
                 "art": eintrag.get("art"),
                 "gegenueber": eintrag.get("gegenueber"),
@@ -435,8 +470,7 @@ def suchen(abfrage: str = "", max: int = 10) -> list[dict]:
                 "datum": eintrag.get("datum"),
                 "fristen": eintrag.get("fristen", []),
                 "auszug": str(eintrag.get("text", ""))[:300],
-            }
-        )
+            })
         if len(treffer) >= max:
             break
     return treffer
