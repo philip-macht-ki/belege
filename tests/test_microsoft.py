@@ -123,7 +123,7 @@ def test_drosselung_wird_abgewartet_und_401_erklaert(box, monkeypatch):
 def test_ohne_client_id_klarer_rueckfall(monkeypatch, repo):
     monkeypatch.setattr(microsoft, "CLIENT_ID", "")
     monkeypatch.delenv("BELEGE_MICROSOFT_CLIENT_ID", raising=False)
-    with pytest.raises(RuntimeError, match="Gmail-Konto"):
+    with pytest.raises(RuntimeError, match="Eigene App"):
         microsoft.token({"name": "firma", "adresse": "a@b.example"})
     assert microsoft.anmelden({"name": "firma"}) == 2
 
@@ -137,7 +137,13 @@ def test_client_id_reihenfolge(monkeypatch):
     assert microsoft.client_id({}) == "eingebaut"
 
 
+def test_mandant_eigene_app_oder_gemeinsam():
+    assert microsoft.mandant({"tenant_id": "abc-123"}) == "abc-123"
+    assert microsoft.mandant({}) == "common"
+
+
 def test_fehlertexte_fuer_admin_und_richtlinie():
+    assert "tenant_id" in microsoft._fehlertext({"error_description": "AADSTS50194: not multi-tenant"})
     assert "Admin" in microsoft._fehlertext({"error_description": "AADSTS90094: admin approval required"})
     assert "Firmenrichtlinie" in microsoft._fehlertext({"error_description": "AADSTS530036: blocked"})
 

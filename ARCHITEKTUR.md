@@ -214,10 +214,12 @@ class Postfach:
   `<konto>_schreiben.json` (Scope `gmail.compose`). Getrennt,
   damit ein Rechtewechsel den laufenden Lesezugang nicht ungültig macht.
 - Weg Microsoft (`belege/microsoft.py`): Microsoft Graph, delegiert, Rechte
-  `Mail.ReadWrite`, `Mail.Send`, `User.Read`. Eine Multi-Tenant-App „belege“
-  (öffentlicher Client, kein Geheimnis, Redirect `http://localhost`); Kennung
+  `Mail.ReadWrite`, `Mail.Send`, `User.Read`. Gemeinsame Multi-Tenant-App „belege“ oder eigene
+  App des Kunden (öffentlicher Client, kein Geheimnis, Redirect `http://localhost`); Kennung
   aus `[[konto]].client_id`, sonst `BELEGE_MICROSOFT_CLIENT_ID`, sonst
-  `microsoft.CLIENT_ID`. Leer → Hinweis auf die Gmail-Umleitung. Anmeldung nur
+  `microsoft.CLIENT_ID` (gemeinsame App). Eigene App des Kunden: zusätzlich
+  `[[konto]].tenant_id`, Anmeldung dann gegen diesen Mandanten statt `common`.
+  Keine Kennung → Hinweis auf eigene App oder Gmail-Umleitung. Anmeldung nur
   im Browser (MSAL interaktiv, PKCE); bewusst kein Device-Code (Phishing-Weg,
   in der App-Registrierung „Öffentliche Clientflows“ aus). Zugang (MSAL-Cache mit Refresh-Token) in
   `arbeit/geheim/<konto>_microsoft.json`, chmod 600. Suche:

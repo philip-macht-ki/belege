@@ -8,7 +8,7 @@ aktion: keine
 
 ### Was ist neu für dich
 
-- Outlook- und Microsoft-365-Postfächer lassen sich jetzt direkt verbinden: einmal im Browser anmelden, fertig. Kein App-Passwort, keine Umleitung an Gmail. In Firmen stimmt einmal der Admin zu.
+- Outlook- und Microsoft-365-Postfächer lassen sich jetzt direkt verbinden: mit einer eigenen App deiner Firma bei Microsoft (etwa 15 Minuten, Claude führt dich durch und klickt auf Wunsch im Browser mit), danach einmal im Browser anmelden. Kein App-Passwort, keine Umleitung an Gmail.
 - Die Umleitung an ein Gmail-Konto bleibt als Rückfall.
 
 ### Musst du etwas tun?

@@ -114,30 +114,81 @@ Anhänge gar nicht geladen werden sollen, kommen stattdessen in `ausschluss`.
 
 ### Microsoft-Postfach
 
-**Direkt verbinden (Standard).** Claude trägt das Postfach mit
-`weg = "microsoft"` in `konfig/belege.toml` ein und startet dann
-`uv run belege anmelden --microsoft <name>`. Im Browser öffnet sich die
-Microsoft-Anmeldung:
+Ein Microsoft-Postfach wird direkt verbunden: einmal im Browser anmelden, danach
+liest belege selbst. Dafür braucht es eine App-Kennung bei Microsoft. Es gibt
+zwei Wege; Claude prüft zuerst, ob diese Fassung schon Philips gemeinsame App
+kennt:
+
+```
+uv run python -c "from belege.microsoft import CLIENT_ID; print('gemeinsam' if CLIENT_ID else 'eigene')"
+```
+
+Steht dort `gemeinsam`, fragt Claude in einem Satz: „Willst du den einfachen
+Weg mit Philips App (nur anmelden und zustimmen), oder deine eigene App (mehr
+Kontrolle und Privatsphäre, nur deine Firma kann sie nutzen, etwa 15 Minuten
+mehr)?“ Steht dort `eigene`, gibt es nur die eigene App oder den Rückfall
+unten.
+
+**Hilfe im Browser.** Beide Wege laufen im Browser. Bevor es losgeht, bietet
+Claude einmal an: „Soll ich im Browser mitklicken? Dafür installierst du die
+Erweiterung Claude in Chrome (im Chrome Web Store nach ‚Claude‘ suchen, ab
+Claude Pro). Sonst sage ich dir jeden Klick einzeln an.“ Lehnt die Person ab,
+fragt Claude bei einem Hänger noch einmal. Passwörter, Codes und die Zustimmung
+klickt immer die Person selbst.
+
+**Eigene App (etwa 15 Minuten, einmalig).** Das macht ein Admin der Firma, bei
+kleinen Firmen meist die Geschäftsführung:
+
+1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.
+2. Links „Identität“ (oder „Entra ID“), „Anwendungen“, „App-Registrierungen“,
+   oben „Neue Registrierung“.
+3. Name `belege`. Unterstützte Kontotypen: „Nur Konten in diesem
+   Organisationsverzeichnis“. Umleitungs-URI: Plattform „Öffentlicher
+   Client/nativ (mobil und Desktop)“, Adresse `http://localhost`.
+   „Registrieren“.
+4. Auf der Übersichtsseite stehen „Anwendungs-ID (Client)“ und
+   „Verzeichnis-ID (Mandant)“. Beide sind keine Geheimnisse; die Person
+   kopiert sie in den Chat.
+5. Links „API-Berechtigungen“, „Berechtigung hinzufügen“, „Microsoft Graph“,
+   „Delegierte Berechtigungen“: `Mail.ReadWrite`, `Mail.Send` und `User.Read`
+   anhaken, „Berechtigungen hinzufügen“. Dann „Administratorzustimmung für
+   <Firma> erteilen“ und bestätigen. Alle drei Zeilen zeigen danach einen
+   grünen Haken.
+6. Unter „Authentifizierung“ bleibt „Öffentliche Clientflows zulassen“ auf
+   „Nein“. Ein Geheimnis (Client Secret) wird nicht gebraucht.
+
+Claude trägt beim Postfach in `konfig/belege.toml` ein:
+
+```toml
+[[konto]]
+name = "geschaeft"
+adresse = "info@firma.de"
+weg = "microsoft"
+client_id = "<Anwendungs-ID>"
+tenant_id = "<Verzeichnis-ID>"
+```
+
+**Anmelden (beide Wege).** `uv run belege anmelden --microsoft <name>` öffnet
+die Microsoft-Anmeldung im Browser:
 
 1. Mit der Postfachadresse anmelden, wie sonst bei Outlook.
-2. Microsoft fragt, ob „belege“ Mails lesen, Entwürfe anlegen und senden darf.
-   Wer Admin der Firma ist (bei kleinen Firmen meist die Geschäftsführung),
-   setzt dort den Haken **„Im Namen Ihrer Organisation zustimmen“** und
-   bestätigt. Das ist einmalig.
+2. Bei Philips App fragt Microsoft, ob „belege“ Mails lesen, Entwürfe anlegen
+   und senden darf. Wer Admin ist, setzt den Haken **„Im Namen Ihrer
+   Organisation zustimmen“** und bestätigt. Bei der eigenen App ist das schon
+   in Schritt 5 erledigt.
 3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
-   Person kein Admin. Dann meldet sich der Admin einmal selbst mit
-   `uv run belege anmelden --microsoft <name>` an und stimmt zu; danach klappt
-   es für alle Postfächer der Firma.
+   Person kein Admin. Dann meldet sich der Admin einmal selbst an und stimmt
+   zu; danach klappt es für alle Postfächer der Firma.
 
 `uv run belege pruefen` zeigt danach „Microsoft-Zugang erneuert“. Der Zugang
 erneuert sich bei jedem Lauf selbst. Nach einem Passwortwechsel oder wenn ein
 Admin die Zugänge zurücksetzt, meldet `belege pruefen` und der nächste Lauf
-einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die Anmeldung läuft immer im Browser dieses Macs; eine Anmeldung
-per Code auf einer fremden Seite gibt es bewusst nicht, das ist ein bekannter
-Phishing-Weg.
+einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die
+Anmeldung läuft immer im Browser dieses Macs; eine Anmeldung per Code auf einer
+fremden Seite gibt es bewusst nicht, das ist ein bekannter Phishing-Weg.
 
-Meldet belege „noch keine App-Kennung hinterlegt“ oder klappt die Zustimmung in
-der Firma nicht, nimm den Rückfall unten.
+Klappt keiner der beiden Wege (etwa weil niemand Admin-Rechte hat), nimm den
+Rückfall:
 
 **Rückfall: Umleitung an ein Gmail-Konto.** Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
 Gmail-Konto umgeleitet, und belege liest dieses Konto. Claude geht die Schritte

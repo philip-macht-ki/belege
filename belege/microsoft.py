@@ -23,19 +23,21 @@ import requests
 from . import kern
 from .postfach import Postfach, _anhaenge, _anhaenge_speichern, _inhalt, _kopf, _nachricht
 
-# Öffentliche Kennung der App „belege“ in Microsoft Entra. Kein Geheimnis:
-# Sie steht in jedem Anmeldelink. Leer, bis die App registriert ist; dann
-# fällt die Einrichtung auf die Umleitung an Gmail zurück.
+# Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra. Kein
+# Geheimnis: Sie steht in jedem Anmeldelink. Leer, bis sie registriert ist.
+# Bis dahin trägt jeder Kunde seine eigene App als client_id und tenant_id
+# beim Postfach ein (einrichten.md, „Eigene App“), sonst Umleitung an Gmail.
 CLIENT_ID = ""
-AUTHORITY = "https://login.microsoftonline.com/common"
+ANMELDUNG = "https://login.microsoftonline.com/"
 GRAPH = "https://graph.microsoft.com/v1.0"
 # Lesen samt Anhängen und Entwürfe brauchen Mail.ReadWrite, der Tagesbericht Mail.Send.
 RECHTE = ["Mail.ReadWrite", "Mail.Send", "User.Read"]
 
 OHNE_CLIENT = (
-    "Für Microsoft-Postfächer ist in dieser belege-Fassung noch keine App-Kennung "
-    "hinterlegt. Bis dahin: Rechnungen per Outlook-Regel an ein Gmail-Konto umleiten, "
-    "siehe einrichten.md, Abschnitt Microsoft-Postfach."
+    "Für dieses Microsoft-Postfach ist keine App-Kennung eingetragen. Leg deine eigene "
+    "App an (einrichten.md, Abschnitt Microsoft-Postfach, „Eigene App“) und trag "
+    "client_id und tenant_id beim Postfach ein, oder leite Rechnungen an ein "
+    "Gmail-Konto um."
 )
 
 
@@ -46,6 +48,11 @@ def client_id(konto: dict | None = None) -> str:
         or os.environ.get("BELEGE_MICROSOFT_CLIENT_ID", "").strip()
         or CLIENT_ID
     )
+
+
+def mandant(konto: dict | None = None) -> str:
+    """Eigene App: nur im eigenen Verzeichnis (tenant_id). Gemeinsame App: common."""
+    return str((konto or {}).get("tenant_id", "")).strip() or "common"
 
 
 def _zugang_datei(name: str) -> Path:
@@ -63,7 +70,10 @@ def _app(konto: dict):
     datei = _zugang_datei(konto["name"])
     if datei.exists():
         cache.deserialize(datei.read_text(encoding="utf-8"))
-    return msal.PublicClientApplication(kennung, authority=AUTHORITY, token_cache=cache), cache
+    return (
+        msal.PublicClientApplication(kennung, authority=ANMELDUNG + mandant(konto), token_cache=cache),
+        cache,
+    )
 
 
 def _cache_sichern(name: str, cache) -> None:
@@ -137,6 +147,10 @@ def _fehlertext(ergebnis: dict) -> str:
             "einmal selbst an und setzt den Haken „Im Namen Ihrer Organisation zustimmen“, "
             "danach klappt es für alle."
         )
+    if "AADSTS50194" in text:
+        return "Die eigene App gilt nur für deine Firma. Trag beim Postfach tenant_id (Verzeichnis-ID) ein."
+    if "AADSTS700016" in text:
+        return "Microsoft kennt diese App-Kennung nicht. Prüf client_id (Anwendungs-ID) beim Postfach."
     if "AADSTS530036" in text or "AADSTS53003" in text or "AADSTS50105" in text:
         return (
             "Eine Firmenrichtlinie blockiert diese Anmeldung. Das kann nur euer Admin freigeben."
