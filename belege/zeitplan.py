@@ -94,6 +94,9 @@ def _an() -> int:
         ziel.write_text(plist_text(name), encoding="utf-8")
         subprocess.run(["launchctl", "bootout", f"gui/{uid}/{_label(name)}"], capture_output=True)
         subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(ziel)], check=True)
+    from .update import einrichtung_merken
+
+    einrichtung_merken()  # Start der vier Wochen mit automatischen Updates, nur nach echter Einrichtung
     print("ok: Zeitplan eingerichtet. Prüfen mit: uv run belege zeitplan zeigen")
     return 0
 
