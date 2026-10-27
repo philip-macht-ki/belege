@@ -338,7 +338,7 @@ def _darf_in_cloud(datei: Path, teiltext: str, mail: dict | None) -> bool:
         return False
     if konfig("belege").get("urteil", {}).get("backend") == "lokal":
         return False
-    urteil = pruefen(teiltext, datei.name, mail, modell=False)
+    urteil = pruefen(teiltext, datei.name, mail)
     if urteil.vertraulich:
         log(f"{datei.name}: vertraulich ({urteil.grund}), keine Claude-Texterkennung.")
         return False

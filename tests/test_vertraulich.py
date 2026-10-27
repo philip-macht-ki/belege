@@ -231,3 +231,42 @@ def test_vertrauliche_e_rechnung_bekommt_den_merker(repo, monkeypatch):
     verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 1)), True)
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {})
     assert any(x.get("vertraulich") for x in index.values())
+
+
+@pytest.mark.parametrize("antwort", ['{"vertraulich": true}', None])
+def test_eingerichtetes_modell_zaehlt_auch_bei_ocr_und_mailsuche(repo, monkeypatch, antwort):
+    """Ist ein lokales Modell da, prüft es mit; scheitert es, gilt der Fund als vertraulich."""
+    from belege import mcp_server, text
+
+    monkeypatch.setattr(vertraulich, "lokales_modell", lambda: "qwen3:8b")
+
+    def post(*a, **k):
+        if antwort is None:
+            raise TimeoutError("Ollama hängt")
+        return SimpleNamespace(json=lambda: {"response": antwort})
+
+    monkeypatch.setattr("requests.post", post)
+    unauffaellig = "Schreiben vom 12.10. zu Ihrem Termin, Unterlagen anbei"
+    # OCR-Notstufe
+    monkeypatch.setenv("URTEIL_BACKEND", "claude")
+    datei = repo / "brief.pdf"
+    datei.write_bytes(b"%PDF")
+    monkeypatch.setattr(text, "_pdftotext", lambda d: unauffaellig)
+    for stufe in ("_pypdf", "_vision", "_tesseract"):
+        monkeypatch.setattr(text, stufe, lambda d: "")
+    monkeypatch.setattr(text, "_claude", lambda d: pytest.fail("Cloud-OCR trotz Modellurteil"))
+    text.auslesen(datei)
+    # MCP-Mailsuche
+
+    class Postfach:
+        def suchen(self, abfrage, max):
+            return [{"id": "m", "von": "a@b.de", "betreff": "Ihr Termin", "auszug": unauffaellig}]
+
+    monkeypatch.setattr("belege.postfach.oeffnen", lambda konto: Postfach())
+    assert mcp_server.suchen("")[0].get("vertraulich") is True
+
+
+def test_ohne_modell_bleibt_es_bei_der_wortregel(repo, monkeypatch):
+    monkeypatch.setattr(vertraulich, "lokales_modell", lambda: None)
+    monkeypatch.setattr("requests.post", lambda *a, **k: pytest.fail("kein Modell, kein Aufruf"))
+    assert not vertraulich.pruefen("Ihre Rechnung Hetzner 4,51 EUR").vertraulich

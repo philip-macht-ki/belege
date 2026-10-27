@@ -37,7 +37,7 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
         # Anhangsnamen; der Auszug ist bei Gmail leer. Schon verarbeitete Mails tragen den Merker.
         anhaenge = " ".join(str(a.get("name", a) if isinstance(a, dict) else a) for a in kopf.get("anhaenge") or [])
         pruef = f'{kopf.get("auszug", "")} {kopf.get("von", "")} {anhaenge}'
-        if str(kopf.get("id")) in schon_vertraulich or pruefen(pruef, "", kopf, modell=False).vertraulich:
+        if str(kopf.get("id")) in schon_vertraulich or pruefen(pruef, "", kopf).vertraulich:
             kopf = {k: kopf.get(k) for k in ("id", "von", "datum")} | {
                 "vertraulich": True, "hinweis": "Betreff und Inhalt nur auf diesem Mac."}
         treffer.append(kopf)

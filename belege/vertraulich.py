@@ -144,10 +144,10 @@ def _modellurteil(text: str) -> bool:
         host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
         body = {"model": modell, "prompt": FRAGE + text[:4000], "stream": False, "format": "json",
                 "think": False, "options": {"temperature": 0}}
-        antwort = requests.post(f"{host}/api/generate", json=body, timeout=90).json()["response"]
+        antwort = requests.post(f"{host}/api/generate", json=body, timeout=30).json()["response"]
         return json.loads(antwort).get("vertraulich") is True
-    except Exception:  # noqa: BLE001 - scheitert das Modell, gilt die Wortregel allein
-        return False
+    except Exception:  # noqa: BLE001 - eingerichtet, aber gescheitert: im Zweifel vertraulich
+        return True
 
 
 def pruefen(text: str = "", name: str = "", mail: dict | None = None, modell: bool = True) -> Urteil:
@@ -162,7 +162,7 @@ def pruefen(text: str = "", name: str = "", mail: dict | None = None, modell: bo
     if urteil.vertraulich:
         return urteil
     if modell and _modellurteil(text):
-        return Urteil(True, f"lokales Modell {lokales_modell()}")
+        return Urteil(True, f"lokales Modell {lokales_modell()} (oder nicht erreichbar)")
     return Urteil(False)
 
 
