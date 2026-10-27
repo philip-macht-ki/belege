@@ -23,6 +23,14 @@ landen unter `~/Belege-Uebung/Ablage`. Nichts Echtes wird berührt.
 
 Für die Tests genügt im Projektordner: `uv run pytest -q`.
 
+## Updates
+
+Sonntags um 6 Uhr schaut Belege nach Verbesserungen. Sichere Updates kommen von
+allein; deine Einstellungen, Zeitpläne und Schlüssel bleiben erhalten. Ein Update,
+bei dem du selbst etwas entscheiden musst, wird nicht automatisch eingespielt.
+Dann sag einfach deinem Claude: „Update“. Du kannst den automatischen Check in
+`konfig/belege.toml` mit `[update] automatisch = false` ausschalten.
+
 ## Was es tut
 
 | Befehl | Was passiert |
@@ -36,6 +44,7 @@ Für die Tests genügt im Projektordner: `uv run pytest -q`.
 | `belege suchen …` | im Postfach suchen |
 | `belege mcp` | Postfach-Server, damit Claude in deinen Mails und abgelegten Belegen suchen und Entwürfe schreiben kann |
 | `belege pruefen` | Selbsttest mit Ampel |
+| `belege aktualisieren` | zeigt neue Verbesserungen; mit `--echt` spielt es sie ein |
 
 Ohne `--echt` zeigt jeder Befehl nur, was er täte.
 

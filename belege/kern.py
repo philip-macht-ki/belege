@@ -10,6 +10,7 @@ import os
 import socket
 import subprocess
 import tomllib
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +51,13 @@ class Ergebnis:
 def konfig(name: str) -> dict:
     """Liest konfig/<name> (mit oder ohne .toml)."""
     datei = ROOT / "konfig" / (name if name.endswith(".toml") else f"{name}.toml")
+    # Konfiguration gehört der Person und ist absichtlich nicht versioniert.
+    # Beim ersten Start entsteht sie aus der mitgelieferten Vorlage, nie umgekehrt.
+    if not datei.exists():
+        vorlage = ROOT / "vorlagen" / "konfig" / datei.name
+        if vorlage.exists():
+            datei.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(vorlage, datei)
     with open(datei, "rb") as f:
         return tomllib.load(f)
 

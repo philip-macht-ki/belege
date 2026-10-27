@@ -70,6 +70,17 @@ def befehl(args) -> int:
         print(f"{f}: {text}" + (f" -> {hinweis}" if hinweis and f != "GRUEN" else ""))
 
     try:
+        from . import __version__
+        print(f"INFO: Belege-Version {__version__}")
+        # Das ist bewusst nur ein Hinweis: Ohne Netz bleibt der Selbsttest grün.
+        remote = subprocess.run(["git", "-C", str(pfad()), "rev-parse", "origin/main"], capture_output=True, timeout=3)
+        local = subprocess.run(["git", "-C", str(pfad()), "rev-parse", "HEAD"], capture_output=True, timeout=3)
+        if remote.returncode == 0 and local.returncode == 0 and remote.stdout != local.stdout:
+            print("INFO: Ein Update wartet – sag deinem Claude: ‚Update‘")
+    except Exception:
+        pass
+
+    try:
         z(
             "GRUEN" if sys.version_info >= (3, 11) else "ROT",
             f"Python {sys.version.split()[0]}",
