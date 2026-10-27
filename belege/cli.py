@@ -38,6 +38,7 @@ BEFEHLE = {
     "dokumente": ("dokumente", "befehl", "Verträge, Versicherungen und Briefe einordnen und ablegen"),
     "fristen": ("dokumente", "befehl_fristen", "Fristen aus Verträgen zeigen und für den Kalender ausgeben"),
     "notfall": ("notfall", "befehl", "Notfallordner erstellen"),
+    "aktualisieren": ("update", "befehl", "Verbesserungen sicher einspielen"),
 }
 
 
@@ -70,6 +71,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
+    argumente.add_argument("--automatisch", action="store_true", help="Nur Updates ohne eigenen Schritt einspielen")
     return argumente
 
 

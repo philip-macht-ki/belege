@@ -83,6 +83,10 @@ tag_uhrzeit = "21:00"
 # Nach jedem fehlerfreien Takt meldet sich belege dort. Leer = aus.
 lebenszeichen = ""
 
+[update]
+# Sonntags nach Verbesserungen schauen. Nur Updates ohne eigenen Schritt werden eingespielt.
+automatisch = true
+
 [urteil]
 # claude = Claude-Abo (Standard) | codex = ChatGPT-Abo über Codex |
 # lokal = Ollama nur auf diesem Mac | anthropic = Anthropic-API | ohne = nur Regeln

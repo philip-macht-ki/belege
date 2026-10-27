@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "fehler")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler")
 
 
 def _gesehen() -> dict:
@@ -84,6 +84,9 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
     if gruppen["monat"]:
         zeilen = ["- " + e.get("text", "") for e in gruppen["monat"]]
         absaetze.append("Monatsabschluss\n" + "\n".join(zeilen))
+
+    if gruppen["update"]:
+        absaetze.append("Belege-Update\n" + "\n".join("- " + e.get("text", "") for e in gruppen["update"]))
 
     if gruppen["fehler"]:
         zeilen = ["- Etwas ist schiefgelaufen: " + e.get("text", "") for e in gruppen["fehler"]]

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .kern import echt, fremder_rechner, konfig, pfad, rechner
 
-LAEUFE = ("takt", "tag", "monat", "posten")
+LAEUFE = ("takt", "tag", "monat", "posten", "update")
 # Optional, nur wenn konfig/moneymoney.toml `an = true` sagt.
 ZUSATZ = ("moneymoney",)
 
@@ -23,7 +23,20 @@ def laeufe() -> tuple[str, ...]:
     """Die Läufe, die `zeitplan an` einrichtet."""
     from .moneymoney import einstellungen
 
-    return LAEUFE + (("moneymoney",) if einstellungen().get("an") else ())
+    k = konfig("belege")
+    basis = tuple(n for n in LAEUFE if n != "update" or k.get("update", {}).get("automatisch", True))
+    return basis + (("moneymoney",) if einstellungen().get("an") else ())
+
+
+def neu_laden() -> None:
+    """Schreibt die vorhandenen Zeitpläne nach einem Update neu, ohne Uhrzeiten zu ändern."""
+    uid = os.getuid()
+    for name in laeufe():
+        ziel = _ziel(name)
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_text(plist_text(name), encoding="utf-8")
+        subprocess.run(["launchctl", "bootout", f"gui/{uid}/{_label(name)}"], capture_output=True)
+        subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(ziel)], check=True)
 
 
 def _label(name: str) -> str:

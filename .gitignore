@@ -1,4 +1,7 @@
 arbeit/
+konfig/*.toml
+konfig/*.md
+.vorlage/
 .env
 __pycache__/
 .venv/

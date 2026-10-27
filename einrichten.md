@@ -133,6 +133,15 @@ meldet sich belege dort. Bleibt das aus, bekommt die Person eine Mail.
 
 Fertig. Ab jetzt landen deine Belege von allein in `~/Belege`.
 
+## Updates
+
+Sonntags um 6 Uhr prüft Belege automatisch auf Verbesserungen. Alles, wofür du
+nichts tun musst, kommt von allein; deine Einstellungen, Zeitpläne und Schlüssel
+bleiben erhalten. Braucht eine neue Version einen Schritt von dir, macht Belege
+nichts und sagt dir verständlich Bescheid. Wenn du früher aktualisieren möchtest,
+sag deinem Claude einfach: „Update“. Ausschalten kannst du das später in
+`konfig/belege.toml` mit `[update] automatisch = false`.
+
 ## Teil 2: Monat und Jahr
 
 Nur wenn die Person Teil 2 hat. Jeder Schritt erst trocken, dann nach einem
