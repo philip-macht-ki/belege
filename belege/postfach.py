@@ -451,7 +451,8 @@ def _server(domain: str, konto: dict):
     """Leitet bekannte Mailanbieter zu ihren IMAP- und SMTP-Servern auf."""
     if domain == "outlook.com" or domain.startswith(("hotmail.", "live.")):
         raise RuntimeError(
-            "Microsoft-Postfächer gehen seit 2026 nur mit OAuth, nicht mit App-Passwort."
+            "Microsoft-Postfächer gehen seit 2026 nur mit OAuth, nicht mit App-Passwort. "
+            "Leite Rechnungen an ein Gmail-Konto um, siehe einrichten.md, Abschnitt Microsoft-Postfach."
         )
     bekannte = {
         "gmail.com": ("imap.gmail.com:993", "smtp.gmail.com:465"),
@@ -551,7 +552,8 @@ def server_erkennen(domain: str) -> tuple[str, str]:
         if mx.endswith(("protection.outlook.com", "outlook.com")):
             raise RuntimeError(
                 f"{domain} liegt bei Microsoft 365. Microsoft-Postfächer gehen seit 2026 nur "
-                "mit OAuth, nicht mit App-Passwort. Leite Rechnungen an ein Google-Konto weiter."
+                "mit OAuth, nicht mit App-Passwort. Leite Rechnungen an ein Gmail-Konto um, "
+                "siehe einrichten.md, Abschnitt Microsoft-Postfach."
             )
         for kennung, imap, smtp in HOSTER_NACH_MX:
             if mx.endswith(kennung) or kennung.endswith(".") and kennung in mx:

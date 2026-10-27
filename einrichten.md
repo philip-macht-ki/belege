@@ -88,9 +88,11 @@ Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
 dein Betrieb, falls das noch nicht eingetragen ist?
 
 Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Dieses
-Postfach kann hier nicht direkt verbunden werden. Richte dort eine Weiterleitung
-an ein Google-Konto ein; dieses Google-Konto verwenden wir dann für Rechnungen.
-Leite nur Rechnungen weiter, nicht das ganze Postfach.
+Postfach kann hier nicht direkt verbunden werden, Microsoft nimmt seit 2026 kein
+App-Passwort mehr an. Eine eigene Domain erkennt Claude daran, dass
+`dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann führt
+Claude durch den Weg über ein Belegkonto bei Gmail, siehe „Microsoft-Postfach“
+unten, bevor es weitergeht.
 
 Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
 Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
@@ -110,6 +112,37 @@ Gibt es Absender mit vertraulichen Unterlagen, etwa Mandanten, Patienten oder
 ein Labor? Die trägt er unter `[vertraulich]` als `absender` in
 `konfig/regeln.toml` ein; solche Belege liest dann nur dein Mac. Absender, deren
 Anhänge gar nicht geladen werden sollen, kommen stattdessen in `ausschluss`.
+
+### Microsoft-Postfach
+
+Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
+Gmail-Konto umgeleitet, und belege liest dieses Konto. Claude geht die Schritte
+einzeln durch und wartet nach jedem auf ein Weiter:
+
+1. Unter accounts.google.com ein neues Gmail-Konto anlegen, etwa
+   `belege.<betrieb>@gmail.com`. Nur für Belege, sonst für nichts.
+2. In diesem Konto die Bestätigung in zwei Schritten einschalten und unter
+   myaccount.google.com/apppasswords ein App-Passwort erzeugen.
+3. In Outlook im Web (outlook.office.com): Einstellungen, E-Mail, Regeln,
+   „Neue Regel hinzufügen“. Bedingung: „Betreff oder Text enthält“ mit den
+   Wörtern Rechnung, Invoice, Beleg, Quittung, Receipt, Gutschrift. Aktion:
+   **„Umleiten an“** das neue Gmail-Konto, nicht „Weiterleiten an“. Beim
+   Umleiten bleibt der echte Absender stehen, belege braucht ihn für den
+   Dateinamen.
+4. Eine Testmail mit dem Wort Rechnung im Betreff an die eigene Adresse
+   schicken und nachsehen, ob sie im Gmail-Konto ankommt.
+
+Kommt nichts an, sperrt fast immer Microsoft selbst: Microsoft 365 blockiert
+automatische Weiterleitungen nach außen in der Grundeinstellung. Freischalten
+kann das nur ein Admin unter security.microsoft.com, „Richtlinien und Regeln“,
+„Bedrohungsrichtlinien“, „Antispam“, „Antispamrichtlinie für ausgehende
+Nachrichten“, Einstellung „Regeln für die automatische Weiterleitung“ auf
+„Ein – Weiterleitung ist aktiviert“. Wer die Firma allein führt, ist meist
+selbst Admin. Outlook.com, Hotmail und Live haben diese Sperre nicht.
+
+Danach geht es mit dem Gmail-Konto weiter wie bei jedem Gmail-Postfach. Rechnungen,
+die vor der Regel eingegangen sind, schickt man einmal von Hand weiter oder legt
+sie als PDF in den Eingang.
 
 ### App-Passwort
 
