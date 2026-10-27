@@ -157,3 +157,23 @@ def test_abofalle_wird_getrennt_abgelegt(repo, monkeypatch):
 def test_einzelwort_offerte_ist_keine_abofalle():
     from belege.abofalle import erkennen
     assert erkennen("Ihre Offerte für Software", name="angebot.pdf") == (False, "")
+
+
+def test_e_rechnung_mit_xml_geht_durch(tmp_path):
+    from pypdf import PdfWriter
+    from belege.abofalle import aktive_pdf_inhalte
+    w = PdfWriter(); w.add_blank_page(100, 100)
+    w.add_attachment("factur-x.xml", b"<rsm:CrossIndustryInvoice/>")
+    datei = tmp_path / "zugferd.pdf"
+    with datei.open("wb") as f: w.write(f)
+    assert not aktive_pdf_inhalte(datei)[0]
+
+
+def test_fremder_anhang_im_pdf_wird_angehalten(tmp_path):
+    from pypdf import PdfWriter
+    from belege.abofalle import aktive_pdf_inhalte
+    w = PdfWriter(); w.add_blank_page(100, 100)
+    w.add_attachment("tool.exe", b"MZ")
+    datei = tmp_path / "anhang.pdf"
+    with datei.open("wb") as f: w.write(f)
+    assert aktive_pdf_inhalte(datei)[0]

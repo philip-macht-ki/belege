@@ -4,12 +4,12 @@ Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1
 
 ## [1.5.2] – 27.10.2026
 
-aktion: keine
+aktion: sicherheit
 
 ### Was ist neu für dich
 
 - Verdächtige Branchenbuch- und Adressbuch-Angebote landen im Ordner `Vorsicht Abofalle`, nicht zwischen deinen Belegen. Im Tagesbericht steht: nicht unterschreiben, nicht zahlen.
-- PDFs mit aktiven Inhalten werden nicht an DATEV oder den Steuerberater übergeben.
+- PDFs mit aktiven Inhalten (Skripte, eingebettete Programme) werden nicht an DATEV oder den Steuerberater übergeben. E-Rechnungen mit eingebetteten Rechnungsdaten (ZUGFeRD, XRechnung) gehen wie gewohnt durch.
 
 ### Musst du etwas tun?
 

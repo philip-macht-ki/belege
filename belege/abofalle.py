@@ -10,6 +10,8 @@ FORMULAR = ("eintragungsofferte", "offerten nummer", "offerten-nummer", "eintrag
 RUECK = ("rücksendung", "ruecksendung", "servicefax", "per fax", "zurückfaxen",
          "zurueckfaxen", "return@", "antwort per fax")
 DOMAINS = ("businesseintrag.info",)
+_AKTION = re.compile(rb"/S\s*/(JavaScript|Launch)\b")
+_JS_CODE = re.compile(rb"/JS\s*[(<]")
 FAX = re.compile(r"(?:00|\+)4(?:1|3)\D*(?:\d[\s-]*){6,}")
 
 
@@ -25,11 +27,34 @@ def erkennen(text: str, *, name: str = "", absender: str = "") -> tuple[bool, st
 
 
 def aktive_pdf_inhalte(datei: Path) -> tuple[bool, str]:
-    if datei.suffix.lower() != ".pdf": return False, ""
-    try: roh = datei.read_bytes()
-    except OSError as exc: return True, f"PDF nicht lesbar: {exc}"
-    marker = (b"/JavaScript", b"/JS", b"/Launch", b"/EmbeddedFile", b"/RichMedia", b"/XFA")
-    gefunden = [m.decode() for m in marker if m in roh]
-    if b"/OpenAction" in roh and (b"/JavaScript" in roh or b"/JS" in roh):
-        gefunden.append("/OpenAction mit JS")
+    """Findet PDF-Aktionen, die nicht an DATEV geschickt werden dürfen.
+
+    E-Rechnungen (ZUGFeRD/Factur-X, XRechnung im PDF) tragen ihre Daten als
+    eingebettete XML-Datei; das ist erlaubt. Gesperrt werden JavaScript- und
+    Launch-Aktionen, RichMedia, XFA-Formulare und eingebettete Nicht-XML-Dateien.
+    """
+    if datei.suffix.lower() != ".pdf":
+        return False, ""
+    try:
+        roh = datei.read_bytes()
+    except OSError as exc:
+        return True, f"PDF nicht lesbar: {exc}"
+    gefunden = sorted({f"/{m.decode()}-Aktion" for m in _AKTION.findall(roh)})
+    if _JS_CODE.search(roh) and "/JavaScript-Aktion" not in gefunden:
+        gefunden.append("/JavaScript-Aktion")
+    gefunden += [m.decode("ascii") for m in (b"/RichMedia", b"/XFA") if m in roh]
+    try:
+        from pypdf import PdfReader
+        leser = PdfReader(str(datei), strict=False)
+        wurzel = leser.trailer["/Root"]
+        namen = wurzel.get("/Names", {})
+        if "/JavaScript" in namen and "/JavaScript-Aktion" not in gefunden:
+            gefunden.append("/JavaScript-Aktion")
+        fremd = [n for n in leser.attachments if not n.lower().endswith(".xml")]
+        if fremd:
+            gefunden.append("eingebettete Datei: " + ", ".join(fremd[:3]))
+    except Exception:
+        # Nicht auswertbar: nur sperren, wenn roh eine eingebettete Datei steht.
+        if b"/EmbeddedFile" in roh:
+            gefunden.append("/EmbeddedFile (nicht auswertbar)")
     return bool(gefunden), ", ".join(gefunden)
