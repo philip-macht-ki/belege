@@ -23,11 +23,12 @@ import requests
 from . import kern
 from .postfach import Postfach, _anhaenge, _anhaenge_speichern, _inhalt, _kopf, _nachricht
 
-# Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra. Kein
-# Geheimnis: Sie steht in jedem Anmeldelink. Leer, bis sie registriert ist.
-# Bis dahin trägt jeder Kunde seine eigene App als client_id und tenant_id
-# beim Postfach ein (einrichten.md, „Eigene App“), sonst Umleitung an Gmail.
-CLIENT_ID = ""
+# Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra
+# (Deern & Jung, Multi-Tenant, öffentlicher Client, Redirect http://localhost,
+# Graph delegiert Mail.ReadWrite, Mail.Send, User.Read, ohne Device-Code).
+# Kein Geheimnis: Sie steht in jedem Anmeldelink. Wer lieber seine eigene App
+# nutzt, trägt client_id und tenant_id beim Postfach ein (einrichten.md).
+CLIENT_ID = "a11ea9e7-fd6a-4a41-a5bc-4192d5e3ecb2"
 ANMELDUNG = "https://login.microsoftonline.com/"
 GRAPH = "https://graph.microsoft.com/v1.0"
 # Lesen samt Anhängen und Entwürfe brauchen Mail.ReadWrite, der Tagesbericht Mail.Send.

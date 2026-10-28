@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.7.0] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Microsoft-Postfächer gehen jetzt auch ohne eigene App: Mit Philips App meldest du dich einfach einmal im Browser an und stimmst zu. Das klappt auch für private Outlook.com- und Hotmail-Postfächer. Die eigene App deiner Firma bleibt als Weg für mehr Kontrolle und Privatsphäre.
+
+### Musst du etwas tun?
+
+Nein. Läuft dein Microsoft-Postfach heute über eine Umleitung an Gmail, sag deinem Claude: Stell mein Postfach auf den direkten Microsoft-Weg um.
+
 ## [1.6.0] – 27.10.2026
 
 aktion: keine

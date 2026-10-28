@@ -136,12 +136,14 @@ Claude Pro). Sonst sage ich dir jeden Klick einzeln an.“ Lehnt die Person ab,
 fragt Claude bei einem Hänger noch einmal. Passwörter, Codes und die Zustimmung
 klickt immer die Person selbst.
 
+**Philips App (der einfache Weg).** Claude trägt nur `weg = "microsoft"` beim
+Postfach ein, ohne `client_id` und `tenant_id`, und es geht weiter mit
+„Anmelden“ unten. Für private Outlook.com-, Hotmail- und Live-Postfächer ist das
+der einzige direkte Weg.
+
 **Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
-Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Ein privates
-Outlook.com-, Hotmail- oder Live-Postfach geht direkt nur mit Philips App; bis es
-sie gibt, nimmt Claude dort den Rückfall unten (bei privaten Postfächern sperrt
-Microsoft die Umleitung nicht). Die eigene App legt ein Admin der Firma an, bei
-kleinen Firmen meist die Geschäftsführung:
+Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Die eigene
+App legt ein Admin der Firma an, bei kleinen Firmen meist die Geschäftsführung:
 
 1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.
 2. Links „Identität“ (oder „Entra ID“), „Anwendungen“, „App-Registrierungen“,
