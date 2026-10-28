@@ -9,6 +9,21 @@ namen = ["Studio Beispiel", "Mara Beispiel"]
 taetigkeit = "Grafikdesign"
 ust_id = ""
 
+# Mehrere Firmen: Statt [betrieb] kannst du je Firma einen solchen Block
+# eintragen. [betrieb] bleibt für bestehende Einrichtungen gültig.
+# [[firma]]
+# name = "Beispiel Holding GmbH"
+# namen = ["Beispiel Holding GmbH", "Beispiel Holding"]
+# ust_id = "DE123456789"
+# bereich = "Holding"
+# uebergabe = "holding@steuerkanzlei.example"
+#
+# [[firma]]
+# name = "Beispiel Service GmbH"
+# namen = ["Beispiel Service GmbH", "Beispiel Service"]
+# ust_id = "DE987654321"
+# bereich = "Service"
+
 [rechner]
 # Nur dieser Rechner legt ab und sendet, also dein Dauerrechner. Den Namen zeigt
 # `hostname -s`. Leer heißt: jeder Rechner. Trag ihn ein, bevor du den Zeitplan

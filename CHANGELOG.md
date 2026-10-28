@@ -1,5 +1,19 @@
 # Änderungen für dich
 
+## [1.10.0] – 29.10.2026
+
+aktion: einrichten
+
+### Was ist neu für dich
+
+- Mehrere Firmen können eigene Bereiche in einer gemeinsamen Belegablage haben. Eine Rechnung wird nach ihrem Empfängerfeld zugeordnet, nicht nach dem Postfach, aus dem sie kam.
+- Ist der Empfänger nicht eindeutig, bleibt der Beleg in Unsortiert. Im Tagesbericht steht dann „Firma unklar“.
+- Monatsabgleich und Übergabe laufen je Firma getrennt; jede Firma kann eine eigene Steuerberateradresse haben.
+
+### Musst du etwas tun?
+
+Nur wenn du mehrere Firmen ablegst: Lass Claude in Teil 3 die Firmen, Schreibweisen und USt-IdNrn. eintragen und prüfe anschließend ein paar Belege je Firma im Trockenlauf.
+
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
 ## [1.9.1] – 28.10.2026

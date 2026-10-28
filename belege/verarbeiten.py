@@ -90,7 +90,7 @@ def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung
             einordnung = Einordnung(
                 True, eintrag["art"], eintrag["bereich"], datum, eintrag["lieferant"],
                 eintrag["beschreibung"], eintrag.get("betrag"), eintrag["waehrung"],
-                eintrag["sicherheit"], "Begleit-PDF zur E-Rechnung.", "xml",
+                eintrag["sicherheit"], "Begleit-PDF zur E-Rechnung.", "xml", eintrag.get("firma", ""),
             )
             return einordnung, xml_pfad.with_name(f"{xml_pfad.stem}_Begleit.pdf")
     return None
@@ -263,7 +263,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
-                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"))
+                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
+                          grund=daten.get("grund"))
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

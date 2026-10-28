@@ -7,7 +7,7 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
-from .kern import Ergebnis, ablage_ordner, konfig
+from .kern import Ergebnis, ablage_ordner, konfig, firma
 from .typen import Einordnung, Fund, Text
 
 
@@ -41,7 +41,11 @@ def ziel(e: Einordnung, ext: str) -> Path:
     cfg = konfig("belege").get("ablage", {})
     if e.bereich == "privat" and not cfg.get("privat", False):
         return ablage_ordner() / "Unsortiert" / dateiname(e, ext)
-    bereich = cfg.get(f"bereich_{e.bereich}", e.bereich.title())
+    if e.bereich == "betrieb" and e.firma and konfig("belege").get("firma"):
+        eintrag = firma(e.firma)
+        bereich = eintrag["bereich"] if eintrag else cfg.get("bereich_betrieb", "Betrieb")
+    else:
+        bereich = cfg.get(f"bereich_{e.bereich}", e.bereich.title())
     art = {"eingang": "Eingang", "ausgang": "Ausgang", "sonstige": "Sonstige"}[e.art]
     return ablage_ordner() / bereich / f"{e.datum:%Y}" / f"{e.datum:%m}" / art / dateiname(e, ext)
 
@@ -54,7 +58,7 @@ def _sha(datei: Path) -> str:
 def _unsortiert(fund: Fund, e: Einordnung) -> bool:
     """Entscheidet, ob ein Fund gemäß Vertrag nicht in den Fachordner darf."""
     privat_aus = e.bereich == "privat" and not konfig("belege").get("ablage", {}).get("privat", False)
-    return not e.ist_beleg or e.sicherheit == "niedrig" or e.datum is None or privat_aus
+    return not e.ist_beleg or e.sicherheit == "niedrig" or e.datum is None or e.firma == "unklar" or privat_aus
 
 
 def _freier_pfad(kandidat: Path, weitere_endungen: tuple[str, ...] = ()) -> Path:

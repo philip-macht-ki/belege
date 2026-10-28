@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tomllib
 import shutil
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -290,6 +291,43 @@ def freier_name(ziel: Path) -> Path:
 
 def ablage_ordner() -> Path:
     return erweitert(konfig("belege")["ablage"]["ordner"])
+
+
+def firmen() -> list[dict]:
+    """Firmen aus der Konfiguration, einschließlich des alten Einzelbetriebs.
+
+    Sobald [[firma]] verwendet wird, ergänzt [betrieb] die Liste nur noch, wenn
+    er nicht bereits durch Namen oder Schreibweise enthalten ist. Das hält alte
+    Konfigurationen und den Übergang zu mehreren Firmen kompatibel.
+    """
+    cfg = konfig("belege")
+    explizit = [dict(f) for f in cfg.get("firma", [])]
+    betrieb = dict(cfg.get("betrieb", {}))
+    if not explizit:
+        explizit = [betrieb]
+    elif betrieb.get("name"):
+        alle_namen = {str(n).casefold() for f in explizit for n in [f.get("name", ""), *f.get("namen", [])] if n}
+        if str(betrieb["name"]).casefold() not in alle_namen:
+            explizit.insert(0, betrieb)
+    ergebnis = []
+    for firma in explizit:
+        name = str(firma.get("name", "")).strip()
+        if not name:
+            continue
+        bereich = str(firma.get("bereich") or name).strip()
+        bereich = re.sub(r"[\\/:*?\"<>|]+", "-", bereich)
+        bereich = re.sub(r"\s+", "-", bereich).strip(".-") or "Firma"
+        ergebnis.append({**firma, "name": name, "bereich": bereich,
+                         "namen": list(firma.get("namen", []))})
+    return ergebnis
+
+
+def firma(name: str | None) -> dict | None:
+    """Gibt die Firma mit diesem kanonischen Namen zurück."""
+    for eintrag in firmen():
+        if name and str(eintrag["name"]).casefold() == str(name).casefold():
+            return eintrag
+    return None
 
 
 def echt(args) -> bool:

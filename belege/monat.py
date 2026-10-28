@@ -376,7 +376,7 @@ def _sonderart(buchung: dict) -> str | None:
     return None
 
 
-def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
+def abgleichen(buchungen_liste: list[dict], index: dict, firma: str | None = None) -> list[dict]:
     """Ordnet Belege nur bei einem eindeutigen Kandidaten mit Namensbezug zu."""
     benutzt: set[str] = set()
     ohne = kern.konfig("regeln").get("monat", {}).get("ohne_beleg", [])
@@ -403,6 +403,7 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             if sha not in benutzt
             and beleg.get("status") == "abgelegt"
             and beleg.get("bereich") == "betrieb"
+            and (firma is None or beleg.get("firma") == firma)
             and beleg.get("art") == art
             and _beleg_betrag(beleg) is not None
             and abs(abs(buchung.get("originalbetrag") if buchung.get("originalbetrag") is not None else buchung["betrag"]) - _beleg_betrag(beleg)) <= 0.01
@@ -733,7 +734,7 @@ def _als_pdf(bild: Path, ziel: Path) -> Path:
     return pdf
 
 
-def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
+def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None) -> list[Path]:
     """Kopiert alle abgelegten Betriebsbelege des Monats nach <ziel>/paket/.
 
     PDFs werden byte-gleich kopiert (ZUGFeRD bleibt erhalten), Fotos zu PDF
@@ -750,6 +751,8 @@ def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
         if str(beleg.get("datum", ""))[:7] != monat:
             continue
         if beleg.get("bereich") != "betrieb" or beleg.get("status") != "abgelegt":
+            continue
+        if firma is not None and beleg.get("firma") != firma:
             continue
         quelle = ablage / str(beleg.get("pfad", ""))
         if not quelle.exists():
@@ -769,7 +772,7 @@ def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
     return sorted(dateien)
 
 
-def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) -> None:
+def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, firma: dict | None = None) -> None:
     """Übergibt das Paket an den Steuerberater, einmal je Monat.
 
     Die offenen Posten stehen im Mailtext, nicht als Anhang, weil Beleg-Adressen
@@ -777,15 +780,17 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) 
     """
     echt = kern.echt(args)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
-    schon = gesehen.get("uebergabe", {}).get(monat)
+    schluessel = f"{firma['name']}:{monat}" if firma else monat
+    schon = gesehen.get("uebergabe", {}).get(schluessel)
     if schon and "nochmal" not in (getattr(args, "ziel", None) or []):
         print(f"nichts: {monat} wurde schon am {schon[:10]} übergeben. Nochmal: belege monat nochmal "
               f"--monat {monat} --uebergabe --echt")
         return
 
-    dateien = paket_packen(monat, ziel, index)
+    dateien = paket_packen(monat, ziel, index, firma["name"] if firma else None)
     cfg = kern.konfig("belege").get("uebergabe", {})
-    betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+    cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
+    betrieb = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     betreff = f"Belege {monat[5:]}/{monat[:4]}, {betrieb}"
     text = (
         f"Hallo,\n\nanbei {len(dateien)} Belege für {monat[5:]}/{monat[:4]}.\n\n"
@@ -812,13 +817,13 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) 
             return
         from .senden import senden
 
-        r = senden(cfg["adresse"], betreff, text, dateien, echt, fortschritt=f"uebergabe:{monat}")
+        r = senden(cfg["adresse"], betreff, text, dateien, echt, fortschritt=f"uebergabe:{schluessel}")
         print(f"{r.status}: {r.meldung}")
         if not echt or r.status != "ok":
             return
         ergebnis_text = f"{len(dateien)} Belege an {cfg['adresse']} gesendet"
 
-    gesehen.setdefault("uebergabe", {})[monat] = kern.jetzt().isoformat(timespec="seconds")
+    gesehen.setdefault("uebergabe", {})[schluessel] = kern.jetzt().isoformat(timespec="seconds")
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
     kern.ereignis("monat", f"Übergabe {monat}: {ergebnis_text}")
 
@@ -863,6 +868,19 @@ def befehl(args) -> int:
         print(f"nichts: {text}")
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
+    alle_firmen = kern.firmen()
+    if len(alle_firmen) > 1:
+        buchungen = buchungen_aus(auszuege, monat)
+        for einzelfirma in alle_firmen:
+            daten_firma = abgleichen(buchungen, index, einzelfirma["name"])
+            ziel_firma = kern.pfad("arbeit", "monat", monat, einzelfirma["bereich"])
+            _schreibe_ausgaben(ziel_firma, monat, daten_firma, _mahnungen())
+            zugeordnet = sum(x["status"].startswith("zugeordnet") for x in daten_firma)
+            fehlt = [x for x in daten_firma if x["status"] == "fehlt"]
+            print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch")
+            if getattr(args, "uebergabe", False):
+                _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
+        return 0
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
     from .posten import fortschreiben

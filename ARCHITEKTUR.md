@@ -78,7 +78,8 @@ arbeit/                   Laufzeit, nie im Git
 <ablage>/Vorsicht Abofalle/<JJJJ-MM-TT>_<ursprünglicher Name>
 ```
 
-- `<Bereich>` = `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
+- `<Bereich>` = bei mehreren `[[firma]]` deren dateisicherer `bereich`
+  (Standard: `name`), sonst `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
   `[ablage].bereich_privat` (Standard „Privat“; nur wenn `privat = true`,
   sonst geht Privates nach Unsortiert).
 - Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
@@ -128,6 +129,7 @@ class Einordnung:
     sicherheit: str               # "hoch" | "mittel" | "niedrig"
     grund: str                    # ein Satz, warum
     quelle: str                   # "regel" | "urteil" | "xml" | "rueckfall"
+    firma: str                    # kanonischer [[firma]].name oder "unklar"
 ```
 
 ## Belegverzeichnis arbeit/index.json
@@ -135,7 +137,7 @@ class Einordnung:
 ```json
 {"<sha256>": {"pfad": "<relativ zur Ablage>", "datum": "2026-10-04", "lieferant": "Pixelwerk",
   "beschreibung": "Rechnung-Software-Abo", "betrag": 59.5, "waehrung": "EUR",
-  "art": "eingang", "bereich": "betrieb", "sicherheit": "hoch", "status": "abgelegt | unsortiert",
+  "art": "eingang", "bereich": "betrieb", "firma": "Studio Beispiel", "sicherheit": "hoch", "status": "abgelegt | unsortiert",
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>"}}
 ```
