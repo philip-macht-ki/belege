@@ -16,6 +16,9 @@ ust_id = ""
 # namen = ["Beispiel Holding GmbH", "Beispiel Holding"]
 # ust_id = "DE123456789"
 # bereich = "Holding"
+# Konten aus dem Auszug: IBAN oder Kontokennung (bei MoneyMoney aus dessen Export).
+# Buchungen ohne zugeordnetes Konto gehören zur ersten Firma.
+# konten = ["DE12 3456 7890 1234 5678 90"]
 # uebergabe = "holding@steuerkanzlei.example"
 #
 # [[firma]]
@@ -23,6 +26,7 @@ ust_id = ""
 # namen = ["Beispiel Service GmbH", "Beispiel Service"]
 # ust_id = "DE987654321"
 # bereich = "Service"
+# konten = ["DE98 7654 3210 9876 5432 10"]
 
 [rechner]
 # Nur dieser Rechner legt ab und sendet, also dein Dauerrechner. Den Namen zeigt

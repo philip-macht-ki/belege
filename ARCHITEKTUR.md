@@ -85,6 +85,9 @@ arbeit/                   Laufzeit, nie im Git
 - Firmenbereiche dürfen nur sichere Zeichen enthalten, weder Pfadtrenner noch
   `..` oder leer sein; zwei Firmen dürfen nach der Bereinigung nicht denselben
   Bereich haben. Das ist ein Konfigurationsfehler und stoppt Ablage und Monat.
+- Diese Bereichsprüfung gilt nur für `[[firma]]`. Beim alten Einzelbetrieb bleibt
+  der Ordner stets `[ablage].bereich_betrieb`, unabhängig vom Namen in
+  `[betrieb]`.
 - Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
   sondern nach `Vorsicht Abofalle`; der Tagesbericht sagt „nicht unterschreiben,
   nicht zahlen“. Erkennung verlangt mindestens drei unabhängige Merkmale (oder zwei, wenn eines eine bekannte Abofallen-Domain ist). PDFs mit aktiven Inhalten (JavaScript, Launch, RichMedia, XFA, eingebettete Nicht-XML-Dateien) kommen nach `Vorsicht Datei prüfen`; E-Rechnungen mit eingebettetem XML gehen normal durch.
@@ -382,6 +385,14 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Kartenexporte im Format von amex.de vergleichen statt des ganzen Namens die
   ersten zwei Wörter (Händler und Referenz), damit derselbe Umsatz aus amex.de
   und MoneyMoney nur einmal zählt; Girokonto und Karte teilen nie einen Schlüssel.
+- Bei mehreren Firmen beschränkt `[[firma]].konten` den Abgleich auf die
+  angegebenen IBANs oder Kontokennungen. MoneyMoney-Exporte führen die
+  konfigurierte Kennung in der Spalte `Konto`; in fremden CSVs wird nur eine
+  gleich benannte Spalte `Konto`, `Kontokennung`, `Eigenes Konto` oder `Eigene
+  IBAN` als Quellkonto gelesen (nicht `Kontonummer/IBAN`, das ist die Gegenpartei).
+  Nicht zugeordnete Buchungen gehören zur Hauptfirma. Ohne Kontenangaben läuft
+  der Auszug nur für sie; die übrigen Monatsordner enthalten den Hinweis, die
+  Konten in `[[firma]]` einzutragen.
 - Buchung ohne Beleg: `konfig/regeln.toml` `[monat].ohne_beleg` (Muster wie
   „Finanzamt“, „Gehalt“, „Umbuchung“, „Privatentnahme“) → ignoriert, aber in
   `abgleich.json` sichtbar.

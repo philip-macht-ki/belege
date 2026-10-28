@@ -11,10 +11,14 @@ aktion: einrichten
 - Monatsabgleich und Übergabe laufen je Firma getrennt; jede Firma kann eine eigene Steuerberateradresse haben.
 - Bestehende Betriebsbelege ohne Firmenfeld zählen zur ersten Firma. Ein schon
   übergebener Monat wird für diese Firma auch nach dem Umstieg nicht erneut gesendet.
+- Firmen können ihre Konten mit `konten = ["DE…"]` im `[[firma]]`-Block
+  zuordnen. Der Monatsabgleich trennt die Auszüge danach; nicht zugeordnete
+  Buchungen bleiben bei der Hauptfirma. Fehlen die Zuordnungen, warnt die Prüfung
+  und die übrigen Firmen bekommen einen klaren Hinweis statt falscher Fehlbelege.
 
 ### Musst du etwas tun?
 
-Nur wenn du mehrere Firmen ablegst: Lass Claude in Teil 3 die Firmen, Schreibweisen und USt-IdNrn. eintragen und prüfe anschließend ein paar Belege je Firma im Trockenlauf.
+Nur wenn du mehrere Firmen ablegst: Lass Claude in Teil 3 die Firmen, Schreibweisen, USt-IdNrn. und Konten eintragen und prüfe anschließend ein paar Belege je Firma im Trockenlauf.
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 

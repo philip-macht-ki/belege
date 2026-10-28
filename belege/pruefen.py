@@ -188,6 +188,9 @@ def befehl(args) -> int:
         z("GELB" if len(namen) != len(set(namen)) or len(bereiche) != len(set(bereiche)) else "GRUEN",
           f"Firmen: {len(alle_firmen)} ({', '.join(bereiche) or 'keine'})",
           "Doppelte Firmennamen oder Bereiche in konfig/belege.toml korrigieren." if len(namen) != len(set(namen)) or len(bereiche) != len(set(bereiche)) else None)
+        if len(alle_firmen) > 1 and not any(f.get("konten") for f in alle_firmen):
+            z("GELB", "Mehrere Firmen: Kontoauszug keiner Firma zugeordnet",
+              "In jedem [[firma]] konten = [\"DE…\"] eintragen.")
         name = cfg.get("betrieb", {}).get("name")
         z(
             "GELB" if name == "Studio Beispiel" else "GRUEN",

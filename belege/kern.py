@@ -304,22 +304,34 @@ def firmen() -> list[dict]:
     explizit = [dict(f) for f in cfg.get("firma", [])]
     betrieb = dict(cfg.get("betrieb", {}))
     if not explizit:
-        explizit = [betrieb]
-    elif betrieb.get("name"):
+        # Der Einzelbetrieb hatte nie einen Firmenbereich: sein Ordner kommt
+        # weiterhin ausschließlich aus [ablage].bereich_betrieb. Insbesondere
+        # darf ein Betriebsname mit "/" keine neue Konfigurationsprüfung
+        # auslösen.
+        return [{**betrieb, "bereich": cfg.get("ablage", {}).get("bereich_betrieb", "Betrieb"),
+                 "namen": list(betrieb.get("namen", []))}] if betrieb.get("name") else []
+    zusaetzlicher_betrieb = False
+    if betrieb.get("name"):
         alle_namen = {str(n).casefold() for f in explizit for n in [f.get("name", ""), *f.get("namen", [])] if n}
         if str(betrieb["name"]).casefold() not in alle_namen:
             explizit.insert(0, betrieb)
+            zusaetzlicher_betrieb = True
     ergebnis = []
-    for firma in explizit:
+    for nummer, firma in enumerate(explizit):
         name = str(firma.get("name", "")).strip()
         if not name:
             continue
-        bereich = str(firma.get("bereich") or name).strip()
-        if (not bereich or ".." in bereich or "/" in bereich or "\\" in bereich
-                or not re.fullmatch(r"[\w .-]+", bereich, re.UNICODE)):
-            raise RuntimeError(f"Ungültiger Firmenbereich {bereich!r}: nur sichere Zeichen, keine Pfadtrenner und kein '..'.")
-        bereich = re.sub(r"[\\/:*?\"<>|]+", "-", bereich)
-        bereich = re.sub(r"\s+", "-", bereich).strip(".-") or "Firma"
+        if zusaetzlicher_betrieb and nummer == 0:
+            # [betrieb] bleibt der kompatible Hauptbetrieb und erhält keinen
+            # eigenen, aus seinem Namen abgeleiteten Firmenordner.
+            bereich = cfg.get("ablage", {}).get("bereich_betrieb", "Betrieb")
+        else:
+            bereich = str(firma.get("bereich") or name).strip()
+            if (not bereich or ".." in bereich or "/" in bereich or "\\" in bereich
+                    or not re.fullmatch(r"[\w .-]+", bereich, re.UNICODE)):
+                raise RuntimeError(f"Ungültiger Firmenbereich {bereich!r}: nur sichere Zeichen, keine Pfadtrenner und kein '..'.")
+            bereich = re.sub(r"[\\/:*?\"<>|]+", "-", bereich)
+            bereich = re.sub(r"\s+", "-", bereich).strip(".-") or "Firma"
         ergebnis.append({**firma, "name": name, "bereich": bereich,
                          "namen": list(firma.get("namen", []))})
     bereiche = [f["bereich"].casefold() for f in ergebnis]

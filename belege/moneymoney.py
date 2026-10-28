@@ -31,9 +31,9 @@ FORMATE = ("bank", "amex", "kreditkarte")
 BANK_SPALTEN = [
     "Buchungstag", "Valutadatum", "Buchungstext", "Verwendungszweck",
     "Beguenstigter/Zahlungspflichtiger", "Kontonummer/IBAN", "BIC (SWIFT-Code)",
-    "Betrag", "Waehrung",
+    "Betrag", "Waehrung", "Konto",
 ]
-AMEX_SPALTEN = ["Datum", "Beschreibung", "Betrag"]
+AMEX_SPALTEN = ["Datum", "Beschreibung", "Betrag", "Konto"]
 
 # Die Kennung kommt als Argument, nie in den Skripttext: kein Zitat-Problem, keine Einschleusung.
 _KONTEN = 'tell application "MoneyMoney" to export accounts'
@@ -128,7 +128,7 @@ def im_monat(umsaetze: list[dict], erster: date) -> list[dict]:
     )
 
 
-def csv_inhalt(format: str, umsaetze: list[dict]) -> bytes:
+def csv_inhalt(format: str, umsaetze: list[dict], konto: str = "") -> bytes:
     """Ein Monat eines Kontos als CSV im gewählten Format."""
     aus = io.StringIO(newline="")
     if format in ("amex", "kreditkarte"):
@@ -140,6 +140,7 @@ def csv_inhalt(format: str, umsaetze: list[dict]) -> bytes:
                 "Datum": f"{_tag(u['bookingDate']):%d.%m.%Y}",
                 "Beschreibung": text,
                 "Betrag": _komma(-_betrag(u["amount"])),
+                "Konto": konto,
             })
     elif format == "bank":
         schreiber = csv.DictWriter(aus, fieldnames=BANK_SPALTEN, delimiter=";", quoting=csv.QUOTE_ALL)
@@ -155,6 +156,7 @@ def csv_inhalt(format: str, umsaetze: list[dict]) -> bytes:
                 "BIC (SWIFT-Code)": u.get("bankCode", ""),
                 "Betrag": _komma(_betrag(u["amount"])),
                 "Waehrung": u.get("currency", "EUR"),
+                "Konto": konto,
             })
     else:
         raise ValueError(f"unbekanntes Format {format!r}, erlaubt: {', '.join(FORMATE)}")
@@ -268,7 +270,7 @@ def befehl(args) -> int:
             if not echt:
                 print(f"trocken: würde schreiben {ziel} ({len(zeilen)} Buchungen)")
                 continue
-            neu = schreiben(ziel, csv_inhalt(eintrag["format"], zeilen))
+            neu = schreiben(ziel, csv_inhalt(eintrag["format"], zeilen, str(eintrag.get("kennung", ""))))
             print(f"{'ok' if neu else 'gleich'}: {ziel} ({len(zeilen)} Buchungen)")
     if echt:
         kern.log(f"moneymoney: {len(eintraege)} Konten, {len(liste)} Monate, {fehler_gesamt} Fehler")
