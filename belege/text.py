@@ -119,7 +119,7 @@ def _pypdf(datei: Path) -> str:
         return ""
 
 
-def _pdf_bilder_quartz(datei: Path, ordner: Path) -> list[Path]:
+def _pdf_bilder_quartz(datei: Path, ordner: Path, dpi: int = 200, seiten: int = 2) -> list[Path]:
     """Rendert maximal zwei PDF-Seiten mit macOS CoreGraphics nach PNG.
 
     Das ersetzt pdftoppm auf Macs ohne Homebrew. Der Rasterpuffer bleibt nur im
@@ -134,15 +134,15 @@ def _pdf_bilder_quartz(datei: Path, ordner: Path) -> list[Path]:
         if not dokument:
             return []
         bilder = []
-        for nummer in range(1, min(2, Quartz.CGPDFDocumentGetNumberOfPages(dokument)) + 1):
+        for nummer in range(1, min(seiten, Quartz.CGPDFDocumentGetNumberOfPages(dokument)) + 1):
             seite = Quartz.CGPDFDocumentGetPage(dokument, nummer)
             box = Quartz.CGPDFPageGetBoxRect(seite, Quartz.kCGPDFMediaBox)
             drehung = Quartz.CGPDFPageGetRotationAngle(seite) % 360
             seitenbreite, seitenhoehe = box.size.width, box.size.height
             if drehung in (90, 270):
                 seitenbreite, seitenhoehe = seitenhoehe, seitenbreite
-            breite = max(1, int(seitenbreite * 200 / 72))
-            hoehe = max(1, int(seitenhoehe * 200 / 72))
+            breite = max(1, int(seitenbreite * dpi / 72))
+            hoehe = max(1, int(seitenhoehe * dpi / 72))
             daten = bytearray(breite * hoehe * 4)
             kontext = Quartz.CGBitmapContextCreate(
                 daten, breite, hoehe, 8, breite * 4, Quartz.CGColorSpaceCreateDeviceRGB(),

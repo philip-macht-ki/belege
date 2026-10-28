@@ -24,6 +24,8 @@ def repo(tmp_path, monkeypatch):
     t = t.replace('handy_ordner = "~/Belege/Eingang"', f'handy_ordner = "{tmp_path / "handy"}"')
     t = t.replace('downloads = "~/Downloads"', f'downloads = "{tmp_path / "downloads"}"')
     t = t.replace('auszuege = "~/Belege/Kontoauszuege"', f'auszuege = "{tmp_path / "auszuege"}"')
+    # Ab Werk aus (erst Teil 3); die Tests spielen eine fertige Einrichtung durch.
+    t = t.replace("downloads_an = false", "downloads_an = true")
     toml.write_text(t, encoding="utf-8")
     monkeypatch.setattr(kern, "ROOT", tmp_path)
     monkeypatch.setenv("BELEGE_ROOT", str(tmp_path))
@@ -49,3 +51,11 @@ def kein_netz_fuer_rechnungslinks(monkeypatch):
 
     monkeypatch.setattr(rechnungslink, "_host_erlaubt", lambda host, port: False)
     monkeypatch.setattr(rechnungslink, "_anfrage", _verboten)
+
+
+@pytest.fixture(autouse=True)
+def kein_starter_auffrischen(monkeypatch):
+    """Ein Testlauf von `takt` fasst nie die echten Starter in ~/.local/bin an."""
+    from belege import takt
+
+    monkeypatch.setattr(takt, "_starter_auffrischen", lambda: False)

@@ -205,6 +205,10 @@ class Postfach:
   united-domains, all-inkl, Hetzner, mailbox.org, Posteo, iCloud), sonst über die
   Thunderbird-Anbieterliste (autoconfig.thunderbird.net). MX bei Microsoft 365
   bricht mit dem Hinweis auf `weg = "microsoft"` ab.
+  Suche in allen Ordnern aus `LIST` außer Special-Use (`\Sent`, `\Trash`,
+  `\Junk`, `\Drafts`, `\All` …) und üblichen Namen (Gesendet, Papierkorb, Spam);
+  `imap_ordner = [...]` → nur INBOX und diese. Anhänge aus `BODYSTRUCTURE`,
+  dieselbe Mail (Message-ID) unter mehreren Gmail-Labels nur einmal.
   Passwort zuerst aus dem macOS-Schlüsselbund (Dienst `belege-postfach`, Konto =
   Postfachname), `PASSWORT_<NAME>` (Name groß) nur als Rückfall für Bestandskunden.
   Entwürfe per IMAP `APPEND`
@@ -225,7 +229,9 @@ class Postfach:
   im Browser (MSAL interaktiv, PKCE); bewusst kein Device-Code (Phishing-Weg,
   in der App-Registrierung „Öffentliche Clientflows“ aus). Zugang (MSAL-Cache mit Refresh-Token) in
   `arbeit/geheim/<konto>_microsoft.json`, chmod 600. Suche:
-  `/me/mailFolders/inbox/messages` mit `$filter` auf Datum und Anhang, mit
+  `/me/messages` (alle Ordner; Gesendet, Gelöscht, Junk, Entwürfe, Postausgang
+  per `$batch` ermittelt und über `parentFolderId` ausgelassen; `nur_posteingang
+  = true` → `/me/mailFolders/inbox/messages`) mit `$filter` auf Datum und Anhang, mit
   Suchwörtern `$search` und Filter im Client. `lesen`/`anhaenge` laden die
   Rohmail (`/me/messages/{id}/$value`) und nutzen dieselbe Auswertung wie IMAP.
   Entwurf `POST /me/messages`, Senden `POST /me/sendMail`, beides als MIME.

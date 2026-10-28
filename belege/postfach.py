@@ -10,6 +10,7 @@ import os
 import re
 import smtplib
 import subprocess
+import urllib.parse
 from datetime import date
 from email import policy
 from email.header import decode_header, make_header
@@ -338,7 +339,7 @@ class ImapPostfach(Postfach):
         ordner, uid = ident.rsplit(":", 1)
         verbindung = self._imap()
         try:
-            verbindung.select(ordner, readonly=True)
+            verbindung.select(_imap_quote(ordner), readonly=True)
             _, daten = verbindung.uid("fetch", uid, "(BODY.PEEK[])")
         finally:
             verbindung.logout()
@@ -377,28 +378,63 @@ class ImapPostfach(Postfach):
             return verbindung.uid("search", None, *ascii_teile)
 
     def suchen(self, abfrage="", max=20, seit=None, nur_anhang=False):
-        """Durchsucht IMAP ohne Mails als gelesen zu markieren."""
+        """Durchsucht IMAP ohne Mails als gelesen zu markieren.
+
+        Ohne `imap_ordner` beim Konto alle Ordner außer Gesendet, Papierkorb, Spam
+        und Entwürfen: Mailprogramme mit Filtern verschieben Rechnungen sofort in
+        Unterordner. Mit `imap_ordner` nur INBOX und die genannten Ordner.
+        """
         verbindung = self._imap()
+        # Mit nur_anhang zählt max die Treffer je Ordner; zusammen höchstens 500.
+        grenze = 500 if nur_anhang else max
         try:
-            verbindung.select("INBOX", readonly=True)
-            _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
-            uids = (daten[0].split() if daten and daten[0] else [])[-max:][::-1]
             treffer = []
-            for uid in uids:
-                _, roh = verbindung.uid(
-                    "fetch",
-                    uid,
-                    "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
-                )
-                nachricht = _imap_nachricht(roh)
-                if nachricht is None:
+            schon = set()  # Gmail zeigt Labels als Ordner: dieselbe Mail nur einmal
+            if "imap_ordner" in self.konto:
+                ordnerliste = _imap_ordnerliste(self.konto)
+            else:
+                ordnerliste = _imap_alle_ordner(verbindung)
+            for ordner in ordnerliste:
+                try:
+                    if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
+                        kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+                        continue
+                    _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
+                except (imaplib.IMAP4.error, RuntimeError) as fehler:
+                    if ordner == "INBOX":
+                        raise
+                    # Ein einzelner sperriger Ordner hält die übrige Suche nicht auf.
+                    kern.log(f"IMAP-Ordner {ordner} übersprungen: {fehler}")
                     continue
-                kopf = _kopf(nachricht, f"INBOX:{uid.decode()}")
-                if nur_anhang and not kopf["anhaenge"]:
-                    continue
-                kopf["auszug"] = _inhalt(nachricht)[:300]
-                treffer.append(kopf)
-            return treffer
+                alle = daten[0].split() if daten and daten[0] else []
+                uids = alle[-grenze:][::-1]
+                gefunden = 0
+                for uid in uids:
+                    _, roh = verbindung.uid(
+                        "fetch",
+                        uid,
+                        "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
+                    )
+                    nachricht = _imap_nachricht(roh)
+                    if nachricht is None:
+                        continue
+                    kennung = str(nachricht.get("Message-ID") or "").strip()
+                    if kennung and kennung in schon:
+                        continue
+                    kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
+                    # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
+                    kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
+                    if nur_anhang and not kopf["anhaenge"]:
+                        continue
+                    kopf["auszug"] = _inhalt(nachricht)[:300]
+                    treffer.append(kopf)
+                    if kennung:
+                        schon.add(kennung)
+                    gefunden += 1
+                    if gefunden >= grenze:
+                        break
+            treffer.sort(key=lambda kopf: kopf.get("datum", ""), reverse=True)
+            return treffer[:grenze]
         finally:
             verbindung.logout()
 
@@ -453,6 +489,118 @@ def _imap_nachricht(antwort):
         if isinstance(teil, tuple) and isinstance(teil[1], bytes):
             return email.message_from_bytes(teil[1], policy=policy.default)
     return None
+
+
+def _imap_ordnerliste(konto: dict) -> list[str]:
+    """INBOX zuerst, dann die Zusatzordner aus `imap_ordner`, ohne Doppelte."""
+    ordner = ["INBOX"]
+    for name in konto.get("imap_ordner", []) or []:
+        name = str(name).strip()
+        if name and name not in ordner:
+            ordner.append(name)
+    return ordner
+
+
+# Sonderordner nach RFC 6154; dort liegen keine eingehenden Rechnungen (\\All wäre doppelt).
+_IMAP_SONDER = {"\\sent", "\\trash", "\\junk", "\\drafts", "\\all", "\\flagged", "\\important", "\\noselect", "\\nonexistent"}
+# Für Server ohne Sonderkennzeichen: übliche Namen, deutsch und englisch, kleingeschrieben.
+_IMAP_AUSLASSEN = {
+    "sent", "sent items", "sent messages", "sent mail", "gesendet", "gesendete elemente",
+    "gesendete objekte", "gesendete nachrichten", "trash", "deleted", "deleted items",
+    "deleted messages", "papierkorb", "gelöscht", "gelöschte elemente", "gelöschte objekte",
+    "junk", "junk e-mail", "junk-e-mail", "spam", "spamverdacht", "unerwünscht", "drafts",
+    "entwürfe", "outbox", "postausgang", "notes", "notizen", "templates", "vorlagen",
+    "calendar", "kalender", "contacts", "kontakte", "tasks", "aufgaben", "journal",
+    "all mail", "alle nachrichten", "starred", "markiert", "important", "wichtig",
+}
+
+
+def _mutf7(name: str) -> str:
+    """Dekodiert IMAP-Ordnernamen (modifiziertes UTF-7, RFC 3501), etwa Entw&APw-rfe."""
+    def teil(treffer):
+        kern_text = treffer.group(1)
+        if not kern_text:
+            return "&"
+        roh = kern_text.replace(",", "/")
+        roh += "=" * (-len(roh) % 4)
+        try:
+            return base64.b64decode(roh).decode("utf-16-be")
+        except (ValueError, UnicodeDecodeError):
+            return treffer.group(0)
+    return re.sub(r"&([A-Za-z0-9+,]*)-", teil, name)
+
+
+def _imap_list_zeile(zeile) -> tuple[set[str], str, str] | None:
+    """Zerlegt eine LIST-Antwort in Kennzeichen, Trennzeichen und Ordnernamen."""
+    if isinstance(zeile, tuple):  # Name als Literal {n}
+        kopf, name = zeile[0].decode("utf-8", "replace"), zeile[1].decode("utf-8", "replace")
+        treffer = re.match(r'\((.*?)\)\s+(NIL|"(?:[^"\\]|\\.)*")', kopf)
+        if not treffer:
+            return None
+        flags, trenner = treffer.group(1), treffer.group(2)
+    else:
+        text = zeile.decode("utf-8", "replace") if isinstance(zeile, bytes) else str(zeile)
+        treffer = re.match(r'\((.*?)\)\s+(NIL|"(?:[^"\\]|\\.)*")\s+(.*)$', text)
+        if not treffer:
+            return None
+        flags, trenner, name = treffer.groups()
+        name = name.strip()
+        if name.startswith('"') and name.endswith('"'):
+            name = re.sub(r'\\(.)', r"\1", name[1:-1])
+    trenner = "" if trenner == "NIL" else re.sub(r'\\(.)', r"\1", trenner.strip('"'))
+    return {f.lower() for f in flags.split()}, trenner, name
+
+
+def _imap_alle_ordner(verbindung) -> list[str]:
+    """INBOX und jeder Ordner, in dem eingehende Post liegen kann."""
+    try:
+        status, zeilen = verbindung.list()
+    except Exception as fehler:  # noqa: BLE001 – dann eben nur der Posteingang
+        kern.log(f"IMAP-Ordnerliste nicht lesbar, nur INBOX: {fehler}")
+        return ["INBOX"]
+    if status != "OK":
+        return ["INBOX"]
+    ordner = ["INBOX"]
+    for zeile in zeilen or []:
+        teile = _imap_list_zeile(zeile)
+        if not teile:
+            continue
+        flags, trenner, name = teile
+        if not name or name.upper() == "INBOX" or flags & _IMAP_SONDER:
+            continue
+        stufen = [_mutf7(s).strip().lower() for s in (name.split(trenner) if trenner else [name])]
+        if any(stufe in _IMAP_AUSLASSEN for stufe in stufen) or stufen[0] == "[gmail]" and len(stufen) == 1:
+            continue
+        if name not in ordner:
+            ordner.append(name)
+    return ordner
+
+
+def _imap_quote(ordner: str) -> str:
+    """Setzt Ordnernamen mit Leerzeichen oder Komma für IMAP in Anführungszeichen."""
+    if ordner.startswith('"') or not re.search(r'[\s,()"\\]', ordner):
+        return ordner
+    return '"' + ordner.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _imap_anhaenge(antwort) -> list[str]:
+    """Liest Anhangnamen aus der BODYSTRUCTURE einer IMAP-Fetch-Antwort."""
+    struktur = b" ".join(
+        teil[0] if isinstance(teil, tuple) else teil
+        for teil in antwort or []
+        if isinstance(teil, (tuple, bytes))
+    )
+    namen = []
+    for treffer in re.finditer(
+        rb'"(?:FILENAME|NAME)\*?"\s+"((?:[^"\\]|\\.)*)"', struktur, re.IGNORECASE
+    ):
+        name = treffer.group(1).decode("utf-8", errors="replace")
+        if "''" in name:  # RFC 2231: utf-8''Rechnung%20Nr.pdf
+            name = urllib.parse.unquote(name.split("''", 1)[1])
+        name = str(make_header(decode_header(name)))
+        if name and name not in namen:
+            namen.append(name)
+    return namen
 
 
 def _imap_kriterien(abfrage: str, seit: date | None) -> list[str]:

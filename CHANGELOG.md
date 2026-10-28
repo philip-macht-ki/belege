@@ -2,6 +2,25 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.9.1] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Postfach über App-Passwort (IMAP, etwa mailbox.org, GMX, eigene Domain): belege findet Rechnungen im Anhang wieder. Bisher sah es dort keine Anhänge und holte deshalb nichts.
+- belege sucht Rechnungen jetzt in allen Ordnern deines Postfachs, nicht mehr nur im Posteingang. Wenn deine Filter oder Outlook-Regeln Rechnungen sofort in Unterordner verschieben, findet belege sie trotzdem. Gesendet, Papierkorb, Spam und Entwürfe bleiben außen vor. Das gilt für App-Passwort-Postfächer und für Microsoft 365 und Outlook.
+- Bei viel Post fielen ältere Rechnungen heraus, weil nur die 20 neuesten Mails angesehen wurden. Jetzt sind es bis zu 500, in jedem Postfach.
+- ZUGFeRD-Rechnungen (PDF mit eingebetteter XML, etwa von Sage) brechen nicht mehr ab.
+- Wer Claude nur über die Desktop-App hat: Der Zeitplan erreicht Claude wieder. Der Starter in `~/.local/bin` erneuert sich beim nächsten Lauf von selbst.
+- Neue Einrichtungen: Downloads sind ab Werk aus und kommen erst in Teil 3 dazu. Der Musterbetrieb verkürzt den ersten echten Postfachlauf nicht mehr. Die Übung braucht kein Homebrew mehr und startet nach einem Abbruch sauber neu.
+
+Danke an Nina Clausen für die genaue Fehlermeldung samt Korrekturen.
+
+### Musst du etwas tun?
+
+Nein. Der nächste Lauf schaut einmal die letzten Tage in allen Ordnern nach; was schon abgelegt ist, erkennt belege und legt es nicht doppelt ab.
+
 ## [1.9.0] – 28.10.2026
 
 aktion: keine

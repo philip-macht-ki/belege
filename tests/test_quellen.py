@@ -72,3 +72,33 @@ def test_scan_funde_folgt_keinem_ordnerlink(repo):
     toml = repo / "konfig/belege.toml"
     toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
     assert [f.name for f in quellen.scan_funde()] == ["Brief.pdf"]
+
+
+def test_musterlauf_verkuerzt_den_ersten_echten_rueckblick_nicht(repo):
+    """Erst Musterpostfach, dann das echte Postfach unter demselben Kontonamen."""
+    from belege import kern
+
+    alt = {"geschaeft": {"mails": ["rechnung-pixelwerk.eml"], "lauf": kern.jetzt().isoformat()}}
+    (repo / "arbeit" / "gesehen.json").write_text(json.dumps(alt))
+    assert not quellen._fremder_stand(alt["geschaeft"], quellen._kennung("geschaeft"))
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text()
+        .replace('weg = "ordner"', 'weg = "a"', 1)
+        .replace('imap_server = ""', 'imap_server = "imap.example.org:993"', 1)
+        .replace('smtp_server = ""', 'smtp_server = "smtp.example.org:465"', 1)
+    )
+    kennung = quellen._kennung("geschaeft")
+    assert kennung.startswith("a:")
+    assert quellen._fremder_stand(alt["geschaeft"], kennung)
+
+    heute = kern.jetzt().date().isoformat()
+    quellen.lauf_abschliessen("geschaeft", {"INBOX:7": heute}, True)
+    daten = json.loads((repo / "arbeit" / "gesehen.json").read_text())["geschaeft"]
+    assert daten["mails"] == []
+    assert daten["offen"] == {"INBOX:7": heute}
+    assert daten["kennung"] == kennung
+    assert "lauf" not in daten
+    # Ein späterer Wechsel des Postfachs fällt über die Kennung auf.
+    assert quellen._fremder_stand(daten, "a:andere@example.org")
+    assert not quellen._fremder_stand(daten, kennung)

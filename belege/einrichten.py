@@ -25,12 +25,16 @@ for kandidat in "$HOME/.claude/local/claude" /opt/homebrew/bin/claude /usr/local
 done
 basis="$HOME/Library/Application Support/Claude/claude-code"
 if [ -d "$basis" ]; then
-  while IFS= read -r version; do
-    kandidat="$(find "$basis/$version" -type f -path '*/claude.app/Contents/MacOS/claude' -perm -111 -print -quit 2>/dev/null)"
+  # Erst die Liste holen, dann starten: Ein exec innerhalb von `done < <(...)`
+  # gäbe Claude die find-Ausgabe als Eingabe, und `claude -p` bekäme nichts.
+  versionen=("${{(@f)$(find "$basis" -mindepth 1 -maxdepth 1 -type d -exec basename {{}} \; | (sort -V -r 2>/dev/null || sort -t. -k1,1nr -k2,2nr -k3,3nr))}}")
+  for version in $versionen; do
+    [ -n "$version" ] || continue
+    kandidat="$(find "$basis/$version" -type f -path '*/claude.app/Contents/MacOS/claude' -perm -111 -print -quit 2>/dev/null </dev/null)"
     if [ -n "$kandidat" ]; then
       exec "$kandidat" "$@"
     fi
-  done < <(find "$basis" -mindepth 1 -maxdepth 1 -type d -exec basename {{}} \; | (sort -V -r 2>/dev/null || sort -t. -k1,1nr -k2,2nr -k3,3nr))
+  done
 fi
 print -u2 "Claude wurde nicht gefunden. Öffne die Claude-App einmal und versuche es erneut."
 exit 127
@@ -65,6 +69,24 @@ def anlegen(backend: str = "claude") -> tuple[bool, str]:
     ziel.write_text(text, encoding="utf-8")
     os.chmod(ziel, 0o755)
     return True, str(ziel)
+
+
+def auffrischen() -> bool:
+    """Bringt einen vorhandenen belege-Starter auf den Stand dieser Version.
+
+    Läuft vor jedem Takt, damit Korrekturen am Starter nach einem Update ohne
+    eigenen Schritt ankommen. Fremde oder fehlende Dateien bleiben unberührt.
+    """
+    geaendert = False
+    for backend, marker, text in (("claude", MARKER, starter_text), ("codex", CODEX_MARKER, codex_starter_text)):
+        ziel = starter_pfad(backend)
+        try:
+            alt = ziel.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if marker in alt and alt != text():
+            geaendert = anlegen(backend)[0] or geaendert
+    return geaendert
 
 
 def befehl(args) -> int:

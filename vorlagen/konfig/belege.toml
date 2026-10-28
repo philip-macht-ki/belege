@@ -31,6 +31,10 @@ adresse = "mara@studio-beispiel.example"
 ordner = "beispiel/erzeugt/postfach"
 imap_server = ""
 smtp_server = ""
+# Gesucht wird in allen Ordnern außer Gesendet, Papierkorb, Spam, Entwürfen.
+# Enger: Weg A nur Posteingang + diese Ordner, Microsoft nur der Posteingang.
+# imap_ordner = ["INBOX/Rechnungen"]
+# nur_posteingang = true
 belege = true
 waechter = true
 
@@ -49,7 +53,9 @@ handy_ordner = "~/Belege/Eingang"
 # mit. Die Originale bleiben dort liegen. Leer = keine Papierpost.
 scan_ordner = ""
 downloads = "~/Downloads"
-downloads_an = true
+# Ab Werk aus: Downloads kommen erst in Teil 3 dran. Bis dahin liest kein Lauf,
+# auch nicht der Musterlauf, den echten Downloads-Ordner.
+downloads_an = false
 # Rechnungen, die nur als Link in einer Mail stehen (kein PDF-Anhang): belege
 # holt sie, wenn die Mail nach Rechnung aussieht und genau einen PDF-Link hat.
 # Nur öffentliche https-Links, nur echte PDFs. false = ausschalten.

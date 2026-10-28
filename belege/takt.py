@@ -12,6 +12,7 @@ import importlib
 import traceback
 from collections import Counter
 
+from .einrichten import auffrischen as _starter_auffrischen
 from .kern import Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
 
 
@@ -144,6 +145,11 @@ def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
     Gibt zurück, ob alle Schritte ohne Fehler durchliefen.
     """
     fehlerfrei = True
+    try:
+        if _starter_auffrischen():
+            log("Modell-Starter in ~/.local/bin auf den neuen Stand gebracht.")
+    except Exception as fehler:  # noqa: BLE001 – der Lauf selbst geht vor
+        log(f"Modell-Starter nicht aufgefrischt: {fehler}")
     try:
         with Sperre(sperre):
             for name in schritte:
