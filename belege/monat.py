@@ -485,8 +485,15 @@ def _beitragsnummer(buchung: dict) -> str:
     text = f"{buchung.get('name', '')} {buchung.get('zweck', '')}"
     if "rundfunk" not in _normal(text) and "beitragsservice" not in _normal(text):
         return ""
-    treffer = re.search(r"beitrags?\s*nr\.?\s*:?\s*(\d{3}\s?\d{3}\s?\d{3})", text, re.I)
+    # „Beitragsnr.“, „Beitragsnummer“, „Beitrags-Nr.“, mit oder ohne Leerzeichen in der Nummer.
+    treffer = re.search(r"beitrags?\s*-?\s*(?:nr\.?|nummer)\s*:?\s*(?<!\d)(\d{3}\s?\d{3}\s?\d{3})(?!\d)", text, re.I)
     return re.sub(r"\s", "", treffer.group(1)) if treffer else ""
+
+
+def _enthaelt_nummer(text: str, nummer: str) -> bool:
+    """Die Beitragsnummer steht als eigene Zahl im Text, nicht als Teil einer längeren."""
+    ziffern = re.sub(r"(?<=\d)\s(?=\d)", "", text)
+    return re.search(rf"(?<!\d){nummer}(?!\d)", ziffern) is not None
 
 
 def _dauerbelege(ergebnis: list[dict]) -> None:
@@ -503,11 +510,12 @@ def _dauerbelege(ergebnis: list[dict]) -> None:
         if nummer:
             for eintrag in dokumente.values():
                 raum = f"{eintrag.get('gegenueber', '')} {eintrag.get('titel', '')} {eintrag.get('text', '')}"
-                if nummer in re.sub(r"\s", "", raum):
+                if _enthaelt_nummer(raum, nummer):
                     buchung["status"] = "zugeordnet (Dauerbeleg)"
                     buchung["beleg_pfad"] = eintrag.get("pfad")
                     break
-            continue
+            if buchung["status"] != "fehlt":
+                continue
         for eintrag in dokumente.values():
             raum = f"{eintrag.get('gegenueber', '')} {eintrag.get('titel', '')} {eintrag.get('text', '')} {eintrag.get('pfad', '')}"
             if "kündigung" in _normal(raum) or "kuendigung" in _normal(raum):

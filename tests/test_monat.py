@@ -334,3 +334,21 @@ def test_monat_rundfunk_bescheid_ist_dauerbeleg(repo):
     assert daten[0]["status"] == "zugeordnet (Dauerbeleg)"
     assert daten[0]["beleg_pfad"] == "Dokumente/Behörde/Rundfunk.pdf"
     assert daten[1]["status"] == "fehlt"
+
+
+def test_monat_rundfunk_nummernvarianten_und_grenzen(repo):
+    tag = kern.jetzt().date().isoformat()
+    kern.schreiben(repo / "arbeit/dokumente.json", {
+        "bescheid": {"art": "behoerde", "gegenueber": "Beitragsservice", "titel": "Anmeldebestätigung",
+                     "text": "Beitragsnummer 471 440 743", "pfad": "Dokumente/Rundfunk.pdf"},
+        "lang": {"art": "behoerde", "gegenueber": "Beitragsservice", "titel": "Anderes",
+                 "text": "Aktenzeichen 1234567890", "pfad": "Dokumente/Lang.pdf"},
+    })
+    buchungen = [
+        {"datum": tag, "betrag": -18.36, "name": "Beitragsservice", "zweck": "Rundfunk Beitragsnummer 471 440 743"},
+        {"datum": tag, "betrag": -18.36, "name": "ARD ZDF Beitragsservice", "zweck": "Rundfunk Beitrags-Nr. 471440743"},
+        {"datum": tag, "betrag": -18.36, "name": "Rundfunk", "zweck": "Beitragsnr. 234567890"},
+    ]
+    daten = monat.abgleichen(buchungen, {})
+    assert [x["status"] for x in daten[:2]] == ["zugeordnet (Dauerbeleg)"] * 2
+    assert daten[2]["status"] == "fehlt", "Teil einer längeren Zahl zählt nicht"
