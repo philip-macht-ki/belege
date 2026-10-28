@@ -17,6 +17,18 @@ aktion: keine
 
 Nein. Willst du das nicht, schreib in `konfig/belege.toml` unter `[quellen]` die Zeile `rechnungslinks = false`.
 
+## [1.7.3] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Papierpost über Dropscan, Caya oder eine Scan-App: belege liest jetzt auch die Unterordner deines Scan-Ordners, so wie Dropscan sie je Scanbox und Tag anlegt. Die Anleitung erklärt, wie du die Weiterleitung von Dropscan an Google Drive, Dropbox oder OneDrive einschaltest. Eingescannte Briefe findet dein Claude danach wie jeden anderen Beleg.
+
+### Musst du etwas tun?
+
+Nein. Nutzt du Dropscan und hast den Ordner noch nicht eingetragen, sag deinem Claude: Richte meine Papierpost von Dropscan ein.
+
 ## [1.7.2] – 28.10.2026
 
 aktion: keine

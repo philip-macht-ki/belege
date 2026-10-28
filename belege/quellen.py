@@ -282,6 +282,8 @@ def scan_funde():
 
     Scan-Dienste verwalten ihre Originale selbst. Die Kopie im Arbeitsordner hat
     denselben SHA-Fingerabdruck; dadurch merkt der normale Ablageweg Dubletten.
+    Unterordner zählen mit (bis drei Ebenen): Dropscan legt je Scanbox und Tag
+    einen eigenen Ordner an (Philip, 28.10.2026).
     """
     wert = str(kern.konfig("belege").get("quellen", {}).get("scan_ordner", "")).strip()
     if not wert:
@@ -291,9 +293,7 @@ def scan_funde():
         return
     gesehen = _gesehen()
     bekannte = set(gesehen.get("scan_sha", []))
-    for datei in sorted(ordner.iterdir()):
-        if not _erlaubt(datei):
-            continue
+    for datei in _scan_dateien(ordner):
         sha = _sha(datei)
         if sha in bekannte:
             continue
@@ -305,6 +305,27 @@ def scan_funde():
         gesehen["scan_sha"] = sorted(bekannte)
         kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
         yield Fund(ziel, "scan", datei.name, date.fromtimestamp(datei.stat().st_mtime))
+
+
+def _scan_dateien(ordner: Path, tiefe: int = 3):
+    """Erlaubte Dateien im Scan-Ordner und seinen Unterordnern, nach und nach.
+
+    Versteckte Ordner und verlinkte Ordner (Symlinks) bleiben draußen, damit keine
+    Schleife entsteht. Ein unlesbarer Unterordner wird übersprungen, nicht der Lauf.
+    """
+    # Reihenfolge ist egal (Dubletten erkennt der SHA), daher ohne Sortieren:
+    # auch große Cloud-Ordner werden Eintrag für Eintrag gelesen.
+    try:
+        for eintrag in ordner.iterdir():
+            if eintrag.name.startswith("."):
+                continue
+            if eintrag.is_dir():
+                if tiefe > 0 and not eintrag.is_symlink():
+                    yield from _scan_dateien(eintrag, tiefe - 1)
+            elif _erlaubt(eintrag):
+                yield eintrag
+    except OSError as fehler:
+        kern.log(f"Scan-Ordner {ordner} nicht lesbar: {fehler}")
 
 
 def _sha(datei: Path) -> str:
