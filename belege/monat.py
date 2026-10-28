@@ -105,6 +105,11 @@ def _spalten(kopf: list[str]) -> dict[str, str | None]:
 
 def buchungen(datei: Path, monat: str | None) -> list[dict]:
     """Liest einen Auszug robust und gibt nur Buchungen des gewünschten Monats zurück."""
+    return _buchungen_und_format(datei, monat)[0]
+
+
+def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], bool]:
+    """Wie buchungen, dazu ob die Datei ein Kartenexport im Format von amex.de ist."""
     roh = next(
         (
             datei.read_text(encoding=kodierung)
@@ -142,7 +147,8 @@ def buchungen(datei: Path, monat: str | None) -> list[dict]:
         )
     # Kreditkarte im Format von amex.de (auch aus `belege moneymoney`): Belastungen
     # stehen dort positiv. Umgedreht gilt wie beim Girokonto: Ausgabe negativ.
-    vorzeichen = -1 if _kreditkarte(leser.fieldnames or [], spalten) else 1
+    karte = _kreditkarte(leser.fieldnames or [], spalten)
+    vorzeichen = -1 if karte else 1
     ergebnis = []
     for zeile in leser:
         try:
@@ -163,7 +169,7 @@ def buchungen(datei: Path, monat: str | None) -> list[dict]:
                     if spalten.get("originalbetrag") and zeile.get(spalten["originalbetrag"], "").strip() else None,
                 }
             )
-    return ergebnis
+    return ergebnis, karte
 
 
 def _kreditkarte(kopf: list[str], spalten: dict) -> bool:
@@ -181,25 +187,27 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
 
     Mehrere CSVs sind normal: ein Girokonto und eine Kreditkarte, oder eine
     Jahres-CSV neben einer Monats-CSV, oder derselbe Kartenumsatz von amex.de und
-    aus MoneyMoney. Dieselbe Buchung (Datum, Betrag, erstes Wort des Namens) fließt
-    nur einmal in den Abgleich. Zwei gleiche Buchungen in derselben Datei (zweimal
-    Kaffee am selben Tag) bleiben zwei.
+    aus MoneyMoney. Dieselbe Buchung (Datum, Betrag, Name, Zweck) fließt nur einmal
+    in den Abgleich. Zwei gleiche Buchungen in derselben Datei (zweimal Kaffee am
+    selben Tag) bleiben zwei.
 
-    Nur das erste Wort zählt, weil zwei Exporte denselben Händler verschieden
-    schreiben: „FACEBK *XD8YZ42FB4 DUBLIN“ bei amex.de, „Facebk *XD8YZ42FB4 Dublin
-    Facebook Advertisi“ in MoneyMoney (Philip, 28.10.2026: 52 Buchungen doppelt).
+    Kartenexporte (Format amex.de) vergleichen statt des ganzen Namens nur die
+    ersten zwei Wörter (Händler und Referenz), weil zwei Exporte denselben Umsatz
+    verschieden schreiben: „FACEBK *XD8YZ42FB4 DUBLIN“ bei amex.de, „Facebk
+    *XD8YZ42FB4 Dublin Facebook Advertisi“ in MoneyMoney (Philip, 28.10.2026: 52
+    Buchungen doppelt). Girokonto und Karte teilen sich nie einen Schlüssel.
     """
     gesehen: dict[tuple, int] = {}
     ergebnis: list[dict] = []
     for datei in dateien:
         try:
-            gefunden = buchungen(datei, monat)
+            gefunden, karte = _buchungen_und_format(datei, monat)
         except Exception as fehler:  # noqa: BLE001 - eine kaputte CSV stoppt den Rest nicht
             kern.log(f"Kontoauszug {datei.name} für {monat} nicht lesbar: {fehler}")
             continue
         in_datei: dict[tuple, int] = {}
         for buchung in gefunden:
-            schluessel = (buchung["datum"], buchung["betrag"], _kurzname(buchung["name"] or buchung["zweck"]))
+            schluessel = _dublettenschluessel(buchung, karte)
             in_datei[schluessel] = in_datei.get(schluessel, 0) + 1
             # Neu ist nur, was diese Datei öfter enthält als jede Datei davor.
             if in_datei[schluessel] <= gesehen.get(schluessel, 0):
@@ -209,10 +217,13 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
     return ergebnis
 
 
-def _kurzname(name: str) -> str:
-    """Erstes Wort des Buchungsnamens, klein, für den Dublettenschlüssel."""
-    treffer = re.match(r"[\wäöüß]+", (name or "").strip().casefold())
-    return treffer.group(0) if treffer else ""
+def _dublettenschluessel(buchung: dict, karte: bool) -> tuple:
+    """Schlüssel für dieselbe Buchung in mehreren Dateien (siehe buchungen_aus)."""
+    if karte:
+        woerter = re.findall(r"[\wäöüß]+", buchung["name"].casefold())
+        if len(woerter) >= 2:
+            return ("karte", buchung["datum"], buchung["betrag"], tuple(woerter[:2]))
+    return (buchung["datum"], buchung["betrag"], buchung["name"], buchung["zweck"])
 
 
 def _lesbar(datei: Path, kodierung: str) -> bool:
