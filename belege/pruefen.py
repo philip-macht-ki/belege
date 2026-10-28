@@ -253,10 +253,12 @@ def befehl(args) -> int:
                     _imap(k)
                     z("GRUEN", f"Postfach {name}: Anmeldung klappt")
                 except Exception as e:
+                    hinweis = (f"Die Anmeldung bei {name} klappt nicht mehr. Hast du dein Passwort geändert oder das App-Passwort gelöscht? "
+                               "Sag deinem Claude: Verbinde mein Postfach neu.")
                     z(
                         "ROT",
                         f"Postfach {name}: Anmeldung fehlgeschlagen",
-                        f"Anbieter, Server und App-Passwort prüfen ({e}).",
+                        f"{hinweis} ({e})",
                     )
             elif weg == "b":
                 g = pfad("arbeit", "geheim")
@@ -297,6 +299,9 @@ def befehl(args) -> int:
                         f"Postfach {name}: Microsoft-Zugang fehlt oder abgelaufen",
                         f"belege anmelden --microsoft {name} ausführen ({e}).",
                     )
+                if str(k.get("nach_ablage", "aus")).lower() != "aus":
+                    z("GELB", "Markieren bei Microsoft braucht neue Anmeldung mit Schreibrecht",
+                      f"belege anmelden --microsoft {name} ausführen, falls Mail.ReadWrite noch nicht bestätigt ist.")
             else:
                 z(
                     "GELB",

@@ -212,6 +212,10 @@ class Postfach:
         """Markiert eine Mail als erledigt; andere Wege haben keine Labels."""
         return None
 
+    def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        """Behandelt eine vollständig abgelegte Mail; Standard bleibt folgenlos."""
+        return "nicht unterstützt"
+
 
 class OrdnerPostfach(Postfach):
     """Liest .eml-Dateien aus einem lokalen Ordner für Muster und Tests."""
@@ -450,6 +454,26 @@ class ImapPostfach(Postfach):
     def anhaenge(self, ident: str, ziel: Path) -> list[Path]:
         """Speichert die Anhänge einer IMAP-Mail kollisionsfrei."""
         return _anhaenge_speichern(self._fetch_mail(ident), ziel)
+
+    def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        ordner_alt, uid = ident.rsplit(":", 1)
+        verbindung = self._imap()
+        try:
+            verbindung.select(_imap_quote(ordner_alt), readonly=False)
+            verbindung.uid("store", uid, "+FLAGS", "(\\Seen belege-erledigt)")
+            if art != "verschieben":
+                return "als gelesen und mit belege-erledigt markiert"
+            typ, daten = verbindung.capability()
+            faehig = typ == "OK" and b"MOVE" in b" ".join(d if isinstance(d, bytes) else str(d).encode() for d in (daten or [])).upper()
+            if not faehig:
+                return "nur markiert (Server unterstützt IMAP MOVE nicht)"
+            verbindung.create(_imap_quote(ordner))
+            typ, _ = verbindung.uid("move", uid, _imap_quote(ordner))
+            if typ != "OK":
+                return "nur markiert (IMAP MOVE fehlgeschlagen)"
+            return f"nach {ordner} verschoben"
+        finally:
+            verbindung.logout()
 
     def entwurf(self, an, betreff, text, anhaenge):
         """Legt einen Entwurf im IMAP-Entwurfsordner ab."""
@@ -872,7 +896,17 @@ class GmailPostfach(Postfach):
 
     def label_erledigt(self, ident: str, label: str) -> None:
         """Verschiebt ein Gmail-Label nach <Label>/erledigt."""
-        return None
+        self.nach_ablage(ident, "markieren", label)
+
+    def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        dienst = self._dienst()
+        labels = dienst.users().labels().list(userId="me").execute().get("labels", [])
+        label = next((x for x in labels if x.get("name") == ordner), None)
+        if label is None:
+            label = dienst.users().labels().create(userId="me", body={"name": ordner}).execute()
+        body = {"addLabelIds": [label["id"]], "removeLabelIds": ["INBOX"] if art == "verschieben" else []}
+        dienst.users().messages().modify(userId="me", id=ident, body=body).execute()
+        return ("archiviert und " if art == "verschieben" else "") + f"mit Label {ordner} markiert"
 
 
 def _gmail_metadata(mail: dict) -> dict:

@@ -770,7 +770,7 @@ def _als_pdf(bild: Path, ziel: Path) -> Path:
     return pdf
 
 
-def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None) -> list[Path]:
+def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None, belegart: str | None = None) -> list[Path]:
     """Kopiert alle abgelegten Betriebsbelege des Monats nach <ziel>/paket/.
 
     PDFs werden byte-gleich kopiert (ZUGFeRD bleibt erhalten), Fotos zu PDF
@@ -787,6 +787,8 @@ def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None) 
         if str(beleg.get("datum", ""))[:7] != monat:
             continue
         if beleg.get("bereich") != "betrieb" or beleg.get("status") != "abgelegt":
+            continue
+        if belegart and beleg.get("art") != belegart:
             continue
         if firma is not None and kern.firma_von(beleg) != firma:
             continue
@@ -828,9 +830,29 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
               f"--monat {monat} --uebergabe --echt")
         return
 
-    dateien = paket_packen(monat, ziel, index, firma["name"] if firma else None)
     cfg = kern.konfig("belege").get("uebergabe", {})
     cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
+    adressen = cfg.get("adressen") if isinstance(cfg.get("adressen"), dict) else None
+    if adressen and cfg.get("weg", "mail") == "mail":
+        from .senden import senden
+        for art in ("eingang", "ausgang", "sonstige"):
+            eigene = f"{schluessel}:{art}"
+            if gesehen.get("uebergabe", {}).get(eigene):
+                continue
+            adresse = adressen.get(art) or cfg.get("adresse", "")
+            dateien = paket_packen(monat, ziel / art, index, firma["name"] if firma else None, art)
+            if not dateien:
+                continue
+            if not adresse:
+                print(f"befund: {art}: keine Übergabe-Adresse eingetragen, nicht gesendet.")
+                continue
+            r = senden(adresse, f"Belege {monat[5:]}/{monat[:4]} ({art})", f"Hallo,\n\nanbei {len(dateien)} Belege ({art}).", dateien, echt, fortschritt=f"uebergabe:{eigene}")
+            print(f"{r.status}: {r.meldung}")
+            if echt and r.status == "ok":
+                gesehen.setdefault("uebergabe", {})[eigene] = kern.jetzt().isoformat(timespec="seconds")
+                kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+        return
+    dateien = paket_packen(monat, ziel, index, firma["name"] if firma else None)
     betrieb = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     betreff = f"Belege {monat[5:]}/{monat[:4]}, {betrieb}"
     text = (

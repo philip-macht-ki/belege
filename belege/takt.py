@@ -128,7 +128,11 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
             return f"fehler: Modell nicht erreichbar, {_zusammenfassung(ergebnisse)}", ergebnisse
         return _zusammenfassung(ergebnisse), ergebnisse
     except Exception as fehler:  # noqa: BLE001
-        log(f"fehler in {name}: {fehler}\n{traceback.format_exc(limit=3)}")
+        meldung = str(fehler)
+        if name == "postfach" and any(w in meldung.lower() for w in ("authenticationfailed", "login failed", "invalid_grant", " 401", "lehnt den zugang ab")):
+            meldung = ("Die Anmeldung bei einem Postfach klappt nicht mehr. Hast du dein Passwort geändert oder das App-Passwort gelöscht? "
+                       "Sag deinem Claude: Verbinde mein Postfach neu.")
+        log(f"fehler in {name}: {meldung}\n{traceback.format_exc(limit=3)}")
         if netzfehler(fehler):
             # Zug, Hotel-WLAN, VPN: kein Fehler, nur einmal am Tag eine freundliche Zeile.
             if echt(args):
@@ -136,7 +140,7 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
             return f"offline: {name}", []
         if echt(args):
             ereignis("fehler", f"{name}: {fehler}")
-        return f"fehler: {fehler}", []
+        return f"fehler: {meldung}", []
 
 
 def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:

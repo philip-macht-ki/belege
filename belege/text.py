@@ -119,6 +119,23 @@ def _pypdf(datei: Path) -> str:
         return ""
 
 
+def pdf_defekt(datei: Path) -> bool:
+    """Erkennt einen Parserfehler, nicht bloß einen Scan ohne Text."""
+    if Path(datei).suffix.lower() != ".pdf":
+        return False
+    # Tests und manche Importwege benutzen eine PDF-Endung für noch nicht
+    # gerenderte Textattrappen; nur ein als PDF erkennbarer Download ist hier
+    # ein beschädigtes PDF.
+    if not Path(datei).read_bytes()[:5].startswith(b"%PDF-"):
+        return False
+    try:
+        from pypdf import PdfReader
+        PdfReader(str(datei), strict=True).pages[0:1]
+        return False
+    except Exception:
+        return True
+
+
 def _pdf_bilder_quartz(datei: Path, ordner: Path, dpi: int = 200, seiten: int = 2) -> list[Path]:
     """Rendert maximal zwei PDF-Seiten mit macOS CoreGraphics nach PNG.
 

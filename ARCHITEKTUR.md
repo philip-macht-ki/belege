@@ -206,7 +206,8 @@ class Postfach:
     def entwurf(self, an: str, betreff: str, text: str, anhaenge: list[Path]) -> str   # legt Entwurf im Postfach an
     def _senden(self, an, betreff, text, anhaenge) -> str   # NUR von senden.py aufrufen
     def mit_label(self, label: str) -> list[dict]           # nur Weg B, sonst []
-    def label_erledigt(self, id: str, label: str) -> None   # nur Weg B
+  def label_erledigt(self, id: str, label: str) -> None   # nur Weg B
+  def nach_ablage(self, id: str, art: str, ordner: str) -> str  # „markieren“ | „verschieben“, nie löschen
 ```
 
 - Weg A: `imaplib` (SSL 993) und `smtplib` (465 SSL oder 587 STARTTLS).
@@ -230,6 +231,14 @@ class Postfach:
   `arbeit/geheim/<konto>_lesen.json` (Scope `gmail.modify`) und
   `<konto>_schreiben.json` (Scope `gmail.compose`). Getrennt,
   damit ein Rechtewechsel den laufenden Lesezugang nicht ungültig macht.
+- Nach einer echten, vollständig erfolgreichen Ablage einer Mail kann
+  `[[konto]].nach_ablage = "markieren" | "verschieben"` gesetzt werden
+  (Standard `"aus"`); der Ordner/Labelname ist `nach_ablage_ordner` (Standard
+  „Belege erledigt“). IMAP markiert gelesen und setzt das Keyword; Verschieben
+  nutzt ausschließlich MOVE, ohne MOVE bleibt es beim Markieren. Gmail setzt
+  das Label, bei `verschieben` wird zusätzlich INBOX entfernt. Graph verschiebt
+  in einen angelegten Ordner, wenn `Mail.ReadWrite` vorliegt. Fehler bleiben
+  immer Bericht/Log, nie ein Abbruch.
 - Weg Microsoft (`belege/microsoft.py`): Microsoft Graph, delegiert, Rechte
   `Mail.ReadWrite`, `Mail.Send`, `User.Read`. Gemeinsame Multi-Tenant-App „belege“ oder eigene
   App des Kunden (öffentlicher Client, kein Geheimnis, Redirect `http://localhost`); Kennung
@@ -482,6 +491,10 @@ Konsole plus Zähler aus dem Index.
 - `belege pruefen` meldet doppelte Ordner in der Ablage (`10 (1)`, `10 2`
   neben `10`) als GELB. Ursache ist fast immer ein zweiter Rechner, der
   mitgetaktet hat. Nie im Finder löschen, sondern in der Cloud.
+- `belege fehlerbericht` schreibt und druckt einen geschwärzten Diagnosebericht
+  nach `arbeit/fehlerbericht-<JJJJ-MM-TT-HHMM>.md`; er enthält Systemdaten,
+  Ampelzeilen, Konfigurationsübersicht und die letzten 60 Logzeilen, aber nie
+  Geheimdateien, Mailadressen, IBANs, Beträge oder Belegdateinamen.
 
 ### Lokaler Postfach-Server (belege/mcp_server.py)
 

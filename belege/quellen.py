@@ -293,9 +293,19 @@ def mail_erledigt(konto: str, mail_id: str, echt: bool):
     from .postfach import oeffnen
 
     postfach = oeffnen(konto)
-    if getattr(postfach, "weg", "") == "b":
-        label = str(kern.konfig("belege").get("postfach", {}).get("label", "Beleg"))
-        postfach.label_erledigt(mail_id, f"{label}/erledigt")
+    konto_cfg = kern.konto(konto)
+    art = str(konto_cfg.get("nach_ablage", "aus")).lower()
+    if art not in {"markieren", "verschieben"}:
+        return
+    ordner = str(konto_cfg.get("nach_ablage_ordner", "Belege erledigt"))
+    try:
+        meldung = postfach.nach_ablage(mail_id, art, ordner)
+        kern.log(f"Postfach {konto}: {meldung}.")
+        if "nur markiert" in meldung:
+            kern.ereignis("zweifel", f"Postfach {konto}: {meldung}.", konto=konto, id=mail_id)
+    except Exception as fehler:  # eine abgelegte Rechnung darf nie wegen der Mailpflege scheitern
+        kern.log(f"Postfach {konto}: nach Ablage nicht markiert: {fehler}")
+        kern.ereignis("fehler", f"Postfach {konto}: nach Ablage nicht markiert: {fehler}", konto=konto, id=mail_id)
 
 
 def handy_funde():

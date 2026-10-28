@@ -2,6 +2,20 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.11.0] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Belege kann abgelegte Mails markieren oder aus dem Posteingang nehmen, ohne je eine Mail zu löschen.
+- Ein kaputtes PDF landet mit einem klaren Hinweis in Unsortiert. Mit `belege fehlerbericht` entsteht ein geschwärzter Text für den Support.
+- DATEV-Übergaben können Belege nach Eingang, Ausgang und Sonstige getrennt versenden.
+
+### Musst du etwas tun?
+
+Nein. Wenn du abgelegte Mails erledigen möchtest, trägst du bei deinem `[[konto]]` `nach_ablage = "markieren"` oder `"verschieben"` ein.
+
 ## [1.10.0] – 29.10.2026
 
 aktion: keine

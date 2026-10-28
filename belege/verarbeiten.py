@@ -169,6 +169,16 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("zweifel", f"Vorsicht, PDF mit aktiven Inhalten ({aktiv_grund}): {fund.name} liegt unter {ziel}. {hinweis}",
                               quelle=fund.quelle, pfad=str(ziel), grund=aktiv_grund)
             return ergebnis
+        from .text import pdf_defekt
+        if pdf_defekt(fund.datei):
+            from .ablegen import ablegen
+            from .typen import Text
+            einordnung = _ohne_text()
+            einordnung.grund = "Datei beschädigt oder unvollständig heruntergeladen"
+            ergebnis = ablegen(fund, einordnung, Text("", "defekt", 0), echt)
+            if echt:
+                kern.ereignis("zweifel", f"{fund.name}: Datei beschädigt oder unvollständig heruntergeladen. Bitte ansehen.", quelle=fund.quelle)
+            return ergebnis
         zugferd = _zugferd(fund)
         if zugferd:
             # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
