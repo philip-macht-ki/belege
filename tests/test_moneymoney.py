@@ -213,3 +213,33 @@ def test_gleiche_buchungen_in_einer_datei_bleiben_dubletten_ueber_dateien_nicht(
     assert len(monat.buchungen_aus([monatsdatei], "2026-09")) == 2
     gelesen = monat.buchungen_aus([monatsdatei, jahresdatei], "2026-09")
     assert sorted(b["betrag"] for b in gelesen) == [-59.5, -3.5, -3.5]
+
+
+def test_amex_csv_und_moneymoney_zaehlen_dieselbe_kartenbuchung_einmal(repo):
+    # Philip, 28.10.2026: amex.de und MoneyMoney schreiben denselben Händler verschieden.
+    kopf = "Datum,Beschreibung,Betrag\n"
+    amex = repo / "auszuege" / "a_amex.csv"
+    mm = repo / "auszuege" / "b_moneymoney.csv"
+    amex.write_text(kopf + '14.09.2026,FACEBK *XD8YZ42FB4  DUBLIN,"321,68"\n', encoding="utf-8")
+    mm.write_text(kopf + '14.09.2026,"Facebk *XD8YZ42FB4 Dublin Facebook Advertisi, UK","321,68"\n'
+                  + '15.09.2026,GITHUB INC,"14,96"\n', encoding="utf-8")
+    gelesen = monat.buchungen_aus([amex, mm], "2026-09")
+    assert len(gelesen) == 2
+    assert sorted(abs(b["betrag"]) for b in gelesen) == [14.96, 321.68]
+
+
+def test_girokonto_und_karte_mit_gleichem_haendler_bleiben_zwei(repo):
+    giro = repo / "auszuege" / "a_giro.csv"
+    karte = repo / "auszuege" / "b_karte.csv"
+    giro.write_text("Buchungstag;Beguenstigter/Zahlungspflichtiger;Verwendungszweck;Betrag\n"
+                    "14.09.2026;AMAZON EU;Bestellung 1;-19,99\n", encoding="utf-8")
+    karte.write_text('Datum,Beschreibung,Betrag\n14.09.2026,AMAZON EU SARL,"19,99"\n', encoding="utf-8")
+    assert len(monat.buchungen_aus([giro, karte], "2026-09")) == 2
+
+
+def test_karte_mit_verschiedener_referenz_bleibt_zwei(repo):
+    a = repo / "auszuege" / "a_amex.csv"
+    b = repo / "auszuege" / "b_mm.csv"
+    a.write_text('Datum,Beschreibung,Betrag\n14.09.2026,FACEBK *AAA111 DUBLIN,"10,00"\n', encoding="utf-8")
+    b.write_text('Datum,Beschreibung,Betrag\n14.09.2026,Facebk *BBB222 Dublin,"10,00"\n', encoding="utf-8")
+    assert len(monat.buchungen_aus([a, b], "2026-09")) == 2
