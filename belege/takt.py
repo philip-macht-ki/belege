@@ -60,7 +60,9 @@ def quelle_abarbeiten(name: str, args) -> list[Ergebnis]:
             if not fund.mail:
                 continue
             schluessel = (fund.mail["konto"], fund.mail["id"])
-            je_mail[schluessel] = je_mail.get(schluessel, True) and ergebnis.gut
+            # Ein Befund (etwa „Unsortiert“) ist noch keine vollständige Ablage.
+            # Die Mail bleibt dann unverändert und kommt beim nächsten Lauf wieder.
+            je_mail[schluessel] = je_mail.get(schluessel, True) and ergebnis.status in {"ok", "nichts"}
         for (konto, mail_id), alles_gut in je_mail.items():
             if alles_gut:
                 quellen.mail_erledigt(konto, mail_id, echt(args))
