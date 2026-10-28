@@ -592,7 +592,7 @@ def offene_posten_text(monat: str, ergebnis: list[dict]) -> str:
 
 
 def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen: list[dict] | None = None,
-                       hinweis: str | None = None) -> None:
+                       hinweis: str | None = None, name: str | None = None) -> None:
     """Schreibt die lesbaren Abgleichdateien nach arbeit/monat/<JJJJ-MM>/."""
     ordner.mkdir(parents=True, exist_ok=True)
     offen = [x for x in ergebnis if x["status"] == "fehlt"]
@@ -620,7 +620,7 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen
         "# Bitte prüfen\n\n" + "\n".join(_zeile(x) for x in pruefen) + "\n", encoding="utf-8"
     )
 
-    betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+    betrieb = name or kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     zeilen = [f"# Offene Posten {monat[5:]}/{monat[:4]}, {betrieb}", ""]
     if hinweis:
         zeilen += [hinweis, ""]
@@ -908,19 +908,26 @@ def befehl(args) -> int:
     alle_firmen = kern.firmen()
     if len(alle_firmen) > 1:
         buchungen = buchungen_aus(auszuege, monat)
+        alle_daten: list[dict] = []
         for einzelfirma in alle_firmen:
             hinweis = None
             if not einzelfirma.get("konten") and einzelfirma["name"] != alle_firmen[0]["name"]:
                 hinweis = "Kontoauszug keiner Firma zugeordnet: trag in [[firma]] konten ein"
             daten_firma = abgleichen(_buchungen_fuer_firma(buchungen, einzelfirma, alle_firmen), index, einzelfirma["name"])
+            _nachsuche(daten_firma, args)
+            alle_daten += daten_firma
             ziel_firma = kern.pfad("arbeit", "monat", monat, einzelfirma["bereich"])
-            _schreibe_ausgaben(ziel_firma, monat, daten_firma, _mahnungen(), hinweis)
+            _schreibe_ausgaben(ziel_firma, monat, daten_firma, _mahnungen(), hinweis, einzelfirma["name"])
             zugeordnet = sum(x["status"].startswith("zugeordnet") for x in daten_firma)
             fehlt = [x for x in daten_firma if x["status"] == "fehlt"]
             zusatz = f" – {hinweis}" if hinweis else ""
             print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
             if getattr(args, "uebergabe", False):
                 _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
+            if getattr(args, "anfragen", False):
+                _anfragen(daten_firma, kern.echt(args))
+        from .posten import fortschreiben
+        fortschreiben(alle_daten)
         return 0
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)

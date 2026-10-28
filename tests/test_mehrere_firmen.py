@@ -89,6 +89,9 @@ def test_monat_trennt_konten_je_firma(tmp_path, monkeypatch):
     assert monat.befehl(args) == 0
     assert [x["name"] for x in kern.lesen(tmp_path / "arbeit/monat/2026-10/Alpha/abgleich.json")] == ["Alpha Lieferant"]
     assert [x["name"] for x in kern.lesen(tmp_path / "arbeit/monat/2026-10/Beta/abgleich.json")] == ["Beta Lieferant"]
+    # Offene Posten werden für alle Firmen fortgeschrieben, die Klärungsliste trägt den Firmennamen.
+    assert len(kern.lesen(tmp_path / "arbeit" / "posten.json")) == 2
+    assert "Beta GmbH" in (tmp_path / "arbeit/monat/2026-10/Beta/klaerung.md").read_text(encoding="utf-8")
 
 
 def test_monat_ohne_konten_nutzt_hauptfirma_und_hinweis(tmp_path, monkeypatch):
