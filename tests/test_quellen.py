@@ -47,3 +47,18 @@ def test_scan_funde_liefert_sha_nur_einmal(repo):
     toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
     assert len(list(quellen.scan_funde())) == 1
     assert list(quellen.scan_funde()) == []
+
+
+def test_scan_funde_liest_unterordner_wie_dropscan(repo):
+    """Dropscan legt je Scanbox und Tag einen Ordner an; versteckte Ordner bleiben draußen."""
+    scan = repo / "scan"
+    tag = scan / "Scanbox-12345" / "2026-10-28"
+    tag.mkdir(parents=True)
+    (tag / "Brief.pdf").write_bytes(b"Papierpost vom Amt")
+    versteckt = scan / ".sync"
+    versteckt.mkdir()
+    (versteckt / "x.pdf").write_bytes(b"intern")
+    toml = repo / "konfig/belege.toml"
+    toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
+    funde = list(quellen.scan_funde())
+    assert [f.name for f in funde] == ["Brief.pdf"]

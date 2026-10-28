@@ -45,7 +45,8 @@ label = "Beleg"
 handy_ordner = "~/Belege/Eingang"
 # Bekommst du Briefe auf Papier? Ein Scan-Dienst (z.B. Dropscan, Caya) oder eine
 # Scan-App legt PDFs in einen Cloud-Ordner. Trag ihn hier ein, dann behandelt
-# belege ihn wie den Handy-Eingang. Leer = keine Papierpost.
+# belege ihn wie den Handy-Eingang, Unterordner (z.B. je Scanbox und Tag) zählen
+# mit. Die Originale bleiben dort liegen. Leer = keine Papierpost.
 scan_ordner = ""
 downloads = "~/Downloads"
 downloads_an = true

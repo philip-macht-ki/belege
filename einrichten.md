@@ -366,9 +366,18 @@ Nur wenn die Person Teil 3 hat.
 4. **Papierpost (optional).** **Frag**, ob Briefe auf Papier kommen. Bei wenigen
    Briefen genügt ein Foto wie bei einem Kassenbon im Handy-Eingang. Bei vielen
    oder regelmäßigen Briefen nutzt du einen Scan-Dienst (zum Beispiel Dropscan
-   oder Caya, kostenpflichtig) oder eine Scan-App. Deren Zielordner kommt unter
-   `[quellen]` als `scan_ordner` in `konfig/belege.toml`; danach läuft
-   `uv run belege pruefen`.
+   oder Caya, kostenpflichtig) oder eine Scan-App.
+   **Nutzt die Person Dropscan, sag es ihr so:** In Dropscan unter Einstellungen
+   die automatische Weiterleitung an einen Cloud-Speicher einschalten (Google
+   Drive, Dropbox oder OneDrive, derselbe Dienst wie für das Handy). Dropscan legt
+   dann jeden Scan als PDF in einen Ordner, meist mit Unterordnern je Scanbox und
+   Tag. Genau diesen Ordner trägt Claude als `scan_ordner` unter `[quellen]` in
+   `konfig/belege.toml` ein; Unterordner liest belege mit, die Originale bleiben
+   bei Dropscan. Bei Caya oder einer Scan-App gilt dasselbe mit deren Zielordner.
+   Danach läuft `uv run belege pruefen`.
+   Eingescannte Briefe landen danach in der Ablage wie jeder andere Beleg oder als
+   Dokument. Fragt die Person später „Wo ist der Brief vom Finanzamt?“, sucht
+   Claude mit `dokumente_suchen` bzw. `belege_suchen` darin.
 5. **Regeln.** Wiederkehrende Lieferanten bekommen eine feste Regel in
    `konfig/regeln.toml`; die USt-IdNr. steht unter `[betrieb] ust_id`. Dateien in
    `Unsortiert` ordnet Claude nach einem Satz der Person mit
