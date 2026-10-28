@@ -361,6 +361,7 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
 - Ohne `--auszug` liest der Abgleich **alle** CSV-Dateien im Auszugsordner mit
   Buchungen im Monat (Girokonto und Kreditkarte nebeneinander). Dieselbe
   Buchung (Datum, Betrag, Name, Zweck) zählt nur einmal (`buchungen_aus`).
+  Rundfunkbeitrag: Eine Abbuchung mit Beitragsnummer gilt als belegt, wenn ein Dokument in `dokumente.json` dieselbe neunstellige Beitragsnummer enthält („zugeordnet (Dauerbeleg)“).
   Kartenexporte im Format von amex.de vergleichen statt des ganzen Namens die
   ersten zwei Wörter (Händler und Referenz), damit derselbe Umsatz aus amex.de
   und MoneyMoney nur einmal zählt; Girokonto und Karte teilen nie einen Schlüssel.

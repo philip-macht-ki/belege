@@ -480,12 +480,42 @@ def _sammelrechnungen(ergebnis: list[dict], index: dict, benutzt: set[str]) -> N
                     break
 
 
+def _beitragsnummer(buchung: dict) -> str:
+    """Neunstellige Beitragsnummer aus einer Rundfunk-Abbuchung, sonst leer."""
+    text = f"{buchung.get('name', '')} {buchung.get('zweck', '')}"
+    if "rundfunk" not in _normal(text) and "beitragsservice" not in _normal(text):
+        return ""
+    # „Beitragsnr.“, „Beitragsnummer“, „Beitrags-Nr.“, mit oder ohne Leerzeichen in der Nummer.
+    treffer = re.search(r"beitrags?\s*-?\s*(?:nr\.?|nummer)\s*:?\s*(?<!\d)(\d{3}\s?\d{3}\s?\d{3})(?!\d)", text, re.I)
+    return re.sub(r"\s", "", treffer.group(1)) if treffer else ""
+
+
+def _enthaelt_nummer(text: str, nummer: str) -> bool:
+    """Die Beitragsnummer steht als eigene Zahl im Text, nicht als Teil einer längeren."""
+    ziffern = re.sub(r"(?<=\d)\s(?=\d)", "", text)
+    return re.search(rf"(?<!\d){nummer}(?!\d)", ziffern) is not None
+
+
 def _dauerbelege(ergebnis: list[dict]) -> None:
-    """Findet Verträge in der Dokumentenablage, Kündigungen sind kein Nachweis."""
+    """Findet Verträge in der Dokumentenablage, Kündigungen sind kein Nachweis.
+
+    Rundfunkbeitrag (Philip, 28.10.2026): keine Monatsrechnung; Dauerbeleg ist der
+    Bescheid bzw. die Anmeldebestätigung des Beitragsservice mit derselben Beitragsnummer.
+    """
     dokumente = kern.lesen(kern.pfad("arbeit", "dokumente.json"), {}) or {}
     for buchung in ergebnis:
         if buchung["status"] != "fehlt":
             continue
+        nummer = _beitragsnummer(buchung)
+        if nummer:
+            for eintrag in dokumente.values():
+                raum = f"{eintrag.get('gegenueber', '')} {eintrag.get('titel', '')} {eintrag.get('text', '')}"
+                if _enthaelt_nummer(raum, nummer):
+                    buchung["status"] = "zugeordnet (Dauerbeleg)"
+                    buchung["beleg_pfad"] = eintrag.get("pfad")
+                    break
+            if buchung["status"] != "fehlt":
+                continue
         for eintrag in dokumente.values():
             raum = f"{eintrag.get('gegenueber', '')} {eintrag.get('titel', '')} {eintrag.get('text', '')} {eintrag.get('pfad', '')}"
             if "kündigung" in _normal(raum) or "kuendigung" in _normal(raum):

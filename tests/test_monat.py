@@ -313,3 +313,42 @@ def test_monat_mahnung_ohne_auszug_bis_mahntermin_ist_nicht_pruefbar(repo):
     kern.schreiben(repo / "arbeit/dokumente.json", {"m": {"datum": tag.isoformat(), "gegenueber": "Pixelwerk", "titel": "Mahnung", "text": "Zahlungserinnerung 12,00", "pfad": "Dokumente/Mahnung.pdf"}})
     status = monat._mahnungen()[0]["status"]
     assert status.startswith("nicht prüfbar") and status != "offen"
+
+
+def test_monat_rundfunk_bescheid_ist_dauerbeleg(repo):
+    """Rundfunkbeitrag: Bescheid mit derselben Beitragsnummer gilt jeden Monat (Philip, 28.10.2026)."""
+    tag = kern.jetzt().date().isoformat()
+    kern.schreiben(repo / "arbeit/dokumente.json", {
+        "bescheid": {"art": "behoerde", "gegenueber": "ARD ZDF Deutschlandradio Beitragsservice",
+                     "titel": "Festsetzungsbescheid", "text": "Beitragsnummer 471 440 743 Betriebsstätte",
+                     "pfad": "Dokumente/Behörde/Rundfunk.pdf"},
+        "anderer": {"art": "behoerde", "gegenueber": "Beitragsservice", "titel": "Bescheid",
+                    "text": "Beitragsnummer 534 548 136", "pfad": "Dokumente/Behörde/Privat.pdf"},
+    })
+    daten = monat.abgleichen([
+        {"datum": tag, "betrag": -18.36, "name": "Rundfunk ARD, ZDF, DRadio",
+         "zweck": "Rundfunk 08.2026 - 10.2026 Beitragsnr. 471440743"},
+        {"datum": tag, "betrag": -18.36, "name": "Rundfunk ARD, ZDF, DRadio",
+         "zweck": "Rundfunk 08.2026 - 10.2026 Beitragsnr. 999999999"},
+    ], {})
+    assert daten[0]["status"] == "zugeordnet (Dauerbeleg)"
+    assert daten[0]["beleg_pfad"] == "Dokumente/Behörde/Rundfunk.pdf"
+    assert daten[1]["status"] == "fehlt"
+
+
+def test_monat_rundfunk_nummernvarianten_und_grenzen(repo):
+    tag = kern.jetzt().date().isoformat()
+    kern.schreiben(repo / "arbeit/dokumente.json", {
+        "bescheid": {"art": "behoerde", "gegenueber": "Beitragsservice", "titel": "Anmeldebestätigung",
+                     "text": "Beitragsnummer 471 440 743", "pfad": "Dokumente/Rundfunk.pdf"},
+        "lang": {"art": "behoerde", "gegenueber": "Beitragsservice", "titel": "Anderes",
+                 "text": "Aktenzeichen 1234567890", "pfad": "Dokumente/Lang.pdf"},
+    })
+    buchungen = [
+        {"datum": tag, "betrag": -18.36, "name": "Beitragsservice", "zweck": "Rundfunk Beitragsnummer 471 440 743"},
+        {"datum": tag, "betrag": -18.36, "name": "ARD ZDF Beitragsservice", "zweck": "Rundfunk Beitrags-Nr. 471440743"},
+        {"datum": tag, "betrag": -18.36, "name": "Rundfunk", "zweck": "Beitragsnr. 234567890"},
+    ]
+    daten = monat.abgleichen(buchungen, {})
+    assert [x["status"] for x in daten[:2]] == ["zugeordnet (Dauerbeleg)"] * 2
+    assert daten[2]["status"] == "fehlt", "Teil einer längeren Zahl zählt nicht"
