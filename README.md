@@ -78,12 +78,16 @@ das einmal und danach höchstens wöchentlich; nach einer Nachlieferung folgt En
   deinem Steuerberater oder Buchhaltungsprogramm. Bei E-Rechnungen wird das XML
   als Original mit abgelegt. Keine Rechtsberatung, keine Zusage zur GoBD.
 
-## Postfach: Weg A oder Weg B
+## Postfach: Weg A, Weg B oder Microsoft
 
 - **Weg A (Standard):** App-Passwort im macOS-Schlüsselbund. Gmail, GMX, web.de,
   T-Online, iCloud, mailbox.org, freenet.de und Posteo, dazu eigene Domains
   (Server werden erkannt, sonst von Hand eingetragen).
-  Microsoft-Postfächer gehen seit 2026 nur noch mit OAuth und damit nicht über Weg A.
+  Microsoft-Postfächer nehmen seit 2026 kein App-Passwort mehr an, dafür gibt es
+  den Weg Microsoft.
+- **Weg Microsoft:** Outlook, Microsoft 365 und Outlook.com über Microsoft Graph.
+  Einmal im Browser anmelden, über Philips App oder eine eigene App der Firma.
+  Siehe `einrichten.md`, Abschnitt „Microsoft-Postfach“.
 - **Weg B (auf Wunsch):** eigenes Google-Projekt. Getrennte Rechte (lesen,
   Entwürfe, senden), Gmail-Labels, einzeln widerrufbar. Komplexer, siehe
   `einrichten_weg_b.md`.
