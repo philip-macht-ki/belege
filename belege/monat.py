@@ -180,9 +180,14 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
     """Liest einen Monat aus mehreren Auszügen und zählt Dubletten nur einmal.
 
     Mehrere CSVs sind normal: ein Girokonto und eine Kreditkarte, oder eine
-    Jahres-CSV neben einer Monats-CSV. Dieselbe Buchung (Datum, Betrag, Name,
-    Zweck) fließt nur einmal in den Abgleich. Zwei gleiche Buchungen in
-    derselben Datei (zweimal Kaffee am selben Tag) bleiben zwei.
+    Jahres-CSV neben einer Monats-CSV, oder derselbe Kartenumsatz von amex.de und
+    aus MoneyMoney. Dieselbe Buchung (Datum, Betrag, erstes Wort des Namens) fließt
+    nur einmal in den Abgleich. Zwei gleiche Buchungen in derselben Datei (zweimal
+    Kaffee am selben Tag) bleiben zwei.
+
+    Nur das erste Wort zählt, weil zwei Exporte denselben Händler verschieden
+    schreiben: „FACEBK *XD8YZ42FB4 DUBLIN“ bei amex.de, „Facebk *XD8YZ42FB4 Dublin
+    Facebook Advertisi“ in MoneyMoney (Philip, 28.10.2026: 52 Buchungen doppelt).
     """
     gesehen: dict[tuple, int] = {}
     ergebnis: list[dict] = []
@@ -194,7 +199,7 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
             continue
         in_datei: dict[tuple, int] = {}
         for buchung in gefunden:
-            schluessel = (buchung["datum"], buchung["betrag"], buchung["name"], buchung["zweck"])
+            schluessel = (buchung["datum"], buchung["betrag"], _kurzname(buchung["name"] or buchung["zweck"]))
             in_datei[schluessel] = in_datei.get(schluessel, 0) + 1
             # Neu ist nur, was diese Datei öfter enthält als jede Datei davor.
             if in_datei[schluessel] <= gesehen.get(schluessel, 0):
@@ -202,6 +207,12 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
             gesehen[schluessel] = in_datei[schluessel]
             ergebnis.append(buchung)
     return ergebnis
+
+
+def _kurzname(name: str) -> str:
+    """Erstes Wort des Buchungsnamens, klein, für den Dublettenschlüssel."""
+    treffer = re.match(r"[\wäöüß]+", (name or "").strip().casefold())
+    return treffer.group(0) if treffer else ""
 
 
 def _lesbar(datei: Path, kodierung: str) -> bool:

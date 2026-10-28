@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.7.2] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Holst du deine Kreditkartenumsätze auf zwei Wegen, etwa als CSV von amex.de und zusätzlich über MoneyMoney, zählt der Abgleich jede Buchung nur noch einmal. Vorher konnten Belege doppelt als „fehlt“ gemeldet werden, weil beide Exporte den Händler verschieden schreiben.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.7.1] – 28.10.2026
 
 aktion: keine
