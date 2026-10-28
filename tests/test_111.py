@@ -98,3 +98,10 @@ def test_schwaerzen_header_cookie_und_oauth_code():
 
     text = schwaerzen("Authorization: Basic dXNlcjpwYXNz\nCookie: sid=abc; x=1\nGET /cb?code=4/0AbcDef&state=xyz")
     assert "dXNlcjpwYXNz" not in text and "abc;" not in text and "0AbcDef" not in text and "xyz" not in text
+
+
+def test_schwaerzen_header_als_json():
+    from belege.fehlerbericht import schwaerzen
+
+    text = schwaerzen('{"Authorization": "Basic geheim", \'Cookie\': \'a=b; c=d\'}')
+    assert "geheim" not in text and "a=b" not in text

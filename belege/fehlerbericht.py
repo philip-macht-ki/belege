@@ -22,6 +22,8 @@ def schwaerzen(text: str) -> str:
     text = re.sub(rf'(?i)(["\']?{geheim_name}["\']?\s*[:=]\s*)(?:"[^"\r\n]*"|\'[^\'\r\n]*\'|[^,\s}}]+)', r"\1<geheimnis>", text)
     text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer <geheimnis>", text)
     text = re.sub(r"(?i)\b(authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]+", r"\1: <geheimnis>", text)
+    # Auch als JSON- oder Python-Darstellung: {"Authorization": "Basic …"}
+    text = re.sub(r"""(?i)(["'](?:authorization|proxy-authorization|cookie|set-cookie)["']\s*:\s*)(?:"[^"\r\n]*"|'[^'\r\n]*')""", r"\1<geheimnis>", text)
     text = re.sub(r"(?i)([?&\s](?:code|state|id_token|session|sid)=)[^&\s]+", r"\1<geheimnis>", text)
     # Der ganze Pfad wird ersetzt: Dateinamen dürfen Leerzeichen und Umlaute enthalten.
     text = re.sub(
