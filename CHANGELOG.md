@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.7.1] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Schickt dir dein Steuerberater eine BWA, eine Auswertung oder eine Liste mit Rückfragen, legt belege sie nicht mehr als Rechnung ab. Sie landen bei den Unterlagen zum Ansehen und gehen nicht zurück an den Steuerberater.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.7.0] – 28.10.2026
 
 aktion: keine
