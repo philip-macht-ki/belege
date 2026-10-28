@@ -20,7 +20,7 @@ Belegwort bedeutet ausgang. Ein externer Mailabsender plus Belegwort bedeutet
 eingang und hat Vorrang. Invoice, Receipt, Rechnung und Quittung sind nie ein
 Lieferant. Zahlbar bis, fällig am, gültig bis, due und valid until sind nie das
 Belegdatum. Jede Rechnung oder Quittung an dich ist eingang, auch wenn sie privat ist (bereich privat, art eingang). Lieferant mit Rechtsform, so wie er im Briefkopf steht, aber ohne Zusätze wie "via". Kontoauszug, Bescheid und Vertrag sind sonstige. Newsletter, AGB
-und Werbung sind keine Belege. Unterlagen deines Steuerberaters, die er dir selbst schickt, sind ebenfalls keine Belege: BWA, Auswertungen, Summen- und Saldenlisten, Listen mit Rückfragen oder fehlenden Belegen. Nur seine Rechnung an dich ist ein Beleg (eingang).
+und Werbung sind keine Belege. Unterlagen deines Steuerberaters, die er dir selbst schickt, sind ebenfalls keine Belege: BWA, Auswertungen, Summen- und Saldenlisten, Listen mit Rückfragen oder fehlenden Belegen. Seine Rechnung an dich bleibt ein Beleg (eingang), ein weitergeleiteter Steuerbescheid bleibt sonstige wie jeder Bescheid.
 
 Beispiele:
 Software-Abo: {"ist_beleg":true,"art":"eingang","bereich":"betrieb","datum":"2026-09-10","lieferant":"Wolkenwerk","beschreibung":"Rechnung-Software-Abo","betrag":19.90,"waehrung":"EUR","sicherheit":"hoch","grund":"Rechnung eines externen Software-Anbieters."}
