@@ -136,30 +136,39 @@ Claude Pro). Sonst sage ich dir jeden Klick einzeln an.“ Lehnt die Person ab,
 fragt Claude bei einem Hänger noch einmal. Passwörter, Codes und die Zustimmung
 klickt immer die Person selbst.
 
-**Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
-Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Ein privates
-Outlook.com-, Hotmail- oder Live-Postfach geht direkt nur mit Philips App; bis es
-sie gibt, nimmt Claude dort den Rückfall unten (bei privaten Postfächern sperrt
-Microsoft die Umleitung nicht). Die eigene App legt ein Admin der Firma an, bei
-kleinen Firmen meist die Geschäftsführung:
+**Philips App (der einfache Weg).** Claude trägt nur `weg = "microsoft"` beim
+Postfach ein, ohne `client_id` und `tenant_id`, und es geht weiter mit
+„Anmelden“ unten. Für private Outlook.com-, Hotmail- und Live-Postfächer ist das
+der einzige direkte Weg.
 
-1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.
-2. Links „Identität“ (oder „Entra ID“), „Anwendungen“, „App-Registrierungen“,
-   oben „Neue Registrierung“.
-3. Name `belege`. Unterstützte Kontotypen: „Nur Konten in diesem
-   Organisationsverzeichnis“. Umleitungs-URI: Plattform „Öffentlicher
-   Client/nativ (mobil und Desktop)“, Adresse `http://localhost`.
-   „Registrieren“.
-4. Auf der Übersichtsseite stehen „Anwendungs-ID (Client)“ und
-   „Verzeichnis-ID (Mandant)“. Beide sind keine Geheimnisse; die Person
-   kopiert sie in den Chat.
+**Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
+Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Die eigene
+App legt ein Admin der Firma an, bei kleinen Firmen meist die Geschäftsführung:
+
+Die Bezeichnungen stammen aus dem Entra Admin Center auf Deutsch, Stand
+Oktober 2026; mit Claude in Chrome klickt Claude die Felder selbst, die Person
+klickt nur „Registrieren“ (damit stimmt sie Microsofts Plattformrichtlinien zu)
+und die Administratorzustimmung.
+
+1. entra.microsoft.com öffnen und mit dem Admin-Konto der Firma anmelden.
+2. Links „Entra ID“, „App-Registrierungen“, oben „Neue Registrierung“.
+3. Name `belege`. „Unterstützte Kontotypen“: „Nur ein Mandant – <Name des
+   Verzeichnisses>“. „Umleitungs-URI“: Plattform „Öffentlicher Client/nativ
+   (mobil und Desktop)“, Adresse `http://localhost`. „Registrieren“.
+4. Auf der Übersicht der App stehen „Anwendungs-ID (Client)“ und
+   „Verzeichnis-ID (Mandant)“. Beides sind keine Geheimnisse; Claude liest sie
+   ab oder die Person kopiert sie in den Chat.
 5. Links „API-Berechtigungen“, „Berechtigung hinzufügen“, „Microsoft Graph“,
-   „Delegierte Berechtigungen“: `Mail.ReadWrite`, `Mail.Send` und `User.Read`
-   anhaken, „Berechtigungen hinzufügen“. Dann „Administratorzustimmung für
-   <Firma> erteilen“ und bestätigen. Alle drei Zeilen zeigen danach einen
-   grünen Haken.
-6. Unter „Authentifizierung“ bleibt „Öffentliche Clientflows zulassen“ auf
-   „Nein“. Ein Geheimnis (Client Secret) wird nicht gebraucht.
+   „Delegierte Berechtigungen“. Ins Suchfeld `Mail.` tippen, die Gruppe „Mail“
+   aufklappen, `Mail.ReadWrite` und `Mail.Send` anhaken, „Berechtigungen
+   hinzufügen“. `User.Read` ist schon da. Dann „Administratorzustimmung für
+   „<Verzeichnis>“ erteilen“ und bestätigen; alle drei Zeilen zeigen danach
+   einen grünen Haken.
+6. Links „Authentication (Preview)“ (so heißt der Punkt auch in der deutschen
+   Oberfläche; in der älteren Ansicht „Authentifizierung“), Reiter
+   „Einstellungen“ (älter: „Erweiterte Einstellungen“): „Öffentliche
+   Clientflows zulassen“ steht auf „Deaktiviert“ bzw. „Nein“ und bleibt so. Ein Geheimnis (Client
+   Secret) wird nicht gebraucht.
 
 Claude trägt beim Postfach in `konfig/belege.toml` ein:
 
@@ -180,6 +189,9 @@ die Microsoft-Anmeldung im Browser:
    und senden darf. Wer Admin ist, setzt den Haken **„Im Namen Ihrer
    Organisation zustimmen“** und bestätigt. Bei der eigenen App ist das schon
    in Schritt 5 erledigt.
+   Microsoft zeigt bei Philips App „nicht verifiziert“ beim Herausgeber; das
+   ist erwartet (Deern & Jung Investment GmbH ist kein Microsoft-Partner), Claude
+   sagt das vorher in einem Satz.
 3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
    Person kein Admin. Dann meldet sich der Admin einmal selbst an und stimmt
    zu; danach klappt es für alle Postfächer der Firma.
