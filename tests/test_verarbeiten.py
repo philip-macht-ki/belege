@@ -130,7 +130,7 @@ def test_downloads_duplikat_trocken_meldet_nichts(repo):
 
     datei = repo / "downloads" / "kopie.pdf"
     datei.write_bytes(b"%PDF gleich")
-    k.schreiben(repo / "arbeit" / "index.json", {_sha(datei): {"pfad": "Betrieb/x.pdf"}})
+    k.schreiben(repo / "arbeit" / "index.json", {_sha(datei): {"pfad": "Betrieb/x.pdf", "firma": "Studio Beispiel"}})
     fund = Fund(datei, "downloads", datei.name, date.today(), verschieben=True)
     assert verarbeite(fund, False).status == "nichts"
     assert not (repo / "arbeit" / "ereignisse").exists()
@@ -139,6 +139,7 @@ def test_downloads_duplikat_trocken_meldet_nichts(repo):
     verarbeite(fund, True)
     zeilen = "".join(p.read_text() for p in (repo / "arbeit" / "ereignisse").glob("*.jsonl"))
     assert zeilen.count('"doppelt"') == 1
+    assert "Studio Beispiel" in zeilen
     assert datei.exists()
 
 

@@ -82,6 +82,9 @@ arbeit/                   Laufzeit, nie im Git
   (Standard: `name`), sonst `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
   `[ablage].bereich_privat` (Standard „Privat“; nur wenn `privat = true`,
   sonst geht Privates nach Unsortiert).
+- Firmenbereiche dürfen nur sichere Zeichen enthalten, weder Pfadtrenner noch
+  `..` oder leer sein; zwei Firmen dürfen nach der Bereinigung nicht denselben
+  Bereich haben. Das ist ein Konfigurationsfehler und stoppt Ablage und Monat.
 - Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
   sondern nach `Vorsicht Abofalle`; der Tagesbericht sagt „nicht unterschreiben,
   nicht zahlen“. Erkennung verlangt mindestens drei unabhängige Merkmale (oder zwei, wenn eines eine bekannte Abofallen-Domain ist). PDFs mit aktiven Inhalten (JavaScript, Launch, RichMedia, XFA, eingebettete Nicht-XML-Dateien) kommen nach `Vorsicht Datei prüfen`; E-Rechnungen mit eingebettetem XML gehen normal durch.
@@ -144,6 +147,9 @@ class Einordnung:
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 `nichts` („liegt schon unter …“), keine zweite Ablage.
+Alte Betriebs-Einträge ohne `firma` zählen bei aktivem `[[firma]]` zur
+Hauptfirma (zuerst `[betrieb]`, wenn sie als Firma übernommen wurde, sonst die
+erste `[[firma]]`).
 
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 

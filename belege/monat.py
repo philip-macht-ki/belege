@@ -403,7 +403,7 @@ def abgleichen(buchungen_liste: list[dict], index: dict, firma: str | None = Non
             if sha not in benutzt
             and beleg.get("status") == "abgelegt"
             and beleg.get("bereich") == "betrieb"
-            and (firma is None or beleg.get("firma") == firma)
+            and (firma is None or kern.firma_von(beleg) == firma)
             and beleg.get("art") == art
             and _beleg_betrag(beleg) is not None
             and abs(abs(buchung.get("originalbetrag") if buchung.get("originalbetrag") is not None else buchung["betrag"]) - _beleg_betrag(beleg)) <= 0.01
@@ -752,7 +752,7 @@ def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None) 
             continue
         if beleg.get("bereich") != "betrieb" or beleg.get("status") != "abgelegt":
             continue
-        if firma is not None and beleg.get("firma") != firma:
+        if firma is not None and kern.firma_von(beleg) != firma:
             continue
         quelle = ablage / str(beleg.get("pfad", ""))
         if not quelle.exists():
@@ -781,7 +781,12 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     echt = kern.echt(args)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
     schluessel = f"{firma['name']}:{monat}" if firma else monat
-    schon = gesehen.get("uebergabe", {}).get(schluessel)
+    uebergaben = gesehen.get("uebergabe", {})
+    schon = uebergaben.get(schluessel)
+    # Der alte Schlüssel ohne Firma steht für die damalige einzige Firma und
+    # schützt bei der Migration ausschließlich die heutige Hauptfirma.
+    if firma and firma["name"] == kern.firmen()[0]["name"]:
+        schon = schon or uebergaben.get(monat)
     if schon and "nochmal" not in (getattr(args, "ziel", None) or []):
         print(f"nichts: {monat} wurde schon am {schon[:10]} übergeben. Nochmal: belege monat nochmal "
               f"--monat {monat} --uebergabe --echt")

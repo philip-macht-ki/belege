@@ -9,6 +9,8 @@ aktion: einrichten
 - Mehrere Firmen können eigene Bereiche in einer gemeinsamen Belegablage haben. Eine Rechnung wird nach ihrem Empfängerfeld zugeordnet, nicht nach dem Postfach, aus dem sie kam.
 - Ist der Empfänger nicht eindeutig, bleibt der Beleg in Unsortiert. Im Tagesbericht steht dann „Firma unklar“.
 - Monatsabgleich und Übergabe laufen je Firma getrennt; jede Firma kann eine eigene Steuerberateradresse haben.
+- Bestehende Betriebsbelege ohne Firmenfeld zählen zur ersten Firma. Ein schon
+  übergebener Monat wird für diese Firma auch nach dem Umstieg nicht erneut gesendet.
 
 ### Musst du etwas tun?
 

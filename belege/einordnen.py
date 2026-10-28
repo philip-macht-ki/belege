@@ -182,14 +182,8 @@ def _betrag(text: str) -> float | None:
     return max(werte) if werte else None
 
 
-def _firma_aus_text(text: str) -> str | None:
-    """Erkennt eine Firma deterministisch im Empfänger-/Adressbereich.
-
-    USt-IdNr. zählt stärker als ein Name. Mehrere Treffer bleiben absichtlich
-    unklar; eine Mailadresse ist hierbei nie ein Gegenbeweis.
-    """
-    # Rechnungsfenster und Kopf liegen gewöhnlich auf der ersten Seite. Ein
-    # späteres Auftreten (AGB, Bankverbindung) darf nicht entscheiden.
+def _firmen_im_text(text: str) -> set[str]:
+    """Alle eigenen Firmen, die im Belegtext vorkommen."""
     oben = "\n".join(text.splitlines()[:45]).casefold()
     treffer: set[str] = set()
     for eintrag in firmen():
@@ -201,7 +195,37 @@ def _firma_aus_text(text: str) -> str | None:
         namen = [eintrag["name"], *eintrag.get("namen", [])]
         if any(str(name).strip() and str(name).casefold() in oben for name in namen):
             treffer.add(eintrag["name"])
+    return treffer
+
+
+def _firma_aus_abschnitt(text: str, kandidaten: set[str]) -> str | None:
+    """Gibt genau eine eigene Firma aus einem begrenzten Textabschnitt zurück."""
+    treffer = _firmen_im_text(text) & kandidaten
     return next(iter(treffer)) if len(treffer) == 1 else None
+
+
+def _firma_aus_text(text: str, art: str | None = None) -> str | None:
+    """Erkennt die Firma nach allen Treffern und ihrer Belegposition.
+
+    Bei mehreren eigenen Firmen entscheidet bei Eingangsrechnungen ausschließlich
+    der Empfängerblock, bei Ausgangsrechnungen der kurze Ausstellerkopf.
+    """
+    treffer = _firmen_im_text(text)
+    if len(treffer) != 1:
+        if not treffer:
+            return None
+        zeilen = text.splitlines()[:45]
+        marker = re.compile(r"rechnung\s+an|rechnungsempf[äa]nger|kunde|an\s*:", re.I)
+        marker_nr = next((i for i, zeile in enumerate(zeilen) if marker.search(zeile)), None)
+        if art == "ausgang":
+            return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
+        if marker_nr is not None:
+            empfaenger = _firma_aus_abschnitt("\n".join(zeilen[marker_nr:marker_nr + 7]), treffer)
+            if empfaenger:
+                return empfaenger
+            return _firma_aus_abschnitt("\n".join(zeilen[:marker_nr]), treffer)
+        return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
+    return next(iter(treffer))
 
 
 def _eigener_betrieb(text: str) -> bool:
@@ -268,14 +292,16 @@ def _rueckfall(
         art = regel["art"]
     beschreibung = str((regel or {}).get("beschreibung") or "Rechnung")
     beschreibung = re.sub(r"\s+", "-", beschreibung.strip()) or "Rechnung"
-    erkannt = _firma_aus_text(inhalt)
+    treffer = _firmen_im_text(inhalt)
+    erkannt = _firma_aus_text(inhalt, art)
     # Ein Kontohinweis ist nur ein schwacher Rückfall, nie eine Überschreibung
     # eines Adressfelds und nie eine Wahl zwischen mehreren Firmen.
-    if not erkannt and fund.mail:
+    if not treffer and fund.mail:
         vorschlag = next((k.get("firma") for k in konfig("belege").get("konto", [])
                           if k.get("name") == fund.mail.get("konto") and firma(k.get("firma"))), None)
         if vorschlag:
             erkannt = str(vorschlag)
+    firma_unklar = bool(treffer) and not erkannt
     return {
         "ist_beleg": ist_beleg,
         "art": art,
@@ -287,12 +313,12 @@ def _rueckfall(
         "beschreibung": beschreibung,
         "betrag": _betrag(inhalt),
         "waehrung": "EUR",
-        "sicherheit": "mittel" if (regel or zahlungsname or (eigener and ist_beleg)) and ist_beleg
+        "sicherheit": "mittel" if ((regel or zahlungsname or (eigener and ist_beleg) or erkannt) and ist_beleg)
         else "niedrig",
         "grund": "Feste Regel erkannt."
         if regel
         else "Ohne Modell nur vorsichtig erkannt.",
-        "firma": erkannt or (firmen()[0]["name"] if len(firmen()) == 1 else "unklar"),
+        "firma": "unklar" if firma_unklar else erkannt or (firmen()[0]["name"] if len(firmen()) == 1 else "unklar"),
     }
 
 
@@ -314,12 +340,13 @@ def _aus_xml(fund: Fund) -> Einordnung | None:
     kaeufer = eigene_firma(daten.get("kaeufer", ""), daten.get("kaeufer_ust", ""))
     verkaeufer = eigene_firma(daten.get("verkaeufer", ""), daten.get("verkaeufer_ust", ""))
     ist_kaeufer, ist_verkaeufer = bool(kaeufer), bool(verkaeufer)
+    zwischen_eigenen = ist_kaeufer and ist_verkaeufer and kaeufer != verkaeufer
     art = "ausgang" if ist_verkaeufer and not ist_kaeufer else "eingang"
     partner = (
         daten.get("kaeufer", "") if art == "ausgang" else daten.get("verkaeufer", "")
     )
     position = next(iter(daten.get("positionen", [])), {}).get("text", "Rechnung")
-    unklar = (kaeufer or verkaeufer) is None
+    unklar = zwischen_eigenen or not (kaeufer or verkaeufer)
     return Einordnung(
         True,
         art,
@@ -330,8 +357,8 @@ def _aus_xml(fund: Fund) -> Einordnung | None:
         float(daten.get("betrag") or 0) or None,
         daten.get("waehrung", "EUR"),
         "niedrig" if unklar else "hoch",
-        "Firma unklar" if unklar else "E-Rechnung mit eindeutigem Geschäftspartner.",
-        "xml", kaeufer or verkaeufer or "unklar",
+        "Rechnung zwischen eigenen Firmen" if zwischen_eigenen else "Firma unklar" if unklar else "E-Rechnung mit eindeutigem Geschäftspartner.",
+        "xml", "unklar" if unklar else kaeufer or verkaeufer,
     )
 
 
@@ -354,7 +381,7 @@ def einordnen(fund: Fund, text: Text, nur_lokal: bool = False) -> Einordnung:
     """
     regel = _regel(fund)
     zahlungsname = _zahlungsabwickler(fund)
-    deterministische_firma = _firma_aus_text(text.text)
+    firmen_treffer = _firmen_im_text(text.text)
     xml = _aus_xml(fund)
     if xml:
         return _sicheres_datum(xml, fund.eingang)
@@ -383,10 +410,14 @@ def einordnen(fund: Fund, text: Text, nur_lokal: bool = False) -> Einordnung:
                 antwort[feld] = regel[feld]
     if zahlungsname:
         antwort["lieferant"] = zahlungsname
+    deterministische_firma = _firma_aus_text(text.text, antwort["art"])
     # Das sichtbar adressierte Unternehmen gewinnt immer gegen ein Modellurteil
     # und gegen den Eingangsweg des Postfachs.
     if deterministische_firma:
         antwort["firma"] = deterministische_firma
+    elif firmen_treffer:
+        # Mehrdeutigkeit aus dem Beleg ist stärker als Modell und Postfach.
+        antwort["firma"] = "unklar"
     datum = date.fromisoformat(antwort["datum"]) if antwort["datum"] else None
     erkannte_firma = antwort.get("firma", "")
     if len(alle_firmen) == 1 and not erkannte_firma:

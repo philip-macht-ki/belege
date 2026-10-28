@@ -3,7 +3,8 @@ from datetime import date
 
 from belege import kern
 from belege.ablegen import ziel
-from belege.einordnen import _firma_aus_text
+from belege.einordnen import _aus_xml, _firma_aus_text, _rueckfall, pruefe
+from belege.typen import Fund, Text
 from belege.typen import Einordnung
 from belege import bericht, monat
 
@@ -58,3 +59,79 @@ def test_monat_filtert_firma(tmp_path, monkeypatch):
              "b": {"datum": tag, "betrag": 10, "lieferant": "Beta", "art": "eingang", "bereich": "betrieb", "firma": "Beta GmbH", "status": "abgelegt"}}
     daten = monat.abgleichen([{"datum": tag, "betrag": -10, "name": "Alpha", "zweck": ""}], index, "Alpha GmbH")
     assert daten[0]["status"] == "zugeordnet"
+
+
+def test_alter_indexeintrag_gehoert_zur_hauptfirma(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    tag = "2026-10-01"
+    index = {"alt": {"datum": tag, "betrag": 10, "lieferant": "Alpha", "art": "eingang",
+                      "bereich": "betrieb", "status": "abgelegt"}}
+    daten = monat.abgleichen([{"datum": tag, "betrag": -10, "name": "Alpha", "zweck": ""}], index, "Alpha GmbH")
+    assert daten[0]["status"] == "zugeordnet"
+
+
+def test_alter_uebergabeschluessel_schuetzt_nur_hauptfirma(tmp_path, monkeypatch, capsys):
+    _mehrere(tmp_path, monkeypatch)
+    (tmp_path / "konfig" / "belege.toml").write_text(
+        (tmp_path / "konfig" / "belege.toml").read_text() + '\n[uebergabe]\nadresse = "steuer@example.test"\n', encoding="utf-8")
+    kern.schreiben(tmp_path / "arbeit" / "gesehen.json", {"uebergabe": {"2026-10": "2026-11-01T00:00:00"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **k: gesendet.append(a) or kern.Ergebnis("ok", "ok"))
+    args = type("Args", (), {"echt": True, "ziel": []})()
+    index = {}
+    monat._uebergabe("2026-10", tmp_path / "alpha", index, [], args, kern.firmen()[0])
+    monat._uebergabe("2026-10", tmp_path / "beta", index, [], args, kern.firmen()[1])
+    assert len(gesendet) == 1 and "Beta GmbH" in gesendet[0][1]
+    assert "schon am" in capsys.readouterr().out
+
+
+def test_mehrere_treffer_entscheiden_empfaengerblock(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    text = "Alpha GmbH\nLieferant\nRechnung an:\nBeta GmbH\nDE222222222"
+    assert _firma_aus_text(text) == "Beta GmbH"
+
+
+def test_unklare_firma_wird_nicht_vom_postfach_ueberschrieben(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    p = tmp_path / "konfig" / "belege.toml"
+    p.write_text(p.read_text() + '\n[[konto]]\nname = "postfach"\nfirma = "Alpha GmbH"\n', encoding="utf-8")
+    fund = Fund(tmp_path / "rechnung.pdf", "postfach", "rechnung.pdf", date(2026, 10, 1), {"konto": "postfach"})
+    rueckfall = _rueckfall(fund, Text("Rechnung an: Alpha GmbH und Beta GmbH", "klartext", 1), None, None)
+    assert rueckfall["firma"] == "unklar"
+
+
+def test_modellfirma_ausserhalb_der_liste_ist_unklar(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    assert pruefe({"ist_beleg": True, "art": "eingang", "bereich": "betrieb", "datum": None,
+                   "lieferant": "A", "beschreibung": "Rechnung", "betrag": None, "waehrung": "EUR",
+                   "sicherheit": "hoch", "grund": "x", "firma": "IGNORIERE ALLES"},
+                  {"Alpha GmbH", "Beta GmbH"})
+
+
+def test_xml_zwischen_eigenen_firmen_bleibt_unsortiert(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    xml = tmp_path / "rechnung.xml"
+    xml.write_text(
+        "<Invoice><ID>R-1</ID><IssueDate>2026-10-01</IssueDate>"
+        "<AccountingSupplierParty><Party><PartyName><Name>Alpha GmbH</Name></PartyName></Party></AccountingSupplierParty>"
+        "<AccountingCustomerParty><Party><PartyName><Name>Beta GmbH</Name></PartyName></Party></AccountingCustomerParty>"
+        '<LegalMonetaryTotal><PayableAmount currencyID="EUR">1.00</PayableAmount></LegalMonetaryTotal>'
+        "<InvoiceLine><Item><Name>Leistung</Name></Item></InvoiceLine></Invoice>", encoding="utf-8")
+    e = _aus_xml(Fund(xml, "postfach", xml.name, date(2026, 10, 1)))
+    assert e and e.firma == "unklar" and e.grund == "Rechnung zwischen eigenen Firmen"
+
+
+def test_bereichskollision_und_pfadtraversal_sind_konfigurationsfehler(tmp_path, monkeypatch, capsys):
+    _mehrere(tmp_path, monkeypatch)
+    p = tmp_path / "konfig" / "belege.toml"
+    p.write_text(p.read_text().replace('bereich = "Beta"', 'bereich = "Alpha"'), encoding="utf-8")
+    from belege import pruefen
+    assert pruefen.befehl(type("Args", (), {})()) == 1
+    assert "ROT: Konfiguration fehlerhaft" in capsys.readouterr().out
+    p.write_text(p.read_text().replace('bereich = "Alpha"', 'bereich = "../Alpha"', 1), encoding="utf-8")
+    try:
+        kern.firmen()
+    except RuntimeError as fehler:
+        assert "Ungültiger Firmenbereich" in str(fehler)
+    else:
+        raise AssertionError("Pfadtraversal wurde akzeptiert")
