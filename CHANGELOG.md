@@ -2,6 +2,21 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.8.0] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Manche Anbieter schicken die Rechnung nicht als PDF im Anhang, sondern nur als Link („Rechnung herunterladen“), zum Beispiel über Stripe. belege holt solche Rechnungen jetzt selbst und legt sie ab wie einen Anhang.
+- Das passiert nur, wenn die Mail nach Rechnung aussieht und genau einen passenden Link hat. Geladen wird nur über eine sichere Verbindung (https), nur ein echtes PDF und nur von öffentlichen Adressen. Abmelde-, Login- oder Konto-Links öffnet belege nie.
+- Sieht eine Mail nach Abofalle aus (etwa ein Branchenbuch-Eintrag mit Rückfax), öffnet belege den Link nicht und warnt dich im Tagesbericht.
+- Rechnungen, die nur nach Anmeldung im Kundenportal liegen, kann belege weiterhin nicht holen. Die bleiben auf deiner Liste „fehlt“.
+
+### Musst du etwas tun?
+
+Nein. Willst du das nicht, schreib in `konfig/belege.toml` unter `[quellen]` die Zeile `rechnungslinks = false`.
+
 ## [1.7.3] – 28.10.2026
 
 aktion: keine

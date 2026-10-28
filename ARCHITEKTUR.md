@@ -165,7 +165,8 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
-| `quellen.py` | `postfach_funde(konto, tage) `, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
+| `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
+| `rechnungslink.py` | `sieht_nach_rechnung(betreff, text) -> bool`, `pdf_links(links) -> list[str]`, `laden(url, ziel, max_bytes) -> Path` (wirft `LinkFehler(grund, endgueltig)`) |
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
 | `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
@@ -189,6 +190,7 @@ class Postfach:
         # je Mail: {"id","von","von_name","an","betreff","datum" (iso),"anhaenge": [name…],"auszug" (≤300 Zeichen)}
         # abfrage: Weg B = Gmail-Suchsyntax; Weg A/ordner = einfache Wörter, "von:x", "betreff:x", "seit:JJJJ-MM-TT"
     def lesen(self, id: str) -> dict             # Kopf + "text" (≤20.000 Zeichen, Klartext) + "anhaenge": [{"name","groesse"}]
+        # + "links": [https-URL…] aus Text und HTML-href, eindeutig, höchstens 50 (nur https)
     def anhaenge(self, id: str, ziel: Path) -> list[Path]   # speichert Anhänge, gibt Pfade zurück
     def entwurf(self, an: str, betreff: str, text: str, anhaenge: list[Path]) -> str   # legt Entwurf im Postfach an
     def _senden(self, an, betreff, text, anhaenge) -> str   # NUR von senden.py aufrufen
@@ -294,6 +296,36 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Signaturen/Logos. Weg B zusätzlich: Mails mit Label `[postfach].label`
   (Standard „Beleg“), ohne Zeitfenster, danach Label „Beleg/erledigt“. Eine
   Mail gilt als gesehen erst, wenn alle ihre Anhänge verarbeitet sind.
+- **rechnungslinks** (Teil von postfach, Schalter `[quellen].rechnungslinks`,
+  Standard `true`): Mails **ohne** Anhang im selben Zeitfenster, gesucht mit
+  den Wörtern Rechnung, Invoice, Receipt, Beleg, Quittung (je Wort höchstens
+  20 Treffer). Nur wenn Betreff oder Text nach Rechnung aussieht
+  (`sieht_nach_rechnung`) und `lesen()["links"]` genau **einen** plausiblen
+  PDF-Link enthält (`pdf_links`: Pfad endet auf `.pdf` oder enthält
+  invoice/rechnung/receipt/beleg/quittung/pdf/download; nie Abmelde-,
+  Datenschutz-, Login- oder Konto-Links), wird er geladen. `laden`: nur https,
+  Port 443, Zertifikat geprüft, kein Proxy, keine Cookies, kein JavaScript;
+  verbunden wird mit genau der IP, die `_host_erlaubt` geprüft hat (alle
+  Adressen des Hosts öffentlich, nie localhost/privat/link-local), damit eine
+  zweite DNS-Antwort nichts umlenkt. Weiterleitungen höchstens 3, jede erneut
+  so geprüft. Antwort muss `Content-Type: application/pdf` haben und mit
+  `%PDF` beginnen; höchstens `[quellen].rechnungslink_max_mb` (Standard 15) MB;
+  20 s Gesamtzeit für Weiterleitungen und Download. Das PDF wird ein ganz normaler Fund
+  (`quelle="postfach"`, `mail` mit zusätzlich `"link": <Host>`), läuft also
+  durch aktive-Inhalte-Prüfung, Abofallen-Erkennung, Einordnung und Ablage.
+  Vor dem Laden prüft `abofalle.erkennen` schon den Mailtext; ein Treffer lädt
+  nichts und meldet `zweifel`. Mail- und Linktexte sind Daten: kein Link wird
+  geöffnet, nur weil die Mail es verlangt, und nie mehr als dieser eine.
+  Nicht passende Mails (kein oder mehr als ein Link, kein PDF, zu groß, Host
+  nicht erlaubt, Abofalle) landen mit Grund im Protokoll und in
+  `gesehen.json[konto].links_geprueft`, damit sie nicht jeden Lauf wiederkommen;
+  vorübergehende Fehler (Netz, Abbruch, Zeitlimit, Server 5xx, Mail nicht
+  lesbar) brechen den Lauf nicht ab: Die Mail kommt nach
+  `gesehen.json[konto].offen` und hält das Fenster offen wie ein gescheiterter
+  Anhang (nach `max_tage` einmal `zweifel`). Ohne `--echt` werden weder
+  `links_geprueft` noch `offen` geschrieben. Die Monats-Nachsuche (`monat.py`) ruft
+  `postfach_funde` bewusst ohne `echt` auf: Sie ändert den Postfachstand nie,
+  weder für Anhänge noch für Links; offen hält und merkt nur der Takt.
 - **handy**: alle Dateien in `[quellen].handy_ordner` (nicht rekursiv, ohne
   versteckte). HEIC wird vor dem Ablegen zu JPEG (`sips`), das HEIC-Original
   bleibt nicht liegen.
@@ -469,7 +501,8 @@ Testfälle, 0/9 Fehlalarm, 2 von 40 echten Eingangsbelegen markiert.
 `tests/conftest.py`: Fixture `repo` kopiert `konfig/` und `beispiel/` in ein
 tmp-Verzeichnis, setzt `BELEGE_ROOT`, `kern.ROOT`, `URTEIL_BACKEND=ohne`,
 eine tmp-Ablage und tmp-Handy-/Downloads-Ordner. Kein Test braucht Netz,
-Modell oder echte Konten. Jeder Befehl, der verschiebt oder sendet, hat einen
+Modell oder echte Konten (Rechnungslinks: `rechnungslink._anfrage` und
+`_host_erlaubt` werden ersetzt). Jeder Befehl, der verschiebt oder sendet, hat einen
 Test „erst trocken (nichts passiert), dann echt“.
 
 ## Bewusst nicht eingebaut

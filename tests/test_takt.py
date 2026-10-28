@@ -27,7 +27,7 @@ def _falsche_module(monkeypatch, handy_kaputt=False, ergebnisse=None):
         date(2026, 9, 1),
         mail={"konto": "geschaeft", "id": "m1"},
     )
-    quellen.postfach_funde = lambda konto, tage: [fund_a, fund_b]
+    quellen.postfach_funde = lambda konto, tage, echt=False: [fund_a, fund_b]
 
     def handy():
         if handy_kaputt:

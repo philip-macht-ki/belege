@@ -21,7 +21,7 @@ from pathlib import Path
 import requests
 
 from . import kern
-from .postfach import Postfach, _anhaenge, _anhaenge_speichern, _inhalt, _kopf, _nachricht
+from .postfach import Postfach, _anhaenge, _anhaenge_speichern, _inhalt, _kopf, _links, _nachricht
 
 # Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra
 # (Deern & Jung, Multi-Tenant, öffentlicher Client, Redirect http://localhost,
@@ -282,6 +282,7 @@ class MicrosoftPostfach(Postfach):
         daten = _kopf(nachricht, ident)
         daten["text"] = _inhalt(nachricht)
         daten["anhaenge"] = _anhaenge(nachricht)
+        daten["links"] = _links(nachricht)
         return daten
 
     def anhaenge(self, ident: str, ziel: Path) -> list[Path]:
