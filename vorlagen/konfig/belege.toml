@@ -31,8 +31,10 @@ adresse = "mara@studio-beispiel.example"
 ordner = "beispiel/erzeugt/postfach"
 imap_server = ""
 smtp_server = ""
-# Nur Weg A: Unterordner, in die Filter Rechnungen verschieben, zusätzlich zum Posteingang
+# Gesucht wird in allen Ordnern außer Gesendet, Papierkorb, Spam, Entwürfen.
+# Enger: Weg A nur Posteingang + diese Ordner, Microsoft nur der Posteingang.
 # imap_ordner = ["INBOX/Rechnungen"]
+# nur_posteingang = true
 belege = true
 waechter = true
 

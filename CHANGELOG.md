@@ -9,7 +9,7 @@ aktion: keine
 ### Was ist neu für dich
 
 - Postfach über App-Passwort (IMAP, etwa mailbox.org, GMX, eigene Domain): belege findet Rechnungen im Anhang wieder. Bisher sah es dort keine Anhänge und holte deshalb nichts.
-- Liegen deine Rechnungen per Filter in Unterordnern (Thunderbird, Apple Mail), kann belege diese Ordner mit durchsuchen. Sag deinem Claude, welche Ordner es sind.
+- belege sucht Rechnungen jetzt in allen Ordnern deines Postfachs, nicht mehr nur im Posteingang. Wenn deine Filter oder Outlook-Regeln Rechnungen sofort in Unterordner verschieben, findet belege sie trotzdem. Gesendet, Papierkorb, Spam und Entwürfe bleiben außen vor. Das gilt für App-Passwort-Postfächer und für Microsoft 365 und Outlook.
 - Bei viel Post fielen ältere Rechnungen heraus, weil nur die 20 neuesten Mails angesehen wurden. Jetzt sind es bis zu 500, in jedem Postfach.
 - ZUGFeRD-Rechnungen (PDF mit eingebetteter XML, etwa von Sage) brechen nicht mehr ab.
 - Wer Claude nur über die Desktop-App hat: Der Zeitplan erreicht Claude wieder. Der Starter in `~/.local/bin` erneuert sich beim nächsten Lauf von selbst.
@@ -19,7 +19,7 @@ Danke an Nina Clausen für die genaue Fehlermeldung samt Korrekturen.
 
 ### Musst du etwas tun?
 
-Nein. Nutzt du Mailfilter, die Rechnungen in Unterordner verschieben, sag deinem Claude: „Trag meine Rechnungsordner bei belege ein.“
+Nein. Der nächste Lauf schaut einmal die letzten Tage in allen Ordnern nach; was schon abgelegt ist, erkennt belege und legt es nicht doppelt ab.
 
 ## [1.9.0] – 28.10.2026
 

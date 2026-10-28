@@ -104,11 +104,12 @@ sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
 Abschnitt „Microsoft-Postfach“ unten. Bei Google Workspace muss der Admin App-Passwörter
 erlauben.
 
-**Frag** bei einem IMAP-Postfach, ob das Mailprogramm Rechnungen per Filter in
-Unterordner verschiebt (Thunderbird, Apple Mail, Regeln beim Anbieter). belege
-liest sonst nur den Posteingang. Die Ordner trägt Claude beim Postfach ein, mit
-dem Namen, den der Server nennt (oft mit `INBOX/` davor):
-`imap_ordner = ["INBOX/Rechnungen", "INBOX/Software, Hosting"]`.
+belege sucht in allen Ordnern des Postfachs, nicht nur im Posteingang, denn
+Filter in Thunderbird, Apple Mail oder Outlook verschieben Rechnungen oft sofort
+in Unterordner. Ausgelassen werden Gesendet, Papierkorb, Spam und Entwürfe.
+Will die Person das enger fassen, trägt Claude beim Postfach ein:
+`imap_ordner = ["INBOX/Rechnungen"]` (IMAP: nur Posteingang und diese Ordner)
+oder `nur_posteingang = true` (Microsoft).
 
 Bevor Claude zum ersten Mal ins Postfach schaut, sagt er in einem Satz: Briefe
 von Arzt, Gericht, Krankenkasse oder über Mitarbeitende erkennt belege selbst

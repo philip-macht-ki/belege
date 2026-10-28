@@ -380,15 +380,21 @@ class ImapPostfach(Postfach):
     def suchen(self, abfrage="", max=20, seit=None, nur_anhang=False):
         """Durchsucht IMAP ohne Mails als gelesen zu markieren.
 
-        Neben INBOX auch die Ordner aus `imap_ordner` beim Konto, für Mailprogramme,
-        deren Filter Rechnungen sofort in Unterordner verschieben.
+        Ohne `imap_ordner` beim Konto alle Ordner außer Gesendet, Papierkorb, Spam
+        und Entwürfen: Mailprogramme mit Filtern verschieben Rechnungen sofort in
+        Unterordner. Mit `imap_ordner` nur INBOX und die genannten Ordner.
         """
         verbindung = self._imap()
         # Mit nur_anhang zählt max die Treffer je Ordner; zusammen höchstens 500.
         grenze = 500 if nur_anhang else max
         try:
             treffer = []
-            for ordner in _imap_ordnerliste(self.konto):
+            schon = set()  # Gmail zeigt Labels als Ordner: dieselbe Mail nur einmal
+            if "imap_ordner" in self.konto:
+                ordnerliste = _imap_ordnerliste(self.konto)
+            else:
+                ordnerliste = _imap_alle_ordner(verbindung)
+            for ordner in ordnerliste:
                 if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
                     kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
                     continue
@@ -405,6 +411,9 @@ class ImapPostfach(Postfach):
                     nachricht = _imap_nachricht(roh)
                     if nachricht is None:
                         continue
+                    kennung = str(nachricht.get("Message-ID") or "").strip()
+                    if kennung and kennung in schon:
+                        continue
                     kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
                     # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
                     kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
@@ -412,6 +421,8 @@ class ImapPostfach(Postfach):
                         continue
                     kopf["auszug"] = _inhalt(nachricht)[:300]
                     treffer.append(kopf)
+                    if kennung:
+                        schon.add(kennung)
                     gefunden += 1
                     if gefunden >= grenze:
                         break
@@ -479,6 +490,81 @@ def _imap_ordnerliste(konto: dict) -> list[str]:
     for name in konto.get("imap_ordner", []) or []:
         name = str(name).strip()
         if name and name not in ordner:
+            ordner.append(name)
+    return ordner
+
+
+# Sonderordner nach RFC 6154; dort liegen keine eingehenden Rechnungen (\\All wäre doppelt).
+_IMAP_SONDER = {"\\sent", "\\trash", "\\junk", "\\drafts", "\\all", "\\flagged", "\\important", "\\noselect", "\\nonexistent"}
+# Für Server ohne Sonderkennzeichen: übliche Namen, deutsch und englisch, kleingeschrieben.
+_IMAP_AUSLASSEN = {
+    "sent", "sent items", "sent messages", "sent mail", "gesendet", "gesendete elemente",
+    "gesendete objekte", "gesendete nachrichten", "trash", "deleted", "deleted items",
+    "deleted messages", "papierkorb", "gelöscht", "gelöschte elemente", "gelöschte objekte",
+    "junk", "junk e-mail", "junk-e-mail", "spam", "spamverdacht", "unerwünscht", "drafts",
+    "entwürfe", "outbox", "postausgang", "notes", "notizen", "templates", "vorlagen",
+    "calendar", "kalender", "contacts", "kontakte", "tasks", "aufgaben", "journal",
+    "all mail", "alle nachrichten", "starred", "markiert", "important", "wichtig",
+}
+
+
+def _mutf7(name: str) -> str:
+    """Dekodiert IMAP-Ordnernamen (modifiziertes UTF-7, RFC 3501), etwa Entw&APw-rfe."""
+    def teil(treffer):
+        kern_text = treffer.group(1)
+        if not kern_text:
+            return "&"
+        roh = kern_text.replace(",", "/")
+        roh += "=" * (-len(roh) % 4)
+        try:
+            return base64.b64decode(roh).decode("utf-16-be")
+        except (ValueError, UnicodeDecodeError):
+            return treffer.group(0)
+    return re.sub(r"&([A-Za-z0-9+,]*)-", teil, name)
+
+
+def _imap_list_zeile(zeile) -> tuple[set[str], str, str] | None:
+    """Zerlegt eine LIST-Antwort in Kennzeichen, Trennzeichen und Ordnernamen."""
+    if isinstance(zeile, tuple):  # Name als Literal {n}
+        kopf, name = zeile[0].decode("utf-8", "replace"), zeile[1].decode("utf-8", "replace")
+        treffer = re.match(r'\((.*?)\)\s+(NIL|"(?:[^"\\]|\\.)*")', kopf)
+        if not treffer:
+            return None
+        flags, trenner = treffer.group(1), treffer.group(2)
+    else:
+        text = zeile.decode("utf-8", "replace") if isinstance(zeile, bytes) else str(zeile)
+        treffer = re.match(r'\((.*?)\)\s+(NIL|"(?:[^"\\]|\\.)*")\s+(.*)$', text)
+        if not treffer:
+            return None
+        flags, trenner, name = treffer.groups()
+        name = name.strip()
+        if name.startswith('"') and name.endswith('"'):
+            name = re.sub(r'\\(.)', r"\1", name[1:-1])
+    trenner = "" if trenner == "NIL" else re.sub(r'\\(.)', r"\1", trenner.strip('"'))
+    return {f.lower() for f in flags.split()}, trenner, name
+
+
+def _imap_alle_ordner(verbindung) -> list[str]:
+    """INBOX und jeder Ordner, in dem eingehende Post liegen kann."""
+    try:
+        status, zeilen = verbindung.list()
+    except Exception as fehler:  # noqa: BLE001 – dann eben nur der Posteingang
+        kern.log(f"IMAP-Ordnerliste nicht lesbar, nur INBOX: {fehler}")
+        return ["INBOX"]
+    if status != "OK":
+        return ["INBOX"]
+    ordner = ["INBOX"]
+    for zeile in zeilen or []:
+        teile = _imap_list_zeile(zeile)
+        if not teile:
+            continue
+        flags, trenner, name = teile
+        if not name or name.upper() == "INBOX" or flags & _IMAP_SONDER:
+            continue
+        stufen = [_mutf7(s).strip().lower() for s in (name.split(trenner) if trenner else [name])]
+        if any(stufe in _IMAP_AUSLASSEN for stufe in stufen) or stufen[0] == "[gmail]" and len(stufen) == 1:
+            continue
+        if name not in ordner:
             ordner.append(name)
     return ordner
 

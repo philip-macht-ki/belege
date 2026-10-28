@@ -65,8 +65,14 @@ def test_oeffnen_waehlt_microsoft(monkeypatch, repo):
     assert isinstance(oeffnen("firma"), MicrosoftPostfach)
 
 
+def _ordner_antwort(*ids):
+    return Antwort(json={"responses": [{"id": i, "status": 200, "body": {"id": i.upper()}} for i in ids]
+                   + [{"id": "outbox", "status": 404, "body": {}}]})
+
+
 def test_suchen_filtert_datum_und_anhang_und_folgt_naechster_seite(box):
     box.sitzung = Sitzung([
+        _ordner_antwort("sentitems", "deleteditems", "junkemail", "drafts"),
         Antwort(json={"value": [_mail("1"), _mail("2", anhang=False)], "@odata.nextLink": "https://graph/next"}),
         Antwort(json={"value": [_mail("3")]}),
     ])
@@ -74,19 +80,20 @@ def test_suchen_filtert_datum_und_anhang_und_folgt_naechster_seite(box):
     assert [t["id"] for t in treffer] == ["1", "3"]
     assert treffer[0]["von"] == "rechnung@stadtwerke.example"
     assert treffer[0]["datum"] == "2026-10-26"
-    art, url, kwargs = box.sitzung.aufrufe[0]
-    assert url.endswith("/me/mailFolders/inbox/messages")
+    assert box.sitzung.aufrufe[0][1].endswith("/$batch")
+    art, url, kwargs = box.sitzung.aufrufe[1]
+    assert url.endswith("/me/messages")
     assert kwargs["params"]["$filter"] == "receivedDateTime ge 2026-10-01T00:00:00Z and hasAttachments eq true"
     assert kwargs["params"]["$orderby"] == "receivedDateTime desc"
-    assert box.sitzung.aufrufe[1][1] == "https://graph/next"
-    assert box.sitzung.aufrufe[1][2]["params"] is None
+    assert box.sitzung.aufrufe[2][1] == "https://graph/next"
+    assert box.sitzung.aufrufe[2][2]["params"] is None
 
 
 def test_suchen_mit_woertern_nutzt_search_und_filtert_selbst(box):
-    box.sitzung = Sitzung([Antwort(json={"value": [_mail("alt", eingang="2026-09-01T10:00:00Z"), _mail("neu")]})])
+    box.sitzung = Sitzung([_ordner_antwort(), Antwort(json={"value": [_mail("alt", eingang="2026-09-01T10:00:00Z"), _mail("neu")]})])
     treffer = box.suchen("von:stadtwerke betreff:Rechnung seit:2026-10-01")
     assert [t["id"] for t in treffer] == ["neu"]
-    params = box.sitzung.aufrufe[0][2]["params"]
+    params = box.sitzung.aufrufe[1][2]["params"]
     assert params["$search"] == '"from:stadtwerke subject:Rechnung"'
     assert "$filter" not in params
 
@@ -157,3 +164,32 @@ def test_graph_suche_und_erkennung(monkeypatch):
     assert ist_microsoft("a@hotmail.de")
     assert ist_microsoft("info@firma.de")
     assert not ist_microsoft("a@gmx.de")
+
+
+def test_suchen_in_allen_ordnern_ausser_gesendet_und_papierkorb(box):
+    """Outlook-Regeln verschieben Rechnungen in Unterordner; Gesendetes und Gelöschtes zählt nicht."""
+    unterordner = dict(_mail("regel"), parentFolderId="RECHNUNGEN")
+    gesendet = dict(_mail("gesendet"), parentFolderId="SENTITEMS")
+    geloescht = dict(_mail("weg"), parentFolderId="DELETEDITEMS")
+    box.sitzung = Sitzung([
+        _ordner_antwort("sentitems", "deleteditems", "junkemail", "drafts"),
+        Antwort(json={"value": [unterordner, gesendet, geloescht]}),
+        Antwort(json={"value": [unterordner]}),
+    ])
+    assert [t["id"] for t in box.suchen(nur_anhang=True)] == ["regel"]
+    # Die Ordner-IDs werden nur einmal je Postfach geholt.
+    assert [t["id"] for t in box.suchen(nur_anhang=True)] == ["regel"]
+    assert [a[1].rsplit("/", 1)[-1] for a in box.sitzung.aufrufe] == ["$batch", "messages", "messages"]
+
+
+def test_nur_posteingang_auf_wunsch(monkeypatch):
+    monkeypatch.setattr(microsoft, "token", lambda konto: "t")
+    box = MicrosoftPostfach({"name": "f", "weg": "microsoft", "adresse": "a@b.example", "nur_posteingang": True})
+    box.sitzung = Sitzung([Antwort(json={"value": [_mail("1")]})])
+    assert [t["id"] for t in box.suchen()] == ["1"]
+    assert box.sitzung.aufrufe[0][1].endswith("/me/mailFolders/inbox/messages")
+
+
+def test_ordnerabfrage_scheitert_sucht_trotzdem(box):
+    box.sitzung = Sitzung([Antwort(status=500, json={"error": "x"}), Antwort(json={"value": [_mail("1")]})])
+    assert [t["id"] for t in box.suchen()] == ["1"]

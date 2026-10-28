@@ -51,3 +51,89 @@ def test_rfc2231_und_rfc2047_namen():
         ),
     ]
     assert _imap_anhaenge(antwort) == ["Rechnung März.pdf", "Beleg ü.pdf"]
+
+
+class _Liste:
+    def __init__(self, zeilen):
+        self.zeilen = zeilen
+
+    def list(self):
+        return "OK", self.zeilen
+
+
+def test_alle_ordner_ohne_gesendet_papierkorb_und_spam():
+    from belege.postfach import _imap_alle_ordner
+
+    zeilen = [
+        b'(\\HasChildren) "/" "INBOX"',
+        b'(\\HasNoChildren) "/" "INBOX/Rechnungen"',
+        b'(\\HasNoChildren) "/" "INBOX/Software, Hosting"',
+        b'(\\HasNoChildren \\Sent) "/" "Gesendet"',
+        b'(\\HasNoChildren) "/" "Entw&APw-rfe"',
+        b'(\\HasNoChildren) "." "Gel&APY-schte Elemente"',
+        b'(\\HasNoChildren) "/" "Spam"',
+        b'(\\HasChildren \\Noselect) "/" "[Gmail]"',
+        b'(\\HasNoChildren \\All) "/" "[Gmail]/Alle Nachrichten"',
+        b'(\\HasNoChildren \\Trash) "/" "[Gmail]/Papierkorb"',
+        b'(\\HasNoChildren) "/" "Archiv"',
+        (b'(\\HasNoChildren) "/" {11}', b"Lieferanten"),
+    ]
+    assert _imap_alle_ordner(_Liste(zeilen)) == [
+        "INBOX", "INBOX/Rechnungen", "INBOX/Software, Hosting", "Archiv", "Lieferanten",
+    ]
+
+
+def test_ordnerliste_kaputt_nur_inbox():
+    from belege.postfach import _imap_alle_ordner
+
+    class Kaputt:
+        def list(self):
+            raise OSError("weg")
+
+    assert _imap_alle_ordner(Kaputt()) == ["INBOX"]
+
+
+def test_suchen_ueber_ordner_mit_anhang_und_ohne_doppelte(monkeypatch):
+    """Rechnung im Filterordner wird gefunden; dieselbe Mail unter einem Gmail-Label nur einmal."""
+    from belege import postfach
+    from belege.postfach import ImapPostfach
+
+    def antwort(betreff, mid, anhang):
+        struktur = (b'("APPLICATION" "PDF" ("NAME" "r.pdf") NIL NIL "BASE64" 1 NIL ("ATTACHMENT" ("FILENAME" "r.pdf")) NIL NIL)'
+                    if anhang else b'("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" 1 1 NIL NIL NIL NIL)')
+        kopf = f"Subject: {betreff}\r\nMessage-ID: <{mid}>\r\nFrom: a@b.example\r\nDate: Mon, 26 Oct 2026 10:00:00 +0000\r\n\r\n".encode()
+        return [(b"1 (UID 1 BODYSTRUCTURE " + struktur + b" BODY[HEADER] {%d}" % len(kopf), kopf), b")"]
+
+    postfaecher = {
+        "INBOX": {b"1": antwort("Hallo", "x1", False)},
+        "Rechnungen": {b"1": antwort("Rechnung", "r1", True)},
+        "Label": {b"1": antwort("Rechnung", "r1", True)},
+    }
+
+    class Verbindung:
+        aktuell = None
+
+        def list(self):
+            return "OK", [b'(\\HasNoChildren) "/" "INBOX"', b'(\\HasNoChildren) "/" "Rechnungen"',
+                          b'(\\HasNoChildren) "/" "Label"', b'(\\HasNoChildren \\Sent) "/" "Sent"']
+
+        def select(self, name, readonly=True):
+            self.aktuell = name
+            return ("OK", [b"1"]) if name in postfaecher else ("NO", [])
+
+        def uid(self, befehl, *args):
+            if befehl == "search":
+                return "OK", [b" ".join(postfaecher[self.aktuell])]
+            return "OK", postfaecher[self.aktuell][args[0]]
+
+        def logout(self):
+            pass
+
+    box = ImapPostfach.__new__(ImapPostfach)
+    box.konto, box.name, box.adresse, box.weg = {"name": "t"}, "t", "a@b.example", "a"
+    monkeypatch.setattr(ImapPostfach, "_imap", lambda self: Verbindung())
+    monkeypatch.setattr(ImapPostfach, "_suche", lambda self, v, k: v.uid("search"))
+    treffer = box.suchen(nur_anhang=True)
+    assert [t["id"] for t in treffer] == ["Rechnungen:1"]
+    assert treffer[0]["anhaenge"] == ["r.pdf"]
+    assert postfach._imap_ordnerliste({"imap_ordner": ["Rechnungen"]}) == ["INBOX", "Rechnungen"]

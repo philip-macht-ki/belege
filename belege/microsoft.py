@@ -161,6 +161,10 @@ def _fehlertext(ergebnis: dict) -> str:
     return text or str(ergebnis.get("error", "unbekannter Fehler"))
 
 
+# Well-known names in Microsoft Graph; dort liegen keine eingehenden Rechnungen.
+AUSGELASSENE_ORDNER = ("sentitems", "deleteditems", "junkemail", "drafts", "outbox")
+
+
 def _graph_suche(abfrage: str) -> str:
     """Übersetzt die einfache Suche (von:, betreff:, Wörter) in Graph-$search."""
     teile = []
@@ -210,11 +214,40 @@ class MicrosoftPostfach(Postfach):
             return antwort
         return antwort
 
+    def _ausgelassene_ordner(self) -> set[str]:
+        """IDs von Gesendet, Gelöscht, Junk, Entwürfe und Postausgang, in einem Aufruf.
+
+        Rechnungen liegen oft nicht im Posteingang: Outlook-Regeln verschieben sie
+        in eigene Ordner. Gesucht wird deshalb überall außer in diesen Ordnern.
+        """
+        if getattr(self, "_ausgelassen", None) is None:
+            anfragen = [
+                {"id": name, "method": "GET", "url": f"/me/mailFolders/{name}?$select=id"}
+                for name in AUSGELASSENE_ORDNER
+            ]
+            try:
+                antwort = self._anfrage("POST", "/$batch", json={"requests": anfragen}).json()
+                self._ausgelassen = {
+                    eintrag["body"]["id"]
+                    for eintrag in antwort.get("responses", [])
+                    if eintrag.get("status") == 200 and (eintrag.get("body") or {}).get("id")
+                }
+            except RuntimeError as fehler:
+                kern.log(f"Microsoft-Ordner nicht ermittelt, suche ohne Ausnahmen: {fehler}")
+                self._ausgelassen = set()
+        return self._ausgelassen
+
     def suchen(self, abfrage="", max=20, seit=None, nur_anhang=False):
-        """Sucht im Posteingang, neueste zuerst, ohne Mails als gelesen zu markieren."""
+        """Sucht in allen Ordnern außer Gesendet, Gelöscht, Junk und Entwürfen.
+
+        Neueste zuerst, ohne Mails als gelesen zu markieren. ``nur_posteingang = true``
+        beim Postfach beschränkt die Suche auf den Posteingang.
+        """
         seit = _seit_aus(abfrage, seit)
         suche = _graph_suche(abfrage)
-        felder = "id,subject,from,toRecipients,receivedDateTime,hasAttachments,bodyPreview,internetMessageId"
+        felder = "id,subject,from,toRecipients,receivedDateTime,hasAttachments,bodyPreview,internetMessageId,parentFolderId"
+        nur_eingang = bool(self.konto.get("nur_posteingang"))
+        ausgelassen = set() if nur_eingang else self._ausgelassene_ordner()
         if suche:
             # $search verträgt weder $filter noch $orderby; Datum und Anhang filtern wir selbst.
             params = {"$search": f'"{suche}"', "$select": felder, "$top": 50}
@@ -232,11 +265,13 @@ class MicrosoftPostfach(Postfach):
                 params["$orderby"] = "receivedDateTime desc"
             kopf = {}
         treffer: list[dict] = []
-        url = "/me/mailFolders/inbox/messages"
+        url = "/me/mailFolders/inbox/messages" if nur_eingang else "/me/messages"
         while url and len(treffer) < max:
             daten = self._anfrage("GET", url, params=params, headers=kopf).json()
             params = None  # nextLink trägt die Parameter schon
             for mail in daten.get("value", []):
+                if mail.get("parentFolderId") in ausgelassen:
+                    continue
                 eintrag = self._eintrag(mail)
                 if nur_anhang and not mail.get("hasAttachments"):
                     continue
