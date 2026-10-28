@@ -103,5 +103,11 @@ def test_schwaerzen_header_cookie_und_oauth_code():
 def test_schwaerzen_header_als_json():
     from belege.fehlerbericht import schwaerzen
 
-    text = schwaerzen('{"Authorization": "Basic geheim", \'Cookie\': \'a=b; c=d\'}')
-    assert "geheim" not in text and "a=b" not in text
+    text = schwaerzen('{"Authorization": "Basic QWxhZGRpbg", \'Cookie\': \'a=b; c=d\'}')
+    assert "QWxhZGRpbg" not in text and "a=b" not in text
+
+
+def test_schwaerzen_header_mit_escapten_anfuehrungszeichen():
+    from belege.fehlerbericht import schwaerzen
+
+    assert "XQ7Z9" not in schwaerzen('{"Cookie":"sid=\\"XQ7Z9\\"; x=1"}')
