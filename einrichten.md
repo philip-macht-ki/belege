@@ -164,8 +164,10 @@ und die Administratorzustimmung.
    hinzufügen“. `User.Read` ist schon da. Dann „Administratorzustimmung für
    „<Verzeichnis>“ erteilen“ und bestätigen; alle drei Zeilen zeigen danach
    einen grünen Haken.
-6. Links „Authentication“, Reiter „Einstellungen“: „Öffentliche Clientflows
-   zulassen“ steht auf „Deaktiviert“ und bleibt so. Ein Geheimnis (Client
+6. Links „Authentication (Preview)“ (so heißt der Punkt auch in der deutschen
+   Oberfläche; in der älteren Ansicht „Authentifizierung“), Reiter
+   „Einstellungen“ (älter: „Erweiterte Einstellungen“): „Öffentliche
+   Clientflows zulassen“ steht auf „Deaktiviert“ bzw. „Nein“ und bleibt so. Ein Geheimnis (Client
    Secret) wird nicht gebraucht.
 
 Claude trägt beim Postfach in `konfig/belege.toml` ein:
