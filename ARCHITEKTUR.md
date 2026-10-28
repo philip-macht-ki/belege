@@ -146,7 +146,7 @@ Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
 Eine Zeile JSON: `{"zeit","art","text","daten"}` mit `art` aus
-`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline`.
+`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline | dokument`.
 `vertraulich`: ein Fund wurde nur lokal gelesen und steht im Bericht unter „Bitte ansehen“.
 `offline`: kein Netz; höchstens einmal am Tag (`kern.einmal_taeglich`), kein Fehler.
 Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
@@ -278,6 +278,9 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
    gegriffen.
 - `sicherheit="niedrig"` oder `ist_beleg=false` bei Quelle handy → Unsortiert.
 - `ist_beleg=false` bei Quelle postfach → nichts ablegen (Ereignis nur im Log).
+- Vorher greift die **Dokumentweiche** (siehe „Ablage für Dokumente“,
+  Abschnitt „Automatisch aus den Quellen“): ein sicher erkanntes Dokument geht
+  nach `Dokumente/<Art>/`; nur wenn sie nicht greift, gelten die Regeln hier.
 - Bei Quelle downloads: nur `ist_beleg=true` und `sicherheit` hoch/mittel wird
   verschoben; `ist_beleg=true` + niedrig → Ereignis `zweifel`, Datei bleibt.
 
@@ -585,6 +588,7 @@ Konfiguration in `konfig/belege.toml`:
 [dokumente]
 eingang = "~/Belege/Dokumente-Eingang"   # hier landen Scans und PDFs
 ordner = "Dokumente"                     # Unterordner in [ablage].ordner
+automatisch = true                       # Dokumente auch aus Postfach, Handy, Scan, Downloads
 erinnern_tage = 28                       # so viele Tage vor einer Frist erinnert der Kalender
 ```
 
@@ -607,6 +611,33 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
 - Verzeichnis `arbeit/dokumente.json`: `{sha: {pfad, art, bereich, gegenueber,
   titel, datum, fristen, text (≤ 6.000 Zeichen), abgelegt}}`. Dubletten per
   Fingerabdruck werden übersprungen.
+- **Automatisch aus den Quellen** (`dokumente.automatisch()`, ab 1.9.0, Schalter
+  `[dokumente].automatisch`, Standard `true`): In `verarbeiten.verarbeite()`
+  nach Abofallen-Prüfung, wenn das Belegurteil `ist_beleg=false` ist. Vorher
+  wird je Fund der Fingerabdruck auch in `arbeit/dokumente.json` gesucht;
+  Treffer → `nichts` „liegt schon unter …“ (wie bei Belegen).
+  - Nie bei `stufe="ohne_text"` oder leerem Text, nie bei abgeschaltetem Schalter.
+  - Quelle handy, scan: immer `dokument_einordnen()`.
+  - Quelle postfach, downloads: nur Endung pdf oder docx, nur wenn der Text ein
+    Dokument-Stichwort enthält (`DOKUMENT_STICHWOERTER`) und kein
+    Newsletter-Zeichen (`abmelden`, `newsletter`, `unsubscribe`); sonst kein
+    zweites Urteil. Angenommen werden dort nur `art` ∈ vertrag, versicherung,
+    behoerde, bank.
+  - Angenommen nur mit `sicherheit` ≥ 0,7 und `art` ≠ beleg; `sonstiges` nur
+    aus handy und scan. Sonst greift die Weiche nicht und der Fund läuft wie
+    bisher weiter (handy/scan → `Unsortiert/`, postfach → nichts, downloads →
+    bleibt liegen). Das Prompt stuft Werbung, Newsletter, AGB und Prospekte als
+    `sonstiges` mit niedriger `sicherheit` ein.
+  - Vertraulichkeit: `nur_lokal` aus `vertraulich.pruefen()` des Belegwegs,
+    unverändert. Der Index-Eintrag trägt `vertraulich` und `quelle`.
+  - Ablage wie oben (`<Art>/<Gegenüber>/…`), verschoben bei `fund.verschieben`
+    (handy, downloads), sonst kopiert (postfach, scan). HEIC-Originale wandern
+    wie bei Belegen nach `_erledigt`. Fristen landen im Verzeichnis und damit in
+    `fristen`. Ergebnis `ok` mit `daten.status = "dokument"`.
+  - Ereignis `dokument` (`daten`: quelle, pfad, dokumentart, gegenueber, titel, frist (nächste kommende), vertraulich; bei vertraulichen gegenueber und titel null). Der
+    Tagesbericht listet sie unter „Dokumente abgelegt“ mit Art, Gegenüber,
+    Titel und der nächsten Frist; vertrauliche nur als `Dokumente/<Art>`.
+  - Trocken: Ausgabe „würde als Dokument ablegen: …“, nichts geschrieben.
 - `fristen`: alle Fristen aus dem Verzeichnis, sortiert, Standard die nächsten
   365 Tage, dazu alle mit `datum` null als „prüfen“. `--echt` schreibt
   `<ablage>/<Dokumente>/fristen.ics` (VEVENT je Frist, ganztägig, feste UID aus

@@ -2,6 +2,21 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.9.0] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Verträge, Versicherungen und Briefe vom Amt oder von der Bank bleiben nicht mehr liegen. Kommt so ein Dokument per Mail, als Foto in deinen Handy-Ordner, über deinen Scan-Ordner (Papierpost, Dropscan) oder landet es in Downloads, legt belege es selbst in deine Dokumentenablage: `Dokumente/Vertrag/…`, `Dokumente/Versicherung/…`, `Dokumente/Behörde/…` und so weiter.
+- Kündigungsfristen und Zahlungstermine aus diesen Dokumenten stehen danach in deiner Fristenliste. Im Tagesbericht siehst du unter „Dokumente abgelegt“, was neu dazugekommen ist, mit der nächsten Frist.
+- belege legt nur ab, wenn es sich sicher ist. Aus Mails und Downloads nimmt es nur klare Fälle (Vertrag, Versicherung, Behörde, Bank); Werbung, Newsletter und AGB bleiben, wo sie sind. Unsicheres landet wie bisher unter „Unsortiert“ oder bleibt liegen.
+- Vertrauliches, etwa ein Arztbrief, liest weiterhin nur dein Mac. Im Tagesbericht steht dann nur der Ordner, nicht der Name.
+
+### Musst du etwas tun?
+
+Nein. Willst du Dokumente lieber nur von Hand ablegen, schreib in `konfig/belege.toml` unter `[dokumente]` die Zeile `automatisch = false`.
+
 ## [1.8.1] – 28.10.2026
 
 aktion: keine

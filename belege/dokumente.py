@@ -46,6 +46,17 @@ STICHWORT_ARTEN = (
     (("arzt", "praxis", "klinik"), "gesundheit"),
 )
 
+# Automatik (ab 1.9.0): Postfach und Downloads nur bei klaren Dokumenten.
+KLARE_ARTEN = {"vertrag", "versicherung", "behoerde", "bank"}
+KLARE_ENDUNGEN = {".pdf", ".docx"}
+DOKUMENT_STICHWOERTER = (
+    "vertrag", "vertragsnummer", "laufzeit", "kündigung", "versicherung",
+    "versicherungsschein", "police", "versicherungsnummer", "bescheid",
+    "finanzamt", "aktenzeichen", "steuernummer", "behörde", "kontoauszug",
+    "kreditvertrag", "darlehen", "kontoeröffnung",
+)
+NEWSLETTER_ZEICHEN = ("abmelden", "newsletter", "unsubscribe")
+
 BEZUGSWOERTER = (
     "laufzeitende", "ende der laufzeit", "vor ablauf", "zum vertragsende",
     "vertragsende",
@@ -363,6 +374,97 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         quelle="dokumente",
     )
     print(f"{datei.name}  →  {gespeichert['pfad']}")
+
+
+def schon_abgelegt(sha: str) -> str | None:
+    """Pfad eines bereits abgelegten Dokuments mit diesem Fingerabdruck, sonst None."""
+    eintrag = _index().get(sha)
+    return eintrag.get("pfad", "der Ablage") if eintrag else None
+
+
+def automatisch_an() -> bool:
+    return bool(konfig("belege").get("dokumente", {}).get("automatisch", True))
+
+
+def _lohnt_urteil(fund, text: str) -> bool:
+    """Postfach und Downloads: erst ein zweites Urteil, wenn der Text nach Dokument aussieht."""
+    if fund.quelle in {"handy", "scan"}:
+        return True
+    if fund.datei.suffix.lower() not in KLARE_ENDUNGEN:
+        return False
+    klein = text.lower()
+    if any(zeichen in klein for zeichen in NEWSLETTER_ZEICHEN):
+        return False
+    return any(wort in klein for wort in DOKUMENT_STICHWOERTER)
+
+
+def _angenommen(fund, eintrag: dict) -> bool:
+    """Nur sichere Dokumente; Postfach und Downloads nur Vertrag, Versicherung, Behörde, Bank."""
+    if eintrag["art"] == "beleg" or float(eintrag["sicherheit"]) < SICHERHEITSSCHWELLE:
+        return False
+    if fund.quelle in {"handy", "scan"}:
+        return True
+    return eintrag["art"] in KLARE_ARTEN
+
+
+def _naechste_frist(fristen: list[dict]) -> dict | None:
+    heute = jetzt().date().isoformat()
+    kommend = sorted((f for f in fristen if f.get("datum") and f["datum"] >= heute),
+                     key=lambda f: f["datum"])
+    return kommend[0] if kommend else None
+
+
+def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Ergebnis | None:
+    """Dokumentweiche im Belegweg: legt ein sicher erkanntes Dokument ab.
+
+    Gibt None zurück, wenn die Weiche nicht greift; dann läuft der Fund wie
+    bisher weiter (Unsortiert, bleibt in der Mail oder in Downloads).
+    """
+    if not automatisch_an() or text.stufe == "ohne_text" or not text.text.strip():
+        return None
+    if not _lohnt_urteil(fund, text.text):
+        return None
+    eintrag = dokument_einordnen(text.text, fund.name, nur_lokal=vertraulich)
+    if not _angenommen(fund, eintrag):
+        return None
+    ziel_pfad = _dokument_ziel(eintrag, fund.datei.suffix, unsicher=False)
+    if not echt:
+        print(f"würde als Dokument ablegen: {fund.name} → "
+              f"{ziel_pfad.relative_to(ablage_ordner())} ({eintrag['art']})")
+        return kern.Ergebnis("nichts", f"Würde unter {ziel_pfad} ablegen.",
+                             {"pfad": str(ziel_pfad), "status": "dokument"})
+    ziel_pfad = kern.freier_name(ziel_pfad)
+    ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
+    if fund.verschieben:
+        shutil.move(str(fund.datei), str(ziel_pfad))
+    else:
+        shutil.copy2(fund.datei, ziel_pfad)
+    relativ = str(ziel_pfad.relative_to(ablage_ordner()))
+    index = _index()
+    index[sha] = {
+        "pfad": relativ,
+        "art": eintrag["art"],
+        "bereich": eintrag["bereich"],
+        "gegenueber": eintrag["gegenueber"],
+        "titel": eintrag["titel"],
+        "datum": eintrag["datum"],
+        "fristen": eintrag["fristen"],
+        "text": text.text[:6000],
+        "abgelegt": True,
+        "vertraulich": vertraulich,
+        "quelle": fund.quelle,
+    }
+    _speichere(index)
+    if vertraulich:
+        meldung = f"Vertrauliches Dokument liegt jetzt unter {grober_ordner(relativ)}."
+    else:
+        meldung = f"{fund.name} liegt jetzt unter {relativ}."
+    ereignis("dokument", meldung, quelle=fund.quelle, pfad=relativ, dokumentart=eintrag["art"],
+             gegenueber=None if vertraulich else eintrag["gegenueber"],
+             titel=None if vertraulich else eintrag["titel"],
+             frist=_naechste_frist(eintrag["fristen"]), vertraulich=vertraulich)
+    return kern.Ergebnis("ok", f"Als Dokument unter {ziel_pfad} abgelegt.",
+                         {"pfad": str(ziel_pfad), "status": "dokument"})
 
 
 def befehl(args) -> int:

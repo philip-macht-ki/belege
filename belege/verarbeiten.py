@@ -106,6 +106,15 @@ def _ohne_text() -> Einordnung:
     )
 
 
+def _original_erledigt(fund: Fund) -> None:
+    """Ein umgewandeltes HEIC-Original aus dem Handy-Ordner nach _erledigt schieben."""
+    original = getattr(fund, "handy_original", None)
+    if original and Path(original).exists():
+        erledigt = Path(original).parent / "_erledigt"
+        erledigt.mkdir(exist_ok=True)
+        shutil.move(str(original), str(kern.freier_name(erledigt / Path(original).name)))
+
+
 def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
     """Verarbeitet einen Fund vom Fingerabdruck bis zum Indexeintrag.
 
@@ -123,8 +132,11 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         fingerabdruck = _sha(fund.datei)
         index = _index()
-        if fingerabdruck in index:
-            pfad = index[fingerabdruck].get("pfad", "der Ablage")
+        from .dokumente import schon_abgelegt
+
+        dokument_pfad = schon_abgelegt(fingerabdruck)
+        if fingerabdruck in index or dokument_pfad:
+            pfad = dokument_pfad or index[fingerabdruck].get("pfad", "der Ablage")
             ergebnis = kern.Ergebnis("nichts", f"Liegt schon unter {pfad}.", {"pfad": pfad})
             if echt and fund.quelle == "downloads":
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
@@ -185,6 +197,15 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("zweifel", f"Vorsicht Abofalle: {fund.name} liegt unter {ziel}. Nicht unterschreiben, nicht zahlen.",
                               quelle=fund.quelle, pfad=str(ziel), grund=grund)
             return ergebnis
+        if not einordnung.ist_beleg and not begleit:
+            # Dokumentweiche: Vertrag, Versicherung, Brief einer Behörde oder Bank statt liegen lassen.
+            from .dokumente import automatisch
+
+            dokument = automatisch(fund, text, fingerabdruck, bool(geheim and geheim.vertraulich), echt)
+            if dokument:
+                if echt:
+                    _original_erledigt(fund)
+                return dokument
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:
@@ -233,11 +254,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         }
         index[fingerabdruck] = daten
         _speichere_index(index)
-        original = getattr(fund, "handy_original", None)
-        if original and Path(original).exists():
-            erledigt = Path(original).parent / "_erledigt"
-            erledigt.mkdir(exist_ok=True)
-            shutil.move(str(original), str(kern.freier_name(erledigt / Path(original).name)))
+        _original_erledigt(fund)
         if echt:
             art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"

@@ -382,7 +382,14 @@ Nur wenn die Person Teil 3 hat.
    `konfig/regeln.toml`; die USt-IdNr. steht unter `[betrieb] ust_id`. Dateien in
    `Unsortiert` ordnet Claude nach einem Satz der Person mit
    `uv run belege ablegen <datei> --echt` ein.
-6. **Ablage für Dokumente.** Verträge, Versicherungen und Briefe:
+6. **Ablage für Dokumente.** Verträge, Versicherungen und Briefe legt belege
+   seit 1.9.0 selbst ab, wenn sie über Postfach, Handy-Ordner, Scan-Ordner oder
+   Downloads kommen: sicher Erkanntes unter `Dokumente/<Art>/<Gegenüber>/`, mit
+   Fristen in `belege fristen` und einer Zeile im Tagesbericht. Aus Postfach und
+   Downloads nimmt belege nur klare Fälle (Vertrag, Versicherung, Behörde, Bank);
+   Unsicheres bleibt wie bisher (Handy und Scan: `Unsortiert`). Vertrauliches
+   wie Arztbriefe liest nur der Mac. Wer das nicht will, setzt unter
+   `[dokumente]` die Zeile `automatisch = false`. Von Hand geht weiterhin
    `uv run belege dokumente` (Eingang `~/Belege/Dokumente-Eingang`), Fristen mit
    `uv run belege fristen --echt` als Kalenderdatei, Notfallordner mit
    `uv run belege notfall` aus `konfig/notfall.toml` (nie mit Passwörtern).
