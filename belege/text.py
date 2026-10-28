@@ -123,11 +123,16 @@ def pdf_defekt(datei: Path) -> bool:
     """Erkennt einen Parserfehler, nicht bloß einen Scan ohne Text."""
     if Path(datei).suffix.lower() != ".pdf":
         return False
-    # Tests und manche Importwege benutzen eine PDF-Endung für noch nicht
-    # gerenderte Textattrappen; nur ein als PDF erkennbarer Download ist hier
-    # ein beschädigtes PDF.
-    if not Path(datei).read_bytes()[:5].startswith(b"%PDF-"):
-        return False
+    try:
+        roh = Path(datei).read_bytes()
+    except OSError:
+        return True
+    # Eine Textattrappe wird in einigen lokalen Importwegen noch als PDF
+    # bezeichnet. Leere Downloads und typische HTML-/Fehlerseiten dagegen nie.
+    if not roh or not roh.startswith(b"%PDF-"):
+        return not roh or bool(re.search(br"<\s*!?html|<\s*body|\b(error|fehler|access denied)\b", roh[:4096], re.I))
+    if b"%%EOF" not in roh[-2048:]:
+        return True
     try:
         from pypdf import PdfReader
         PdfReader(str(datei), strict=True).pages[0:1]

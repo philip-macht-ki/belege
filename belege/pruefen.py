@@ -308,6 +308,11 @@ def befehl(args) -> int:
                     f"Postfach {name}: Musterpostfach",
                     "Für echte Mails Weg A oder B einrichten.",
                 )
+            if weg == "a" and str(k.get("nach_ablage", "aus")).lower() in {"markieren", "verschieben"}:
+                from .postfach import imap_ablage_ordner_gueltig
+                if not imap_ablage_ordner_gueltig(str(k.get("nach_ablage_ordner", "Belege erledigt"))):
+                    z("GELB", f"Postfach {name}: nach_ablage_ordner ungültig",
+                      "Ordnername darf nicht leer sein, keine Steuerzeichen oder Anführungszeichen enthalten und höchstens 100 Zeichen lang sein.")
     except Exception as e:
         z("ROT", f"Postfächer nicht prüfbar: {e}")
     try:

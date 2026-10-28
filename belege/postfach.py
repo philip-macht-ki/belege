@@ -27,6 +27,11 @@ ANMELDE_HINWEIS = (
 )
 
 
+def imap_ablage_ordner_gueltig(ordner: str) -> bool:
+    """Erlaubt nur sichere, einzelne IMAP-Ordnernamen für CREATE/MOVE."""
+    return bool(ordner.strip() and len(ordner) <= 100 and '"' not in ordner and not any(ord(c) < 32 or ord(c) == 127 for c in ordner))
+
+
 def schluesselbund_passwort(name: str) -> str | None:
     """Liest ein App-Passwort intern aus dem macOS-Schlüsselbund.
 
@@ -456,18 +461,26 @@ class ImapPostfach(Postfach):
         return _anhaenge_speichern(self._fetch_mail(ident), ziel)
 
     def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        if not imap_ablage_ordner_gueltig(ordner):
+            return "nicht markiert (nach_ablage_ordner ist ungültig)"
         ordner_alt, uid = ident.rsplit(":", 1)
         verbindung = self._imap()
         try:
-            verbindung.select(_imap_quote(ordner_alt), readonly=False)
-            verbindung.uid("store", uid, "+FLAGS", "(\\Seen belege-erledigt)")
+            typ, _ = verbindung.select(_imap_quote(ordner_alt), readonly=False)
+            if typ != "OK":
+                return "nicht markiert (IMAP SELECT fehlgeschlagen)"
+            typ, _ = verbindung.uid("store", uid, "+FLAGS", "(\\Seen belege-erledigt)")
+            if typ != "OK":
+                return "nicht markiert (IMAP UID STORE fehlgeschlagen)"
             if art != "verschieben":
                 return "als gelesen und mit belege-erledigt markiert"
             typ, daten = verbindung.capability()
             faehig = typ == "OK" and b"MOVE" in b" ".join(d if isinstance(d, bytes) else str(d).encode() for d in (daten or [])).upper()
             if not faehig:
                 return "nur markiert (Server unterstützt IMAP MOVE nicht)"
-            verbindung.create(_imap_quote(ordner))
+            typ, _ = verbindung.create(_imap_quote(ordner))
+            if typ != "OK":
+                return "nur markiert (IMAP CREATE fehlgeschlagen)"
             typ, _ = verbindung.uid("move", uid, _imap_quote(ordner))
             if typ != "OK":
                 return "nur markiert (IMAP MOVE fehlgeschlagen)"

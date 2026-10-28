@@ -298,10 +298,17 @@ def mail_erledigt(konto: str, mail_id: str, echt: bool):
     if art not in {"markieren", "verschieben"}:
         return
     ordner = str(konto_cfg.get("nach_ablage_ordner", "Belege erledigt"))
+    if getattr(postfach, "weg", "") == "a":
+        from .postfach import imap_ablage_ordner_gueltig
+        if not imap_ablage_ordner_gueltig(ordner):
+            meldung = "nach_ablage ausgeschaltet: nach_ablage_ordner ist ungültig"
+            kern.log(f"Postfach {konto}: {meldung}.")
+            kern.ereignis("fehler", f"Postfach {konto}: {meldung}.", konto=konto, id=mail_id)
+            return
     try:
         meldung = postfach.nach_ablage(mail_id, art, ordner)
         kern.log(f"Postfach {konto}: {meldung}.")
-        if "nur markiert" in meldung:
+        if "nur markiert" in meldung or "nicht markiert" in meldung:
             kern.ereignis("zweifel", f"Postfach {konto}: {meldung}.", konto=konto, id=mail_id)
     except Exception as fehler:  # eine abgelegte Rechnung darf nie wegen der Mailpflege scheitern
         kern.log(f"Postfach {konto}: nach Ablage nicht markiert: {fehler}")
