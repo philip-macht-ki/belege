@@ -376,8 +376,12 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
     print(f"{datei.name}  →  {gespeichert['pfad']}")
 
 
-def schon_abgelegt(sha: str) -> str | None:
-    """Pfad eines bereits abgelegten Dokuments mit diesem Fingerabdruck, sonst None.
+class VertraulichGescheitert(Exception):
+    """Ablage eines vertraulichen Dokuments gescheitert; die Meldung trägt keinen Dateinamen."""
+
+
+def schon_abgelegt(sha: str) -> tuple[str, bool] | None:
+    """(Pfad, vertraulich) eines bereits abgelegten Dokuments, sonst None.
 
     Vertrauliche nur als `Dokumente/<Art>`: der Pfad landet im Tagesbericht.
     """
@@ -385,7 +389,9 @@ def schon_abgelegt(sha: str) -> str | None:
     if not eintrag:
         return None
     pfad_bekannt = eintrag.get("pfad", "der Ablage")
-    return grober_ordner(pfad_bekannt) if ist_vertraulich(eintrag) else pfad_bekannt
+    if ist_vertraulich(eintrag):
+        return grober_ordner(pfad_bekannt), True
+    return pfad_bekannt, False
 
 
 def automatisch_an() -> bool:
@@ -463,10 +469,15 @@ def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Erg
             shutil.move(str(fund.datei), str(ziel_pfad))
         else:
             shutil.copy2(fund.datei, ziel_pfad)
-    except OSError:
+    except OSError as fehler:
         index.pop(sha, None)
         _speichere(index)
-        raise
+        if vertraulich:
+            # Die allgemeine Fehlermeldung nennt den Dateinamen; der bleibt hier draußen.
+            raise VertraulichGescheitert(
+                "Ein vertrauliches Dokument ließ sich nicht ablegen und liegt noch an der Quelle. "
+                "Der nächste Lauf versucht es wieder.") from None
+        raise fehler
     if vertraulich:
         meldung = f"Vertrauliches Dokument liegt jetzt unter {grober_ordner(relativ)}."
     else:

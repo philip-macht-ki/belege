@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from . import kern
+from .dokumente import VertraulichGescheitert
 from .urteil import Unerreichbar
 from .typen import Einordnung, Fund, Text
 
@@ -134,15 +135,16 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         index = _index()
         from .dokumente import schon_abgelegt
 
-        dokument_pfad = schon_abgelegt(fingerabdruck)
-        if fingerabdruck in index or dokument_pfad:
-            pfad = dokument_pfad or index[fingerabdruck].get("pfad", "der Ablage")
+        dokument = schon_abgelegt(fingerabdruck)
+        if fingerabdruck in index or dokument:
+            pfad = dokument[0] if dokument else index[fingerabdruck].get("pfad", "der Ablage")
+            name = "Ein vertrauliches Dokument" if dokument and dokument[1] else fund.name
             ergebnis = kern.Ergebnis("nichts", f"Liegt schon unter {pfad}.", {"pfad": pfad})
             if echt and fund.quelle == "downloads":
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
                 gemeldet = set(gesehen.get("downloads_gemeldet", []))
                 if fingerabdruck not in gemeldet:
-                    kern.ereignis("doppelt", f"{fund.name} liegt schon unter {pfad}, kannst du löschen",
+                    kern.ereignis("doppelt", f"{name} liegt schon unter {pfad}, kannst du löschen",
                                   quelle=fund.quelle)
                     gesehen["downloads_gemeldet"] = sorted(gemeldet | {fingerabdruck})
                     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
@@ -274,6 +276,10 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             else:
                 kern.einmal_taeglich("fehler", f"Modell nicht erreichbar, Belege warten: {fehler}")
         return kern.Ergebnis("spaeter", meldung)
+    except VertraulichGescheitert as fehler:
+        if echt:
+            kern.ereignis("fehler", str(fehler), quelle=fund.quelle)
+        return kern.Ergebnis("fehler", str(fehler))
     except Exception as fehler:  # noqa: BLE001
         meldung = f"Konnte {fund.name} nicht verarbeiten: {fehler}"
         if echt:

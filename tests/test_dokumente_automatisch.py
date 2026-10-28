@@ -214,16 +214,35 @@ def test_vertrauliche_dublette_nennt_nur_den_ordner(repo, weg, monkeypatch):
 
     monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument(art="gesundheit"))
     monkeypatch.setattr("belege.vertraulich.pruefen", lambda *_a, **_k: Urteil(True, "Gesundheit"))
-    erste = repo / "a.pdf"
+    erste = repo / "Befund_Dr_Mueller.pdf"
     erste.write_bytes(b"arztbrief")
     verarbeiten.verarbeite(Fund(erste, "scan", erste.name, date(2026, 10, 28)), True)
-    zweite = repo / "downloads" / "b.pdf"
+    zweite = repo / "downloads" / "Befund_Dr_Mueller_Kopie.pdf"
     zweite.write_bytes(b"arztbrief")
     ergebnis = verarbeiten.verarbeite(Fund(zweite, "downloads", zweite.name, date(2026, 10, 28), verschieben=True), True)
     assert ergebnis.status == "nichts"
     text, _ = bericht.text_und_betreff(kern.ereignisse())
-    assert "Telefonica" not in text and "Handyvertrag" not in text
+    assert "Telefonica" not in text and "Handyvertrag" not in text and "Mueller" not in text
     assert "Dokumente/Gesundheit" in text
+
+
+def test_vertraulich_gescheitert_ohne_dateinamen(repo, weg, monkeypatch):
+    from belege.vertraulich import Urteil
+
+    monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument(art="gesundheit"))
+    monkeypatch.setattr("belege.vertraulich.pruefen", lambda *_a, **_k: Urteil(True, "Gesundheit"))
+
+    def kaputt(*_a, **_k):
+        raise OSError("Platte voll")
+
+    monkeypatch.setattr("belege.dokumente.shutil.move", kaputt)
+    datei = repo / "handy" / "Befund_Dr_Mueller.pdf"
+    datei.write_bytes(b"geheim")
+    ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 28), verschieben=True), True)
+    assert ergebnis.status == "fehler" and "Mueller" not in ergebnis.meldung
+    assert datei.exists() and _dokindex(repo) == {}
+    text, _ = bericht.text_und_betreff(kern.ereignisse())
+    assert "Mueller" not in text
 
 
 def test_scheitert_das_verschieben_bleibt_nichts_im_verzeichnis(repo, weg, monkeypatch):

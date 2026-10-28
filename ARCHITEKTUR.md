@@ -616,7 +616,7 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   nach Abofallen-Prüfung, wenn das Belegurteil `ist_beleg=false` ist. Vorher
   wird je Fund der Fingerabdruck auch in `arbeit/dokumente.json` gesucht;
   Treffer → `nichts` „liegt schon unter …“ (wie bei Belegen); bei vertraulichen
-  Dokumenten nennt die Meldung nur `Dokumente/<Art>`.
+  Dokumenten nennt die Meldung weder Dateinamen noch mehr als `Dokumente/<Art>`.
   - Nie bei `stufe="ohne_text"` oder leerem Text, nie bei abgeschaltetem Schalter.
   - Quelle handy, scan: immer `dokument_einordnen()`.
   - Quelle postfach, downloads: nur Endung pdf oder docx, nur wenn der Text ein
@@ -634,7 +634,7 @@ erinnern_tage = 28                       # so viele Tage vor einer Frist erinner
   - Ablage wie oben (`<Art>/<Gegenüber>/…`), verschoben bei `fund.verschieben`
     (handy, downloads), sonst kopiert (postfach, scan); erst wird das
     Verzeichnis geschrieben, dann die Datei bewegt (scheitert das Bewegen, wird
-    der Eintrag zurückgenommen). HEIC-Originale wandern
+    der Eintrag zurückgenommen; bei vertraulichen `fehler` ohne Dateinamen). HEIC-Originale wandern
     wie bei Belegen nach `_erledigt`. Fristen landen im Verzeichnis und damit in
     `fristen`. Ergebnis `ok` mit `daten.status = "dokument"`.
   - Ereignis `dokument` (`daten`: quelle, pfad, dokumentart, gegenueber, titel, frist (nächste kommende), vertraulich; bei vertraulichen gegenueber und titel null). Der
