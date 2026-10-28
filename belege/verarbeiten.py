@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from . import kern
+from .dokumente import VertraulichGescheitert
 from .urteil import Unerreichbar
 from .typen import Einordnung, Fund, Text
 
@@ -106,6 +107,15 @@ def _ohne_text() -> Einordnung:
     )
 
 
+def _original_erledigt(fund: Fund) -> None:
+    """Ein umgewandeltes HEIC-Original aus dem Handy-Ordner nach _erledigt schieben."""
+    original = getattr(fund, "handy_original", None)
+    if original and Path(original).exists():
+        erledigt = Path(original).parent / "_erledigt"
+        erledigt.mkdir(exist_ok=True)
+        shutil.move(str(original), str(kern.freier_name(erledigt / Path(original).name)))
+
+
 def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
     """Verarbeitet einen Fund vom Fingerabdruck bis zum Indexeintrag.
 
@@ -123,14 +133,18 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         fingerabdruck = _sha(fund.datei)
         index = _index()
-        if fingerabdruck in index:
-            pfad = index[fingerabdruck].get("pfad", "der Ablage")
+        from .dokumente import schon_abgelegt
+
+        dokument = schon_abgelegt(fingerabdruck)
+        if fingerabdruck in index or dokument:
+            pfad = dokument[0] if dokument else index[fingerabdruck].get("pfad", "der Ablage")
+            name = "Ein vertrauliches Dokument" if dokument and dokument[1] else fund.name
             ergebnis = kern.Ergebnis("nichts", f"Liegt schon unter {pfad}.", {"pfad": pfad})
             if echt and fund.quelle == "downloads":
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
                 gemeldet = set(gesehen.get("downloads_gemeldet", []))
                 if fingerabdruck not in gemeldet:
-                    kern.ereignis("doppelt", f"{fund.name} liegt schon unter {pfad}, kannst du löschen",
+                    kern.ereignis("doppelt", f"{name} liegt schon unter {pfad}, kannst du löschen",
                                   quelle=fund.quelle)
                     gesehen["downloads_gemeldet"] = sorted(gemeldet | {fingerabdruck})
                     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
@@ -185,6 +199,15 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("zweifel", f"Vorsicht Abofalle: {fund.name} liegt unter {ziel}. Nicht unterschreiben, nicht zahlen.",
                               quelle=fund.quelle, pfad=str(ziel), grund=grund)
             return ergebnis
+        if not einordnung.ist_beleg and not begleit:
+            # Dokumentweiche: Vertrag, Versicherung, Brief einer Behörde oder Bank statt liegen lassen.
+            from .dokumente import automatisch
+
+            dokument = automatisch(fund, text, fingerabdruck, bool(geheim and geheim.vertraulich), echt)
+            if dokument:
+                if echt:
+                    _original_erledigt(fund)
+                return dokument
         if fund.quelle == "postfach" and not einordnung.ist_beleg:
             return kern.Ergebnis("nichts", "Kein Beleg erkannt; die Mail bleibt unverändert.")
         if fund.quelle == "downloads" and not einordnung.ist_beleg:
@@ -233,11 +256,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         }
         index[fingerabdruck] = daten
         _speichere_index(index)
-        original = getattr(fund, "handy_original", None)
-        if original and Path(original).exists():
-            erledigt = Path(original).parent / "_erledigt"
-            erledigt.mkdir(exist_ok=True)
-            shutil.move(str(original), str(kern.freier_name(erledigt / Path(original).name)))
+        _original_erledigt(fund)
         if echt:
             art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
@@ -257,6 +276,10 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             else:
                 kern.einmal_taeglich("fehler", f"Modell nicht erreichbar, Belege warten: {fehler}")
         return kern.Ergebnis("spaeter", meldung)
+    except VertraulichGescheitert as fehler:
+        if echt:
+            kern.ereignis("fehler", str(fehler), quelle=fund.quelle)
+        return kern.Ergebnis("fehler", str(fehler))
     except Exception as fehler:  # noqa: BLE001
         meldung = f"Konnte {fund.name} nicht verarbeiten: {fehler}"
         if echt:

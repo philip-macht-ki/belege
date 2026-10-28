@@ -39,6 +39,8 @@ Bankschreiben sind "bank". Rechnungen und Quittungen, die eigentlich Belege
 für die Buchhaltung sind, sind "beleg" (sie werden dann nicht hier abgelegt,
 sondern in den Belegweg gegeben). Alles andere, das erkennbar zu einem Kunden
 gehört, ist "kunde", Gesundheitliches ist "gesundheit", der Rest "sonstiges".
+Werbung, Newsletter, Prospekte, Werbeangebote und AGB sind "sonstiges" mit
+sicherheit höchstens 0.3.
 Wenn du dir nicht sicher bist, wähle eine niedrige sicherheit statt zu raten.
 
 Betrieb: {betrieb}

@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument")
 
 
 def _gesehen() -> dict:
@@ -48,6 +48,26 @@ def _zeile_beleg(e: dict) -> str:
     return "- " + (" ".join(teile) or e.get("text", ""))
 
 
+FRIST_NAMEN = {"kuendigung": "Kündigung", "ablauf": "Ablauf", "zahlung": "Zahlung", "termin": "Termin"}
+
+
+def _zeile_dokument(e: dict) -> str:
+    """"Vertrag: Telekom, Handyvertrag (Kündigung bis 30.09.2027)" aus einem Ereignis `dokument`."""
+    d = e.get("daten", {})
+    if d.get("vertraulich"):
+        return "- " + e.get("text", "")
+    art = str(d.get("dokumentart", "")).capitalize().replace("Behoerde", "Behörde")
+    zeile = f"- {art}: " + ", ".join(str(x) for x in (d.get("gegenueber"), d.get("titel")) if x)
+    frist = d.get("frist") or {}
+    if frist.get("datum"):
+        try:
+            datum = datetime.fromisoformat(frist["datum"]).strftime("%d.%m.%Y")
+        except ValueError:
+            datum = str(frist["datum"])
+        zeile += f" ({FRIST_NAMEN.get(frist.get('art'), 'Frist')} bis {datum})"
+    return zeile
+
+
 def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
     """Baut den Mailtext in Absätzen und einen Betreff mit den wichtigsten Zahlen."""
     if not liste:
@@ -61,6 +81,10 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
     if gruppen["abgelegt"]:
         zeilen = [_zeile_beleg(e) for e in gruppen["abgelegt"]]
         absaetze.append(f"Abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
+
+    if gruppen["dokument"]:
+        zeilen = [_zeile_dokument(e) for e in gruppen["dokument"]]
+        absaetze.append(f"Dokumente abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
 
     ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
     if ansehen:
@@ -102,6 +126,8 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         )
 
     zahlen = [f"{len(gruppen['abgelegt'])} abgelegt"]
+    if gruppen["dokument"]:
+        zahlen.append(f"{len(gruppen['dokument'])} Dokumente")
     if ansehen:
         zahlen.append(f"{len(ansehen)} zum Ansehen")
     if gruppen["fehler"]:

@@ -112,3 +112,7 @@ modell = "sonnet"
 eingang = "~/Belege/Dokumente-Eingang"
 ordner = "Dokumente"
 erinnern_tage = 28
+# Verträge, Versicherungen und Briefe von Amt oder Bank, die per Mail, Handy,
+# Scan oder in Downloads kommen, legt belege selbst unter Dokumente ab, wenn
+# es sich sicher ist. Unsicheres bleibt wie bisher. false = nur von Hand.
+automatisch = true
