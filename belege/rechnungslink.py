@@ -6,12 +6,12 @@ ohne etwas auszuführen. Was zurückkommt, muss ein echtes PDF sein.
 """
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import re
 import socket
 import ssl
-import urllib.error
-import urllib.request
+import time
 from email.message import Message
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
@@ -24,7 +24,7 @@ _NIE = ("unsubscribe", "abmelden", "abbestellen", "newsletter", "datenschutz", "
         "settings", "einstellungen", "preferences", "tracking", "track/open", "pixel")
 _STRIPE = ("pay.stripe.com", "invoice.stripe.com")
 WEITERLEITUNGEN = 3
-ZEITLIMIT = 20
+ZEITLIMIT = 20  # Sekunden für alles: Weiterleitungen und Download zusammen
 
 
 class LinkFehler(Exception):
@@ -60,41 +60,64 @@ def pdf_links(links: list[str]) -> list[str]:
     return treffer
 
 
-def _host_erlaubt(host: str, port: int | None) -> bool:
-    """Nur Port 443 und nur Hosts, deren sämtliche Adressen öffentlich sind."""
+def _host_erlaubt(host: str, port: int | None) -> str | None:
+    """Gibt eine geprüfte öffentliche IP für Port 443 zurück, sonst ``None``.
+
+    Alle Adressen des Hosts müssen öffentlich sein. Verbunden wird danach genau
+    mit dieser IP (``_anfrage``), damit eine zweite DNS-Antwort nichts umlenkt.
+    """
     if port not in (None, 443) or not host or host.lower() in {"localhost"} or host.lower().endswith(".local"):
-        return False
-    try:
-        adressen = {eintrag[4][0] for eintrag in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)}
-    except (socket.gaierror, UnicodeError, OSError):
-        return False
-    try:
-        return bool(adressen) and all(ipaddress.ip_address(a.split("%")[0]).is_global for a in adressen)
-    except ValueError:
-        return False
-
-
-class _KeineWeiterleitung(urllib.request.HTTPRedirectHandler):
-    """Weiterleitungen nicht selbst folgen; ``laden`` prüft jedes Ziel einzeln."""
-
-    def redirect_request(self, *args, **kwargs):
         return None
+    try:
+        adressen = sorted({eintrag[4][0] for eintrag in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)})
+    except (socket.gaierror, UnicodeError, OSError):
+        return None
+    try:
+        if adressen and all(ipaddress.ip_address(a.split("%")[0]).is_global for a in adressen):
+            return adressen[0]
+    except ValueError:
+        pass
+    return None
 
 
-def _anfrage(url: str, zeitlimit: int):
-    """Eine GET-Anfrage ohne Cookies und ohne automatische Weiterleitung.
+class _Verbindung(http.client.HTTPSConnection):
+    """HTTPS zu einer festen, vorher geprüften IP; Zertifikat und SNI für den Hostnamen."""
+
+    def __init__(self, host: str, ip: str, zeitlimit: float):
+        super().__init__(host, 443, timeout=zeitlimit, context=ssl.create_default_context())
+        self._ip = ip
+
+    def connect(self):
+        roh = socket.create_connection((self._ip, 443), self.timeout)
+        self.sock = self._context.wrap_socket(roh, server_hostname=self.host)
+
+
+def _anfrage(url: str, zeitlimit: float, ip: str):
+    """Eine GET-Anfrage an die geprüfte IP: ohne Proxy, ohne Cookies, ohne Weiterleitung.
 
     Liefert ``(status, kopf, antwort)``; ``antwort`` hat ``read(n)`` und ``close()``.
     """
-    oeffner = urllib.request.build_opener(
-        _KeineWeiterleitung, urllib.request.HTTPSHandler(context=ssl.create_default_context())
-    )
-    anfrage = urllib.request.Request(url, headers={"User-Agent": "belege/rechnungslink", "Accept": "application/pdf"})
-    try:
-        antwort = oeffner.open(anfrage, timeout=zeitlimit)
-    except urllib.error.HTTPError as fehler:
-        return fehler.code, fehler.headers, fehler
-    return antwort.status, antwort.headers, antwort
+    teile = urlsplit(url)
+    pfad = (teile.path or "/") + (f"?{teile.query}" if teile.query else "")
+    verbindung = _Verbindung(teile.hostname or "", ip, zeitlimit)
+    verbindung.request("GET", pfad, headers={"User-Agent": "belege/rechnungslink", "Accept": "application/pdf"})
+    antwort = verbindung.getresponse()
+    return antwort.status, antwort.msg, antwort
+
+
+def _lesen(antwort, max_bytes: int, frist: float) -> bytes:
+    """Liest höchstens ``max_bytes + 1`` Bytes und bricht nach der Gesamtfrist ab."""
+    teile: list[bytes] = []
+    menge = 0
+    while menge <= max_bytes:
+        if time.monotonic() > frist:
+            raise LinkFehler("Zeitlimit überschritten", endgueltig=False)
+        stueck = antwort.read(min(65536, max_bytes + 1 - menge))
+        if not stueck:
+            break
+        teile.append(stueck)
+        menge += len(stueck)
+    return b"".join(teile)
 
 
 def _dateiname(url: str, kopf: Message) -> str:
@@ -108,6 +131,7 @@ def _dateiname(url: str, kopf: Message) -> str:
 
 def laden(url: str, ziel: Path, max_bytes: int = 15 * 1024 * 1024) -> Path:
     """Lädt genau ein PDF nach ``ziel`` (Ordner) und gibt den Dateipfad zurück."""
+    frist = time.monotonic() + ZEITLIMIT
     for _ in range(WEITERLEITUNGEN + 1):
         teile = urlsplit(url)
         if teile.scheme.lower() != "https":
@@ -118,14 +142,19 @@ def laden(url: str, ziel: Path, max_bytes: int = 15 * 1024 * 1024) -> Path:
             port = teile.port
         except ValueError:
             raise LinkFehler("ungültiger Port")
-        if not _host_erlaubt(teile.hostname or "", port):
+        ip = _host_erlaubt(teile.hostname or "", port)
+        if not ip:
             raise LinkFehler(f"Host nicht erlaubt: {teile.hostname}")
+        rest = frist - time.monotonic()
+        if rest <= 0:
+            raise LinkFehler("Zeitlimit überschritten", endgueltig=False)
         try:
-            status, kopf, antwort = _anfrage(url, ZEITLIMIT)
-        except (urllib.error.URLError, TimeoutError, OSError, ssl.SSLError) as fehler:
-            # Zertifikatsfehler sind kein Netzaussetzer: nicht täglich neu versuchen.
-            endgueltig = isinstance(getattr(fehler, "reason", fehler), ssl.SSLCertVerificationError)
-            raise LinkFehler(f"nicht erreichbar ({type(fehler).__name__})", endgueltig=endgueltig)
+            status, kopf, antwort = _anfrage(url, rest, ip)
+        except ssl.SSLCertVerificationError:
+            # Falsches Zertifikat ist kein Netzaussetzer: nicht täglich neu versuchen.
+            raise LinkFehler("Zertifikat ungültig")
+        except (http.client.HTTPException, OSError) as fehler:
+            raise LinkFehler(f"nicht erreichbar ({type(fehler).__name__})", endgueltig=False)
         try:
             if status in (301, 302, 303, 307, 308):
                 weiter = kopf.get("Location", "")
@@ -143,7 +172,10 @@ def laden(url: str, ziel: Path, max_bytes: int = 15 * 1024 * 1024) -> Path:
             laenge = kopf.get("Content-Length")
             if laenge and laenge.isdigit() and int(laenge) > max_bytes:
                 raise LinkFehler("zu groß")
-            daten = antwort.read(max_bytes + 1)
+            try:
+                daten = _lesen(antwort, max_bytes, frist)
+            except (http.client.HTTPException, OSError) as fehler:
+                raise LinkFehler(f"Abbruch beim Laden ({type(fehler).__name__})", endgueltig=False)
             if len(daten) > max_bytes:
                 raise LinkFehler("zu groß")
             if not daten.startswith(b"%PDF"):

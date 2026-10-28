@@ -304,11 +304,13 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   PDF-Link enthält (`pdf_links`: Pfad endet auf `.pdf` oder enthält
   invoice/rechnung/receipt/beleg/quittung/pdf/download; nie Abmelde-,
   Datenschutz-, Login- oder Konto-Links), wird er geladen. `laden`: nur https,
-  Port 443, Zertifikat geprüft, keine Cookies, kein JavaScript; Weiterleitungen
-  höchstens 3, jede erneut geprüft (https, Ziel-IP öffentlich, nie
-  localhost/privat/link-local); Antwort muss `Content-Type: application/pdf`
-  haben und mit `%PDF` beginnen; höchstens `[quellen].rechnungslink_max_mb`
-  (Standard 15) MB, Zeitlimit 20 s. Das PDF wird ein ganz normaler Fund
+  Port 443, Zertifikat geprüft, kein Proxy, keine Cookies, kein JavaScript;
+  verbunden wird mit genau der IP, die `_host_erlaubt` geprüft hat (alle
+  Adressen des Hosts öffentlich, nie localhost/privat/link-local), damit eine
+  zweite DNS-Antwort nichts umlenkt. Weiterleitungen höchstens 3, jede erneut
+  so geprüft. Antwort muss `Content-Type: application/pdf` haben und mit
+  `%PDF` beginnen; höchstens `[quellen].rechnungslink_max_mb` (Standard 15) MB;
+  20 s Gesamtzeit für Weiterleitungen und Download. Das PDF wird ein ganz normaler Fund
   (`quelle="postfach"`, `mail` mit zusätzlich `"link": <Host>`), läuft also
   durch aktive-Inhalte-Prüfung, Abofallen-Erkennung, Einordnung und Ablage.
   Vor dem Laden prüft `abofalle.erkennen` schon den Mailtext; ein Treffer lädt
@@ -317,9 +319,11 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Nicht passende Mails (kein oder mehr als ein Link, kein PDF, zu groß, Host
   nicht erlaubt, Abofalle) landen mit Grund im Protokoll und in
   `gesehen.json[konto].links_geprueft`, damit sie nicht jeden Lauf wiederkommen;
-  vorübergehende Fehler (Netz, Zeitlimit, Server 5xx) werden nicht gemerkt und
-  beim nächsten Lauf erneut versucht. Ohne `--echt` wird `links_geprueft` nicht
-  geschrieben.
+  vorübergehende Fehler (Netz, Abbruch, Zeitlimit, Server 5xx, Mail nicht
+  lesbar) brechen den Lauf nicht ab: Die Mail kommt nach
+  `gesehen.json[konto].offen` und hält das Fenster offen wie ein gescheiterter
+  Anhang (nach `max_tage` einmal `zweifel`). Ohne `--echt` werden weder
+  `links_geprueft` noch `offen` geschrieben.
 - **handy**: alle Dateien in `[quellen].handy_ordner` (nicht rekursiv, ohne
   versteckte). HEIC wird vor dem Ablegen zu JPEG (`sips`), das HEIC-Original
   bleibt nicht liegen.

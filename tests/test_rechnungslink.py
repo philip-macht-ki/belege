@@ -19,7 +19,8 @@ class _Antwort:
         self.daten = daten
 
     def read(self, n: int) -> bytes:
-        return self.daten[:n]
+        stueck, self.daten = self.daten[:n], self.daten[n:]
+        return stueck
 
     def close(self) -> None:
         pass
@@ -36,13 +37,14 @@ def _server(monkeypatch, antworten: dict, erlaubt=lambda host: host.endswith("ex
     """Ersetzt das Netz: ``antworten`` ordnet URLs (status, kopf, inhalt) zu."""
     geladen = []
 
-    def anfrage(url, zeitlimit):
+    def anfrage(url, zeitlimit, ip):
         geladen.append(url)
         status, kopf, inhalt = antworten[url]
         return status, kopf, _Antwort(inhalt)
 
     monkeypatch.setattr(rechnungslink, "_anfrage", anfrage)
-    monkeypatch.setattr(rechnungslink, "_host_erlaubt", lambda host, port: port in (None, 443) and erlaubt(host))
+    monkeypatch.setattr(rechnungslink, "_host_erlaubt",
+                        lambda host, port: "93.184.215.14" if port in (None, 443) and erlaubt(host) else None)
     return geladen
 
 
@@ -216,7 +218,54 @@ def test_voruebergehender_fehler_wird_nicht_gemerkt(repo, monkeypatch):
     _mail(repo, "netz.eml", "Ihre Rechnung", f'<a href="{url}">PDF</a>')
     _server(monkeypatch, {url: (502, _kopf(), b"")})
     assert list(quellen.postfach_funde("geschaeft", 3, echt=True)) == []
-    assert "links_geprueft" not in _gesehen(repo).get("geschaeft", {})
+    stand = _gesehen(repo)["geschaeft"]
+    assert "links_geprueft" not in stand and "netz.eml" in stand["offen"]
+    # Rückblick bleibt offen, beim nächsten Lauf klappt es: Fund statt Merken.
+    quellen.lauf_abschliessen("geschaeft", {}, True)
+    assert "lauf" not in _gesehen(repo)["geschaeft"]
+    _server(monkeypatch, {url: _pdf_antwort()})
+    assert [f.mail["id"] for f in quellen.postfach_funde("geschaeft", 3, echt=True)] == ["netz.eml"]
+
+
+def test_abbruch_beim_lesen_ist_voruebergehend(repo, monkeypatch):
+    class Abbruch(_Antwort):
+        def read(self, n):
+            raise ConnectionResetError("weg")
+
+    url = "https://example.com/rechnung.pdf"
+    monkeypatch.setattr(rechnungslink, "_host_erlaubt", lambda host, port: "93.184.215.14")
+    monkeypatch.setattr(rechnungslink, "_anfrage",
+                        lambda u, z, ip: (200, _kopf(Content_Type="application/pdf"), Abbruch(b"")))
+    with pytest.raises(LinkFehler) as fehler:
+        rechnungslink.laden(url, repo / "arbeit" / "tmp" / "x")
+    assert not fehler.value.endgueltig
+
+
+def test_gesamtfrist_gilt_ueber_alle_weiterleitungen(repo, monkeypatch):
+    uhr = iter([0, 5, 15, 25, 30, 40])
+    monkeypatch.setattr(rechnungslink.time, "monotonic", lambda: next(uhr))
+    urls = [f"https://example.com/r/{i}" for i in range(4)]
+    _server(monkeypatch, {u: (302, _kopf(Location=urls[i + 1]), b"") for i, u in enumerate(urls[:-1])})
+    with pytest.raises(LinkFehler, match="Zeitlimit") as fehler:
+        rechnungslink.laden(urls[0], repo / "arbeit" / "tmp" / "x")
+    assert not fehler.value.endgueltig
+
+
+def test_anfrage_verbindet_mit_gepruefter_ip(monkeypatch):
+    """Kein zweites DNS, kein Proxy: die Verbindung geht an die geprüfte IP."""
+    gesehen = {}
+
+    def verbinden(adresse, zeitlimit):
+        gesehen["adresse"] = adresse
+        raise ConnectionRefusedError("Test")
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setattr(rechnungslink.socket, "create_connection", verbinden)
+    from belege.rechnungslink import _Verbindung
+
+    with pytest.raises(ConnectionRefusedError):
+        _Verbindung("example.com", "93.184.215.14", 5).connect()
+    assert gesehen["adresse"] == ("93.184.215.14", 443)
 
 
 def test_schalter_aus(repo, monkeypatch):

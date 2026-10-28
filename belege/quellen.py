@@ -110,6 +110,7 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
             voll = postfach.lesen(str(mail_id))
         except Exception as fehler:  # Netz weg: beim nächsten Lauf noch einmal
             kern.log(f"Rechnungslink {konto}:{mail_id} später noch einmal: Mail nicht lesbar ({fehler})")
+            _link_offen(konto, str(mail_id), _mail_datum(mail), echt)
             continue
         grund = None
         links: list[str] = []
@@ -136,6 +137,7 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
             except rechnungslink.LinkFehler as fehler:
                 if not fehler.endgueltig:
                     kern.log(f"Rechnungslink {konto}:{mail_id} später noch einmal: {fehler.grund}")
+                    _link_offen(konto, str(mail_id), _mail_datum(mail), echt)
                     continue
                 grund = f"Link nicht geladen: {fehler.grund}"
             else:
@@ -154,10 +156,26 @@ def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:
     if not echt:
         return
     gesehen = _gesehen()
-    liste = gesehen.setdefault(konto, {"mails": []}).setdefault("links_geprueft", [])
+    daten = gesehen.setdefault(konto, {"mails": []})
+    liste = daten.setdefault("links_geprueft", [])
     if mail_id not in liste:
         liste.append(mail_id)
-        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+    (daten.get("offen") or {}).pop(mail_id, None)
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+
+
+def _link_offen(konto: str, mail_id: str, datum: date, echt: bool) -> None:
+    """Hält eine Link-Mail nach einem Netzfehler offen, damit das Fenster sie behält.
+
+    Wie bei Anhängen: ``lauf_abschliessen`` rückt den Rückblick erst vor, wenn
+    nichts mehr offen ist, und meldet nach ``max_tage`` einmal ``zweifel``.
+    """
+    if not echt:
+        return
+    gesehen = _gesehen()
+    offen = gesehen.setdefault(konto, {"mails": []}).setdefault("offen", {})
+    offen.setdefault(mail_id, datum.isoformat())
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
 def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
