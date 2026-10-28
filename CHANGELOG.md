@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.8.1] – 28.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Der Rundfunkbeitrag fehlt im Monatsabgleich nicht mehr jeden Monat. Liegt der Bescheid oder die Anmeldebestätigung des Beitragsservice in deinen Dokumenten, gilt er als Dauerbeleg, solange die Beitragsnummer übereinstimmt.
+
+### Musst du etwas tun?
+
+Nein. Wenn du den Bescheid noch nicht abgelegt hast: Foto oder Scan in deinen Handy- oder Scan-Ordner, den Rest macht belege.
+
 ## [1.8.0] – 28.10.2026
 
 aktion: keine
