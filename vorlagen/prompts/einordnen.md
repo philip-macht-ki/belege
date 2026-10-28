@@ -5,11 +5,13 @@ Antworte genau mit einem JSON-Objekt und ohne Markdown. Die Felder sind:
 ist_beleg (boolean), art (eingang|ausgang|sonstige), bereich (betrieb|privat),
 datum (JJJJ-MM-TT oder null), lieferant, beschreibung (ein bis vier Wörter mit
 Bindestrichen), betrag (Brutto als Zahl oder null), waehrung (EUR), sicherheit
-(hoch|mittel|niedrig), grund (ein kurzer Satz).
+(hoch|mittel|niedrig), grund (ein kurzer Satz), firma (genau ein Name aus der
+Firmenliste oder unklar).
 
 Betrieb: {betrieb}
 Schreibweisen: {namen}
 USt-IdNr: {ust_id}
+Firmenliste: {firmen}
 Tätigkeit: {taetigkeit}
 Private Ablage erlaubt: {privat_erlaubt}
 Mailkopf: {mail}

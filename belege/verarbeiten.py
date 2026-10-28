@@ -90,7 +90,7 @@ def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung
             einordnung = Einordnung(
                 True, eintrag["art"], eintrag["bereich"], datum, eintrag["lieferant"],
                 eintrag["beschreibung"], eintrag.get("betrag"), eintrag["waehrung"],
-                eintrag["sicherheit"], "Begleit-PDF zur E-Rechnung.", "xml",
+                eintrag["sicherheit"], "Begleit-PDF zur E-Rechnung.", "xml", eintrag.get("firma", ""),
             )
             return einordnung, xml_pfad.with_name(f"{xml_pfad.stem}_Begleit.pdf")
     return None
@@ -140,18 +140,20 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         dokument = schon_abgelegt(fingerabdruck)
         if fingerabdruck in index or dokument:
             pfad = dokument[0] if dokument else index[fingerabdruck].get("pfad", "der Ablage")
+            abgelegte_firma = kern.firma_von(index[fingerabdruck]) if fingerabdruck in index else None
             name = "Ein vertrauliches Dokument" if dokument and dokument[1] else fund.name
-            ergebnis = kern.Ergebnis("nichts", f"Liegt schon unter {pfad}.", {"pfad": pfad})
+            firma_hinweis = f" ({abgelegte_firma})" if abgelegte_firma else ""
+            ergebnis = kern.Ergebnis("nichts", f"Liegt schon unter {pfad}{firma_hinweis}.", {"pfad": pfad, "firma": abgelegte_firma})
             if echt and fund.quelle == "downloads":
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
                 gemeldet = set(gesehen.get("downloads_gemeldet", []))
                 if fingerabdruck not in gemeldet:
-                    kern.ereignis("doppelt", f"{name} liegt schon unter {pfad}, kannst du löschen",
-                                  quelle=fund.quelle)
+                    kern.ereignis("doppelt", f"{name} liegt schon unter {pfad}{firma_hinweis}, kannst du löschen",
+                                  quelle=fund.quelle, firma=abgelegte_firma)
                     gesehen["downloads_gemeldet"] = sorted(gemeldet | {fingerabdruck})
                     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
             elif echt:
-                kern.ereignis("doppelt", ergebnis.meldung, quelle=fund.quelle)
+                kern.ereignis("doppelt", ergebnis.meldung, quelle=fund.quelle, firma=abgelegte_firma)
             return ergebnis
         begleit = None
         geheim = None
@@ -263,7 +265,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
-                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"))
+                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
+                          grund=daten.get("grund"))
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

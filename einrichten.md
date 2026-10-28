@@ -349,6 +349,26 @@ ausdrücklichen Ja mit `--echt`.
 
 Nur wenn die Person Teil 3 hat.
 
+### Mehrere Firmen
+
+Hat die Person mehrere Firmen, fragt Claude für jede nach dem Namen auf
+Rechnungen, allen üblichen Schreibweisen und der USt-IdNr. Claude trägt je
+Firma einen `[[firma]]`-Block ein und legt den Bereich mit einem kurzen,
+dateisicheren Ordnernamen fest. Danach macht Claude mit drei Belegen je Firma
+einen Trockenlauf und prüft gemeinsam den Ordner `Unsortiert`. Eine bestehende
+Ablage wird nicht umsortiert: Die Trennung gilt nur für neue Belege. Ein
+Umsortieren macht Claude ausschließlich auf ausdrücklichen Wunsch, vorher immer
+als Trockenlauf.
+
+Für den Monatsabgleich fragt Claude zusätzlich nach den Konten jeder Firma und
+trägt sie im jeweiligen Block ein, zum Beispiel
+`konten = ["DE12 3456 7890 1234 5678 90"]`. Erlaubt sind IBANs oder die
+Kontokennungen aus dem Export; MoneyMoney schreibt die dort eingerichtete
+Kennung als Spalte `Konto` mit. Buchungen ohne zugeordnetes Konto gehören zur
+Hauptfirma (der ersten Firma). Ohne Kontenangabe wird derselbe Auszug nicht bei
+jeder Firma wiederholt; die übrigen Firmen erhalten im Monatsordner den Hinweis,
+die Konten einzutragen.
+
 1. **Cloud-Ordner.** Claude fragt, welchen Dienst die Person auf Handy und Mac
    nutzt (iCloud Drive, Google Drive, Dropbox, OneDrive), legt dort `Belege/Eingang`
    an und trägt den Pfad als `[quellen] handy_ordner` ein. Im selben Block setzt

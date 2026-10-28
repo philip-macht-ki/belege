@@ -79,8 +79,15 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
 
     absaetze: list[str] = []
     if gruppen["abgelegt"]:
-        zeilen = [_zeile_beleg(e) for e in gruppen["abgelegt"]]
-        absaetze.append(f"Abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
+        nach_firma: dict[str, list[dict]] = {}
+        for e in gruppen["abgelegt"]:
+            nach_firma.setdefault(str(e.get("daten", {}).get("firma") or "Betrieb"), []).append(e)
+        teile = []
+        for name, ereignisse_firma in nach_firma.items():
+            kopf = f"{name} ({len(ereignisse_firma)})" if len(nach_firma) > 1 else None
+            zeilen = [_zeile_beleg(e) for e in ereignisse_firma]
+            teile.append((kopf + "\n" if kopf else "") + "\n".join(zeilen))
+        absaetze.append(f"Abgelegt ({len(gruppen['abgelegt'])})\n" + "\n".join(teile))
 
     if gruppen["dokument"]:
         zeilen = [_zeile_dokument(e) for e in gruppen["dokument"]]
@@ -88,7 +95,7 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
 
     ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
     if ansehen:
-        zeilen = ["- " + e.get("text", "") for e in ansehen]
+        zeilen = ["- Firma unklar: " + e.get("text", "") if e.get("daten", {}).get("grund") == "Firma unklar" else "- " + e.get("text", "") for e in ansehen]
         absaetze.append("Bitte ansehen\n" + "\n".join(zeilen))
 
     if gruppen["doppelt"]:

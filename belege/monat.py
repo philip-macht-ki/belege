@@ -141,6 +141,8 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
     )
     leser = csv.DictReader(zeilen[kopf_nr:], dialect=muster)
     spalten = _spalten(leser.fieldnames or [])
+    konto_spalte = next((spalte for spalte in leser.fieldnames or []
+                         if _normal(spalte) in {"konto", "kontokennung", "eigenes konto", "eigene iban"}), None)
     if not all(spalten.get(art) for art in ("datum", "betrag", "name")):
         raise RuntimeError(
             "Datum, Betrag oder Name sind nicht eindeutig. Prüfe die CSV-Spalten."
@@ -159,8 +161,7 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
         except (KeyError, ValueError):
             continue
         if monat is None or tag.strftime("%Y-%m") == monat:
-            ergebnis.append(
-                {
+            buchung = {
                     "datum": tag.isoformat(),
                     "betrag": menge,
                     "name": zeile[spalten["name"]].strip(),
@@ -168,7 +169,9 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
                     "originalbetrag": _betrag(zeile[spalten["originalbetrag"]])
                     if spalten.get("originalbetrag") and zeile.get(spalten["originalbetrag"], "").strip() else None,
                 }
-            )
+            if konto_spalte and zeile.get(konto_spalte, "").strip():
+                buchung["konto"] = zeile[konto_spalte].strip()
+            ergebnis.append(buchung)
     return ergebnis, karte
 
 
@@ -199,6 +202,7 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
     """
     gesehen: dict[tuple, int] = {}
     ergebnis: list[dict] = []
+    mehrere_firmen = len(kern.firmen()) > 1
     for datei in dateien:
         try:
             gefunden, karte = _buchungen_und_format(datei, monat)
@@ -208,6 +212,9 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
         in_datei: dict[tuple, int] = {}
         for buchung in gefunden:
             schluessel = _dublettenschluessel(buchung, karte)
+            if mehrere_firmen and buchung.get("konto"):
+                # Bei mehreren Firmen sind gleiche Umsätze auf verschiedenen Firmenkonten keine Dublette.
+                schluessel = (_konto_kennung(buchung["konto"]),) + schluessel
             in_datei[schluessel] = in_datei.get(schluessel, 0) + 1
             # Neu ist nur, was diese Datei öfter enthält als jede Datei davor.
             if in_datei[schluessel] <= gesehen.get(schluessel, 0):
@@ -376,7 +383,7 @@ def _sonderart(buchung: dict) -> str | None:
     return None
 
 
-def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
+def abgleichen(buchungen_liste: list[dict], index: dict, firma: str | None = None) -> list[dict]:
     """Ordnet Belege nur bei einem eindeutigen Kandidaten mit Namensbezug zu."""
     benutzt: set[str] = set()
     ohne = kern.konfig("regeln").get("monat", {}).get("ohne_beleg", [])
@@ -403,6 +410,7 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             if sha not in benutzt
             and beleg.get("status") == "abgelegt"
             and beleg.get("bereich") == "betrieb"
+            and (firma is None or kern.firma_von(beleg) == firma)
             and beleg.get("art") == art
             and _beleg_betrag(beleg) is not None
             and abs(abs(buchung.get("originalbetrag") if buchung.get("originalbetrag") is not None else buchung["betrag"]) - _beleg_betrag(beleg)) <= 0.01
@@ -452,7 +460,7 @@ def abgleichen(buchungen_liste: list[dict], index: dict) -> list[dict]:
             )
             eintrag["status"] = "pruefen" if fremd else "fehlt"
         ergebnis.append(eintrag)
-    _sammelrechnungen(ergebnis, index, benutzt)
+    _sammelrechnungen(ergebnis, index, benutzt, firma)
     _dauerbelege(ergebnis)
     return ergebnis
 
@@ -463,11 +471,12 @@ def _ist_quittung(beleg: dict) -> bool:
     return bool(re.search(r"quittung|receipt|zahlungsbestätigung|zahlungsbestaetigung", raum, re.I))
 
 
-def _sammelrechnungen(ergebnis: list[dict], index: dict, benutzt: set[str]) -> None:
+def _sammelrechnungen(ergebnis: list[dict], index: dict, benutzt: set[str], firma: str | None = None) -> None:
     """Ordnet bis zu sechs Teilzahlungen einer passenden Sammelrechnung zu."""
     offen = [x for x in ergebnis if x["status"] in {"fehlt", "pruefen"}]
     for sha, beleg in index.items():
-        if sha in benutzt or beleg.get("status") != "abgelegt" or _beleg_betrag(beleg) is None:
+        if (sha in benutzt or beleg.get("status") != "abgelegt" or _beleg_betrag(beleg) is None
+                or (firma is not None and kern.firma_von(beleg) != firma)):
             continue
         passende = [x for x in offen if _gleicher_name(beleg, x) and _im_fenster(beleg.get("datum"), date.fromisoformat(x["datum"]))]
         for anzahl in range(2, min(6, len(passende)) + 1):
@@ -586,7 +595,8 @@ def offene_posten_text(monat: str, ergebnis: list[dict]) -> str:
     return "\n\n".join(teile)
 
 
-def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen: list[dict] | None = None) -> None:
+def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen: list[dict] | None = None,
+                       hinweis: str | None = None, name: str | None = None) -> None:
     """Schreibt die lesbaren Abgleichdateien nach arbeit/monat/<JJJJ-MM>/."""
     ordner.mkdir(parents=True, exist_ok=True)
     offen = [x for x in ergebnis if x["status"] == "fehlt"]
@@ -606,15 +616,18 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen
 
     summe = euro(sum(abs(x["betrag"]) for x in offen))
     (ordner / "fehlt_noch.md").write_text(
-        "# Fehlende Belege\n\n" + "\n".join(_zeile(x) for x in offen) + f"\n\nSumme: {summe}\n",
+        "# Fehlende Belege\n\n" + (f"> {hinweis}\n\n" if hinweis else "")
+        + "\n".join(_zeile(x) for x in offen) + f"\n\nSumme: {summe}\n",
         encoding="utf-8",
     )
     (ordner / "pruefen.md").write_text(
         "# Bitte prüfen\n\n" + "\n".join(_zeile(x) for x in pruefen) + "\n", encoding="utf-8"
     )
 
-    betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+    betrieb = name or kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     zeilen = [f"# Offene Posten {monat[5:]}/{monat[:4]}, {betrieb}", ""]
+    if hinweis:
+        zeilen += [hinweis, ""]
     for x in offen + pruefen:
         zeilen.append(_zeile(x) + " → Was ist das? ______")
     privat = [x for x in ergebnis if x["status"] == "privat"]
@@ -626,6 +639,30 @@ def _schreibe_ausgaben(ordner: Path, monat: str, ergebnis: list[dict], mahnungen
             f"- {x['glaeubiger']}: {x['status']} ({x['pfad']})" for x in mahnungen
         ) + "\n", encoding="utf-8")
     kern.schreiben(ordner / "abgleich.json", ergebnis)
+
+
+def _konto_kennung(wert: object) -> str:
+    """Vergleicht IBANs und Kontokennungen robust, Leerzeichen sind egal."""
+    return re.sub(r"\s+", "", str(wert or "")).casefold()
+
+
+def _buchungen_fuer_firma(buchungen: list[dict], firma: dict, alle_firmen: list[dict]) -> list[dict]:
+    """Gibt nur die Buchungen der Firmenkonten; nicht zugeordnete gehören zur Hauptfirma."""
+    zugeordnet = {
+        _konto_kennung(konto)
+        for eintrag in alle_firmen for konto in eintrag.get("konten", [])
+        if _konto_kennung(konto)
+    }
+    eigene = {_konto_kennung(konto) for konto in firma.get("konten", []) if _konto_kennung(konto)}
+    hauptfirma = alle_firmen[0]["name"]
+    if firma["name"] == hauptfirma:
+        # Die Hauptfirma bekommt ihre eigenen Konten und alles, was keiner Firma zugeordnet ist,
+        # auch Buchungen ohne erkannte Kontokennung.
+        return [buchung for buchung in buchungen
+                if _konto_kennung(buchung.get("konto")) in eigene or _konto_kennung(buchung.get("konto")) not in zugeordnet]
+    if eigene:
+        return [buchung for buchung in buchungen if _konto_kennung(buchung.get("konto")) in eigene]
+    return []
 
 
 def _fund_passt(datei: Path, buchung: dict, mail: dict | None = None) -> bool:
@@ -733,7 +770,7 @@ def _als_pdf(bild: Path, ziel: Path) -> Path:
     return pdf
 
 
-def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
+def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None) -> list[Path]:
     """Kopiert alle abgelegten Betriebsbelege des Monats nach <ziel>/paket/.
 
     PDFs werden byte-gleich kopiert (ZUGFeRD bleibt erhalten), Fotos zu PDF
@@ -750,6 +787,8 @@ def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
         if str(beleg.get("datum", ""))[:7] != monat:
             continue
         if beleg.get("bereich") != "betrieb" or beleg.get("status") != "abgelegt":
+            continue
+        if firma is not None and kern.firma_von(beleg) != firma:
             continue
         quelle = ablage / str(beleg.get("pfad", ""))
         if not quelle.exists():
@@ -769,7 +808,7 @@ def paket_packen(monat: str, ziel: Path, index: dict) -> list[Path]:
     return sorted(dateien)
 
 
-def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) -> None:
+def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, firma: dict | None = None) -> None:
     """Übergibt das Paket an den Steuerberater, einmal je Monat.
 
     Die offenen Posten stehen im Mailtext, nicht als Anhang, weil Beleg-Adressen
@@ -777,15 +816,22 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) 
     """
     echt = kern.echt(args)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
-    schon = gesehen.get("uebergabe", {}).get(monat)
+    schluessel = f"{firma['name']}:{monat}" if firma else monat
+    uebergaben = gesehen.get("uebergabe", {})
+    schon = uebergaben.get(schluessel)
+    # Der alte Schlüssel ohne Firma steht für die damalige einzige Firma und
+    # schützt bei der Migration ausschließlich die heutige Hauptfirma.
+    if firma and firma["name"] == kern.firmen()[0]["name"]:
+        schon = schon or uebergaben.get(monat)
     if schon and "nochmal" not in (getattr(args, "ziel", None) or []):
         print(f"nichts: {monat} wurde schon am {schon[:10]} übergeben. Nochmal: belege monat nochmal "
               f"--monat {monat} --uebergabe --echt")
         return
 
-    dateien = paket_packen(monat, ziel, index)
+    dateien = paket_packen(monat, ziel, index, firma["name"] if firma else None)
     cfg = kern.konfig("belege").get("uebergabe", {})
-    betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+    cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
+    betrieb = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     betreff = f"Belege {monat[5:]}/{monat[:4]}, {betrieb}"
     text = (
         f"Hallo,\n\nanbei {len(dateien)} Belege für {monat[5:]}/{monat[:4]}.\n\n"
@@ -812,13 +858,13 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args) 
             return
         from .senden import senden
 
-        r = senden(cfg["adresse"], betreff, text, dateien, echt, fortschritt=f"uebergabe:{monat}")
+        r = senden(cfg["adresse"], betreff, text, dateien, echt, fortschritt=f"uebergabe:{schluessel}")
         print(f"{r.status}: {r.meldung}")
         if not echt or r.status != "ok":
             return
         ergebnis_text = f"{len(dateien)} Belege an {cfg['adresse']} gesendet"
 
-    gesehen.setdefault("uebergabe", {})[monat] = kern.jetzt().isoformat(timespec="seconds")
+    gesehen.setdefault("uebergabe", {})[schluessel] = kern.jetzt().isoformat(timespec="seconds")
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
     kern.ereignis("monat", f"Übergabe {monat}: {ergebnis_text}")
 
@@ -863,6 +909,30 @@ def befehl(args) -> int:
         print(f"nichts: {text}")
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
+    alle_firmen = kern.firmen()
+    if len(alle_firmen) > 1:
+        buchungen = buchungen_aus(auszuege, monat)
+        alle_daten: list[dict] = []
+        for einzelfirma in alle_firmen:
+            hinweis = None
+            if not einzelfirma.get("konten") and einzelfirma["name"] != alle_firmen[0]["name"]:
+                hinweis = "Kontoauszug keiner Firma zugeordnet: trag in [[firma]] konten ein"
+            daten_firma = abgleichen(_buchungen_fuer_firma(buchungen, einzelfirma, alle_firmen), index, einzelfirma["name"])
+            _nachsuche(daten_firma, args)
+            alle_daten += daten_firma
+            ziel_firma = kern.pfad("arbeit", "monat", monat, einzelfirma["bereich"])
+            _schreibe_ausgaben(ziel_firma, monat, daten_firma, _mahnungen(), hinweis, einzelfirma["name"])
+            zugeordnet = sum(x["status"].startswith("zugeordnet") for x in daten_firma)
+            fehlt = [x for x in daten_firma if x["status"] == "fehlt"]
+            zusatz = f" – {hinweis}" if hinweis else ""
+            print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
+            if getattr(args, "uebergabe", False):
+                _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
+            if getattr(args, "anfragen", False):
+                _anfragen(daten_firma, kern.echt(args))
+        from .posten import fortschreiben
+        fortschreiben(alle_daten)
+        return 0
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
     from .posten import fortschreiben

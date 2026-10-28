@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tomllib
 import shutil
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -290,6 +291,78 @@ def freier_name(ziel: Path) -> Path:
 
 def ablage_ordner() -> Path:
     return erweitert(konfig("belege")["ablage"]["ordner"])
+
+
+def firmen() -> list[dict]:
+    """Firmen aus der Konfiguration, einschließlich des alten Einzelbetriebs.
+
+    Sobald [[firma]] verwendet wird, ergänzt [betrieb] die Liste nur noch, wenn
+    er nicht bereits durch Namen oder Schreibweise enthalten ist. Das hält alte
+    Konfigurationen und den Übergang zu mehreren Firmen kompatibel.
+    """
+    cfg = konfig("belege")
+    explizit = [dict(f) for f in cfg.get("firma", [])]
+    betrieb = dict(cfg.get("betrieb", {}))
+    if not explizit:
+        # Der Einzelbetrieb hatte nie einen Firmenbereich: sein Ordner kommt
+        # weiterhin ausschließlich aus [ablage].bereich_betrieb. Insbesondere
+        # darf ein Betriebsname mit "/" keine neue Konfigurationsprüfung
+        # auslösen.
+        return [{**betrieb, "bereich": cfg.get("ablage", {}).get("bereich_betrieb", "Betrieb"),
+                 "namen": list(betrieb.get("namen", []))}] if betrieb.get("name") else []
+    zusaetzlicher_betrieb = False
+    if betrieb.get("name"):
+        alle_namen = {str(n).casefold() for f in explizit for n in [f.get("name", ""), *f.get("namen", [])] if n}
+        if str(betrieb["name"]).casefold() not in alle_namen:
+            explizit.insert(0, betrieb)
+            zusaetzlicher_betrieb = True
+    ergebnis = []
+    for nummer, firma in enumerate(explizit):
+        name = str(firma.get("name", "")).strip()
+        if not name:
+            continue
+        if zusaetzlicher_betrieb and nummer == 0:
+            # [betrieb] bleibt der kompatible Hauptbetrieb und erhält keinen
+            # eigenen, aus seinem Namen abgeleiteten Firmenordner.
+            bereich = cfg.get("ablage", {}).get("bereich_betrieb", "Betrieb")
+        else:
+            bereich = str(firma.get("bereich") or name).strip()
+            if (not bereich or ".." in bereich or "/" in bereich or "\\" in bereich
+                    or not re.fullmatch(r"[\w .-]+", bereich, re.UNICODE)):
+                raise RuntimeError(f"Ungültiger Firmenbereich {bereich!r}: nur sichere Zeichen, keine Pfadtrenner und kein '..'.")
+            bereich = re.sub(r"[\\/:*?\"<>|]+", "-", bereich)
+            bereich = re.sub(r"\s+", "-", bereich).strip(".-") or "Firma"
+        ergebnis.append({**firma, "name": name, "bereich": bereich,
+                         "namen": list(firma.get("namen", []))})
+    bereiche = [f["bereich"].casefold() for f in ergebnis]
+    if len(bereiche) != len(set(bereiche)):
+        raise RuntimeError("Mehrere Firmen haben nach der Bereinigung denselben Bereich.")
+    return ergebnis
+
+
+def firma(name: str | None) -> dict | None:
+    """Gibt die Firma mit diesem kanonischen Namen zurück."""
+    for eintrag in firmen():
+        if name and str(eintrag["name"]).casefold() == str(name).casefold():
+            return eintrag
+    return None
+
+
+def firma_von(eintrag: dict) -> str | None:
+    """Kanonische Firma eines Indexeintrags, einschließlich alter Einträge.
+
+    Vor der Mehrfirmen-Ablage hatten Betriebsbelege kein ``firma``-Feld. Sobald
+    [[firma]] konfiguriert ist, gehören diese Einträge zur Hauptfirma, also zur
+    ersten von :func:`firmen` gelieferten Firma.
+    """
+    name = eintrag.get("firma")
+    gefunden = firma(str(name)) if name else None
+    if gefunden:
+        return gefunden["name"]
+    if not name and eintrag.get("bereich") == "betrieb" and konfig("belege").get("firma"):
+        alle = firmen()
+        return alle[0]["name"] if alle else None
+    return str(name) if name else None
 
 
 def echt(args) -> bool:

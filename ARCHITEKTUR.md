@@ -78,9 +78,16 @@ arbeit/                   Laufzeit, nie im Git
 <ablage>/Vorsicht Abofalle/<JJJJ-MM-TT>_<ursprünglicher Name>
 ```
 
-- `<Bereich>` = `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
+- `<Bereich>` = bei mehreren `[[firma]]` deren dateisicherer `bereich`
+  (Standard: `name`), sonst `[ablage].bereich_betrieb` (Standard „Betrieb“) oder
   `[ablage].bereich_privat` (Standard „Privat“; nur wenn `privat = true`,
   sonst geht Privates nach Unsortiert).
+- Firmenbereiche dürfen nur sichere Zeichen enthalten, weder Pfadtrenner noch
+  `..` oder leer sein; zwei Firmen dürfen nach der Bereinigung nicht denselben
+  Bereich haben. Das ist ein Konfigurationsfehler und stoppt Ablage und Monat.
+- Diese Bereichsprüfung gilt nur für `[[firma]]`. Beim alten Einzelbetrieb bleibt
+  der Ordner stets `[ablage].bereich_betrieb`, unabhängig vom Namen in
+  `[betrieb]`.
 - Verdächtige Adressbuch-/Branchenbuch-Angebote gehen nie in die Buchhaltung,
   sondern nach `Vorsicht Abofalle`; der Tagesbericht sagt „nicht unterschreiben,
   nicht zahlen“. Erkennung verlangt mindestens drei unabhängige Merkmale (oder zwei, wenn eines eine bekannte Abofallen-Domain ist). PDFs mit aktiven Inhalten (JavaScript, Launch, RichMedia, XFA, eingebettete Nicht-XML-Dateien) kommen nach `Vorsicht Datei prüfen`; E-Rechnungen mit eingebettetem XML gehen normal durch.
@@ -128,6 +135,7 @@ class Einordnung:
     sicherheit: str               # "hoch" | "mittel" | "niedrig"
     grund: str                    # ein Satz, warum
     quelle: str                   # "regel" | "urteil" | "xml" | "rueckfall"
+    firma: str                    # kanonischer [[firma]].name oder "unklar"
 ```
 
 ## Belegverzeichnis arbeit/index.json
@@ -135,13 +143,16 @@ class Einordnung:
 ```json
 {"<sha256>": {"pfad": "<relativ zur Ablage>", "datum": "2026-10-04", "lieferant": "Pixelwerk",
   "beschreibung": "Rechnung-Software-Abo", "betrag": 59.5, "waehrung": "EUR",
-  "art": "eingang", "bereich": "betrieb", "sicherheit": "hoch", "status": "abgelegt | unsortiert",
+  "art": "eingang", "bereich": "betrieb", "firma": "Studio Beispiel", "sicherheit": "hoch", "status": "abgelegt | unsortiert",
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>"}}
 ```
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 `nichts` („liegt schon unter …“), keine zweite Ablage.
+Alte Betriebs-Einträge ohne `firma` zählen bei aktivem `[[firma]]` zur
+Hauptfirma (zuerst `[betrieb]`, wenn sie als Firma übernommen wurde, sonst die
+erste `[[firma]]`).
 
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
@@ -374,6 +385,14 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Kartenexporte im Format von amex.de vergleichen statt des ganzen Namens die
   ersten zwei Wörter (Händler und Referenz), damit derselbe Umsatz aus amex.de
   und MoneyMoney nur einmal zählt; Girokonto und Karte teilen nie einen Schlüssel.
+- Bei mehreren Firmen beschränkt `[[firma]].konten` den Abgleich auf die
+  angegebenen IBANs oder Kontokennungen. MoneyMoney-Exporte führen die
+  konfigurierte Kennung in der Spalte `Konto`; in fremden CSVs wird nur eine
+  gleich benannte Spalte `Konto`, `Kontokennung`, `Eigenes Konto` oder `Eigene
+  IBAN` als Quellkonto gelesen (nicht `Kontonummer/IBAN`, das ist die Gegenpartei).
+  Nicht zugeordnete Buchungen gehören zur Hauptfirma. Ohne Kontenangaben läuft
+  der Auszug nur für sie; die übrigen Monatsordner enthalten den Hinweis, die
+  Konten in `[[firma]]` einzutragen.
 - Buchung ohne Beleg: `konfig/regeln.toml` `[monat].ohne_beleg` (Muster wie
   „Finanzamt“, „Gehalt“, „Umbuchung“, „Privatentnahme“) → ignoriert, aber in
   `abgleich.json` sichtbar.

@@ -49,6 +49,7 @@ class Einordnung:
     sicherheit: str  # "hoch" | "mittel" | "niedrig"
     grund: str
     quelle: str  # "regel" | "urteil" | "xml" | "rueckfall"
+    firma: str = ""  # Name der erkannten Firma; leer nur bei alten Indexeinträgen
 
     def als_dict(self) -> dict:
         """Gibt die Einordnung in einem JSON-tauglichen Wörterbuch zurück.
