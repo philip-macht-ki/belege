@@ -187,6 +187,9 @@ die Microsoft-Anmeldung im Browser:
    und senden darf. Wer Admin ist, setzt den Haken **„Im Namen Ihrer
    Organisation zustimmen“** und bestätigt. Bei der eigenen App ist das schon
    in Schritt 5 erledigt.
+   Microsoft zeigt bei Philips App „nicht verifiziert“ beim Herausgeber; das
+   ist erwartet (Deern & Jung Investment GmbH ist kein Microsoft-Partner), Claude
+   sagt das vorher in einem Satz.
 3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
    Person kein Admin. Dann meldet sich der Admin einmal selbst an und stimmt
    zu; danach klappt es für alle Postfächer der Firma.
