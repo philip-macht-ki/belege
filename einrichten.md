@@ -145,23 +145,28 @@ der einzige direkte Weg.
 Microsoft 365, denn sie braucht ein Firmenverzeichnis bei Microsoft. Die eigene
 App legt ein Admin der Firma an, bei kleinen Firmen meist die Geschäftsführung:
 
-1. entra.microsoft.com öffnen und mit dem Admin-Konto anmelden.
-2. Links „Identität“ (oder „Entra ID“), „Anwendungen“, „App-Registrierungen“,
-   oben „Neue Registrierung“.
-3. Name `belege`. Unterstützte Kontotypen: „Nur Konten in diesem
-   Organisationsverzeichnis“. Umleitungs-URI: Plattform „Öffentlicher
-   Client/nativ (mobil und Desktop)“, Adresse `http://localhost`.
-   „Registrieren“.
-4. Auf der Übersichtsseite stehen „Anwendungs-ID (Client)“ und
-   „Verzeichnis-ID (Mandant)“. Beide sind keine Geheimnisse; die Person
-   kopiert sie in den Chat.
+Die Bezeichnungen stammen aus dem Entra Admin Center auf Deutsch, Stand
+Oktober 2026; mit Claude in Chrome klickt Claude die Felder selbst, die Person
+klickt nur „Registrieren“ (damit stimmt sie Microsofts Plattformrichtlinien zu)
+und die Administratorzustimmung.
+
+1. entra.microsoft.com öffnen und mit dem Admin-Konto der Firma anmelden.
+2. Links „Entra ID“, „App-Registrierungen“, oben „Neue Registrierung“.
+3. Name `belege`. „Unterstützte Kontotypen“: „Nur ein Mandant – <Name des
+   Verzeichnisses>“. „Umleitungs-URI“: Plattform „Öffentlicher Client/nativ
+   (mobil und Desktop)“, Adresse `http://localhost`. „Registrieren“.
+4. Auf der Übersicht der App stehen „Anwendungs-ID (Client)“ und
+   „Verzeichnis-ID (Mandant)“. Beides sind keine Geheimnisse; Claude liest sie
+   ab oder die Person kopiert sie in den Chat.
 5. Links „API-Berechtigungen“, „Berechtigung hinzufügen“, „Microsoft Graph“,
-   „Delegierte Berechtigungen“: `Mail.ReadWrite`, `Mail.Send` und `User.Read`
-   anhaken, „Berechtigungen hinzufügen“. Dann „Administratorzustimmung für
-   <Firma> erteilen“ und bestätigen. Alle drei Zeilen zeigen danach einen
-   grünen Haken.
-6. Unter „Authentifizierung“ bleibt „Öffentliche Clientflows zulassen“ auf
-   „Nein“. Ein Geheimnis (Client Secret) wird nicht gebraucht.
+   „Delegierte Berechtigungen“. Ins Suchfeld `Mail.` tippen, die Gruppe „Mail“
+   aufklappen, `Mail.ReadWrite` und `Mail.Send` anhaken, „Berechtigungen
+   hinzufügen“. `User.Read` ist schon da. Dann „Administratorzustimmung für
+   „<Verzeichnis>“ erteilen“ und bestätigen; alle drei Zeilen zeigen danach
+   einen grünen Haken.
+6. Links „Authentication“, Reiter „Einstellungen“: „Öffentliche Clientflows
+   zulassen“ steht auf „Deaktiviert“ und bleibt so. Ein Geheimnis (Client
+   Secret) wird nicht gebraucht.
 
 Claude trägt beim Postfach in `konfig/belege.toml` ein:
 
