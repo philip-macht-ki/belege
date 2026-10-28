@@ -651,10 +651,13 @@ def _buchungen_fuer_firma(buchungen: list[dict], firma: dict, alle_firmen: list[
     }
     eigene = {_konto_kennung(konto) for konto in firma.get("konten", []) if _konto_kennung(konto)}
     hauptfirma = alle_firmen[0]["name"]
+    if firma["name"] == hauptfirma:
+        # Die Hauptfirma bekommt ihre eigenen Konten und alles, was keiner Firma zugeordnet ist,
+        # auch Buchungen ohne erkannte Kontokennung.
+        return [buchung for buchung in buchungen
+                if _konto_kennung(buchung.get("konto")) in eigene or _konto_kennung(buchung.get("konto")) not in zugeordnet]
     if eigene:
         return [buchung for buchung in buchungen if _konto_kennung(buchung.get("konto")) in eigene]
-    if firma["name"] == hauptfirma:
-        return [buchung for buchung in buchungen if _konto_kennung(buchung.get("konto")) not in zugeordnet]
     return []
 
 

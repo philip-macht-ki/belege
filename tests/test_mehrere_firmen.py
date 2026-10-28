@@ -175,3 +175,12 @@ def test_bereichskollision_und_pfadtraversal_sind_konfigurationsfehler(tmp_path,
         assert "Ungültiger Firmenbereich" in str(fehler)
     else:
         raise AssertionError("Pfadtraversal wurde akzeptiert")
+
+
+def test_hauptfirma_mit_eigenen_konten_behaelt_buchungen_ohne_kennung():
+    from belege.monat import _buchungen_fuer_firma
+
+    firmen = [{"name": "Haupt", "konten": ["DE01"]}, {"name": "Zweit", "konten": ["DE02"]}]
+    buchungen = [{"konto": "DE01"}, {"konto": "DE02"}, {"konto": ""}, {}, {"konto": "DE99"}]
+    assert _buchungen_fuer_firma(buchungen, firmen[0], firmen) == [{"konto": "DE01"}, {"konto": ""}, {}, {"konto": "DE99"}]
+    assert _buchungen_fuer_firma(buchungen, firmen[1], firmen) == [{"konto": "DE02"}]
