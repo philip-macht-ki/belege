@@ -62,3 +62,13 @@ def test_scan_funde_liest_unterordner_wie_dropscan(repo):
     toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
     funde = list(quellen.scan_funde())
     assert [f.name for f in funde] == ["Brief.pdf"]
+
+
+def test_scan_funde_folgt_keinem_ordnerlink(repo):
+    scan = repo / "scan"
+    (scan / "a").mkdir(parents=True)
+    (scan / "a" / "Brief.pdf").write_bytes(b"Papierpost")
+    (scan / "a" / "schleife").symlink_to(scan, target_is_directory=True)
+    toml = repo / "konfig/belege.toml"
+    toml.write_text(toml.read_text().replace('scan_ordner = ""', f'scan_ordner = "{scan}"'), encoding="utf-8")
+    assert [f.name for f in quellen.scan_funde()] == ["Brief.pdf"]

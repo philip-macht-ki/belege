@@ -209,17 +209,25 @@ def scan_funde():
         yield Fund(ziel, "scan", datei.name, date.fromtimestamp(datei.stat().st_mtime))
 
 
-def _scan_dateien(ordner: Path, tiefe: int = 3) -> list[Path]:
-    """Erlaubte Dateien im Scan-Ordner und seinen Unterordnern, ohne versteckte Ordner."""
-    dateien = []
-    for eintrag in sorted(ordner.iterdir()):
+def _scan_dateien(ordner: Path, tiefe: int = 3):
+    """Erlaubte Dateien im Scan-Ordner und seinen Unterordnern, nach und nach.
+
+    Versteckte Ordner und verlinkte Ordner (Symlinks) bleiben draußen, damit keine
+    Schleife entsteht. Ein unlesbarer Unterordner wird übersprungen, nicht der Lauf.
+    """
+    try:
+        eintraege = sorted(ordner.iterdir())
+    except OSError as fehler:
+        kern.log(f"Scan-Ordner {ordner} nicht lesbar: {fehler}")
+        return
+    for eintrag in eintraege:
         if eintrag.name.startswith("."):
             continue
-        if eintrag.is_dir() and tiefe > 0:
-            dateien.extend(_scan_dateien(eintrag, tiefe - 1))
+        if eintrag.is_dir():
+            if tiefe > 0 and not eintrag.is_symlink():
+                yield from _scan_dateien(eintrag, tiefe - 1)
         elif _erlaubt(eintrag):
-            dateien.append(eintrag)
-    return dateien
+            yield eintrag
 
 
 def _sha(datei: Path) -> str:
