@@ -137,3 +137,30 @@ def test_suchen_ueber_ordner_mit_anhang_und_ohne_doppelte(monkeypatch):
     assert [t["id"] for t in treffer] == ["Rechnungen:1"]
     assert treffer[0]["anhaenge"] == ["r.pdf"]
     assert postfach._imap_ordnerliste({"imap_ordner": ["Rechnungen"]}) == ["INBOX", "Rechnungen"]
+
+
+def test_sperriger_ordner_haelt_suche_nicht_auf(monkeypatch):
+    import imaplib
+
+    from belege.postfach import ImapPostfach
+
+    class Verbindung:
+        def list(self):
+            return "OK", [b'(\\HasNoChildren) "/" "INBOX"', b'(\\HasNoChildren) "/" "Kaputt"']
+
+        def select(self, name, readonly=True):
+            if name == "Kaputt":
+                raise imaplib.IMAP4.error("SELECT failed")
+            return "OK", [b"0"]
+
+        def uid(self, befehl, *args):
+            return "OK", [b""]
+
+        def logout(self):
+            pass
+
+    box = ImapPostfach.__new__(ImapPostfach)
+    box.konto, box.name, box.adresse, box.weg = {"name": "t"}, "t", "a@b.example", "a"
+    monkeypatch.setattr(ImapPostfach, "_imap", lambda self: Verbindung())
+    monkeypatch.setattr(ImapPostfach, "_suche", lambda self, v, k: v.uid("search"))
+    assert box.suchen(nur_anhang=True) == []

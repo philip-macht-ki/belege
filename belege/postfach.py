@@ -395,10 +395,17 @@ class ImapPostfach(Postfach):
             else:
                 ordnerliste = _imap_alle_ordner(verbindung)
             for ordner in ordnerliste:
-                if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
-                    kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+                try:
+                    if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
+                        kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+                        continue
+                    _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
+                except (imaplib.IMAP4.error, RuntimeError) as fehler:
+                    if ordner == "INBOX":
+                        raise
+                    # Ein einzelner sperriger Ordner hält die übrige Suche nicht auf.
+                    kern.log(f"IMAP-Ordner {ordner} übersprungen: {fehler}")
                     continue
-                _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
                 alle = daten[0].split() if daten and daten[0] else []
                 uids = alle[-grenze:][::-1]
                 gefunden = 0
