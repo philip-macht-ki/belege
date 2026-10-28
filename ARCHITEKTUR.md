@@ -323,7 +323,9 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   lesbar) brechen den Lauf nicht ab: Die Mail kommt nach
   `gesehen.json[konto].offen` und hält das Fenster offen wie ein gescheiterter
   Anhang (nach `max_tage` einmal `zweifel`). Ohne `--echt` werden weder
-  `links_geprueft` noch `offen` geschrieben.
+  `links_geprueft` noch `offen` geschrieben. Die Monats-Nachsuche (`monat.py`) ruft
+  `postfach_funde` bewusst ohne `echt` auf: Sie ändert den Postfachstand nie,
+  weder für Anhänge noch für Links; offen hält und merkt nur der Takt.
 - **handy**: alle Dateien in `[quellen].handy_ordner` (nicht rekursiv, ohne
   versteckte). HEIC wird vor dem Ablegen zu JPEG (`sips`), das HEIC-Original
   bleibt nicht liegen.

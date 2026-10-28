@@ -100,8 +100,14 @@ def _anfrage(url: str, zeitlimit: float, ip: str):
     teile = urlsplit(url)
     pfad = (teile.path or "/") + (f"?{teile.query}" if teile.query else "")
     verbindung = _Verbindung(teile.hostname or "", ip, zeitlimit)
-    verbindung.request("GET", pfad, headers={"User-Agent": "belege/rechnungslink", "Accept": "application/pdf"})
-    antwort = verbindung.getresponse()
+    try:
+        verbindung.request("GET", pfad, headers={"User-Agent": "belege/rechnungslink", "Accept": "application/pdf"})
+        sock = verbindung.sock
+        antwort = verbindung.getresponse()
+    except BaseException:
+        verbindung.close()
+        raise
+    antwort.belege_sock = sock  # für _lesen: Restfrist je Stück setzen
     return antwort.status, antwort.msg, antwort
 
 
@@ -110,8 +116,12 @@ def _lesen(antwort, max_bytes: int, frist: float) -> bytes:
     teile: list[bytes] = []
     menge = 0
     while menge <= max_bytes:
-        if time.monotonic() > frist:
+        rest = frist - time.monotonic()
+        if rest <= 0:
             raise LinkFehler("Zeitlimit überschritten", endgueltig=False)
+        sock = getattr(antwort, "belege_sock", None)
+        if sock is not None:
+            sock.settimeout(rest)  # ein hängendes read() endet spätestens mit der Gesamtfrist
         stueck = antwort.read(min(65536, max_bytes + 1 - menge))
         if not stueck:
             break

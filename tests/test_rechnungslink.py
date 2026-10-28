@@ -282,3 +282,18 @@ def test_lesen_liefert_links(repo):
 
     _mail(repo, "l.eml", "Rechnung", '<a href="https://acme.example.com/x.pdf?a=1&amp;b=2">x</a>')
     assert oeffnen("geschaeft").lesen("l.eml")["links"] == ["https://acme.example.com/x.pdf?a=1&b=2"]
+
+
+def test_restfrist_gilt_auch_fuer_jedes_lesestueck(repo, monkeypatch):
+    class Sock:
+        zeiten = []
+
+        def settimeout(self, wert):
+            self.zeiten.append(wert)
+
+    uhr = iter([0, 13])
+    monkeypatch.setattr(rechnungslink.time, "monotonic", lambda: next(uhr))
+    antwort = _Antwort(PDF)
+    antwort.belege_sock = Sock()
+    assert rechnungslink._lesen(antwort, 10_000, 20) == PDF
+    assert Sock.zeiten == [20, 7]
