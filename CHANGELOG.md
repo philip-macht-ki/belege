@@ -1,8 +1,10 @@
 # Änderungen für dich
 
+Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
+
 ## [1.10.0] – 29.10.2026
 
-aktion: einrichten
+aktion: keine
 
 ### Was ist neu für dich
 
@@ -19,8 +21,6 @@ aktion: einrichten
 ### Musst du etwas tun?
 
 Nur wenn du mehrere Firmen ablegst: Lass Claude in Teil 3 die Firmen, Schreibweisen, USt-IdNrn. und Konten eintragen und prüfe anschließend ein paar Belege je Firma im Trockenlauf.
-
-Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
 ## [1.9.1] – 28.10.2026
 
