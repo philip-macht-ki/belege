@@ -82,3 +82,12 @@ def test_pdf_defekt_erkennt_leere_fehlende_header_und_abschnitt(tmp_path):
     leer = tmp_path / "leer.pdf"; leer.write_bytes(b"")
     html = tmp_path / "fehler.pdf"; html.write_text("<html>Download error</html>")
     assert pdf_defekt(leer) and pdf_defekt(html)
+
+
+def test_schwaerzen_geheimnis_mit_leerzeichen_in_anfuehrungszeichen():
+    from belege.fehlerbericht import schwaerzen
+
+    text = schwaerzen('passwort = "mein geheimes wort" und {"client_secret": "a b c"}')
+    assert "geheimes" not in text and "a b c" not in text
+    assert text.count("<geheimnis>") == 2
+

@@ -327,7 +327,8 @@ class MicrosoftPostfach(Postfach):
     def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
         """Verschiebt nur mit Graph-Schreibrecht; Graph kennt keine Keywords."""
         # Ein Ordner ist bei Graph das sichtbare Gegenstück zum erledigt-Label.
-        ordnerliste = self._anfrage("GET", "/me/mailFolders", params={"$filter": f"displayName eq '{ordner.replace("'", "''")}'", "$select": "id,displayName"}).json().get("value", [])
+        filter_name = ordner.replace("'", "''")
+        ordnerliste = self._anfrage("GET", "/me/mailFolders", params={"$filter": f"displayName eq '{filter_name}'", "$select": "id,displayName"}).json().get("value", [])
         ziel = ordnerliste[0] if ordnerliste else self._anfrage("POST", "/me/mailFolders", json={"displayName": ordner}).json()
         if art == "verschieben":
             self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": ziel["id"]})
