@@ -377,9 +377,15 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
 
 
 def schon_abgelegt(sha: str) -> str | None:
-    """Pfad eines bereits abgelegten Dokuments mit diesem Fingerabdruck, sonst None."""
+    """Pfad eines bereits abgelegten Dokuments mit diesem Fingerabdruck, sonst None.
+
+    Vertrauliche nur als `Dokumente/<Art>`: der Pfad landet im Tagesbericht.
+    """
     eintrag = _index().get(sha)
-    return eintrag.get("pfad", "der Ablage") if eintrag else None
+    if not eintrag:
+        return None
+    pfad_bekannt = eintrag.get("pfad", "der Ablage")
+    return grober_ordner(pfad_bekannt) if ist_vertraulich(eintrag) else pfad_bekannt
 
 
 def automatisch_an() -> bool:
@@ -435,10 +441,6 @@ def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Erg
                              {"pfad": str(ziel_pfad), "status": "dokument"})
     ziel_pfad = kern.freier_name(ziel_pfad)
     ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
-    if fund.verschieben:
-        shutil.move(str(fund.datei), str(ziel_pfad))
-    else:
-        shutil.copy2(fund.datei, ziel_pfad)
     relativ = str(ziel_pfad.relative_to(ablage_ordner()))
     index = _index()
     index[sha] = {
@@ -454,7 +456,17 @@ def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Erg
         "vertraulich": vertraulich,
         "quelle": fund.quelle,
     }
+    # Erst ins Verzeichnis, dann die Datei: scheitert das Schreiben, bleibt sie an der Quelle.
     _speichere(index)
+    try:
+        if fund.verschieben:
+            shutil.move(str(fund.datei), str(ziel_pfad))
+        else:
+            shutil.copy2(fund.datei, ziel_pfad)
+    except OSError:
+        index.pop(sha, None)
+        _speichere(index)
+        raise
     if vertraulich:
         meldung = f"Vertrauliches Dokument liegt jetzt unter {grober_ordner(relativ)}."
     else:

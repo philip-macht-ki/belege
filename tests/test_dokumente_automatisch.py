@@ -207,3 +207,53 @@ def test_bericht_nennt_dokument_mit_frist():
     assert "Dokumente abgelegt (1)" in text
     assert "Behörde: Finanzamt Koblenz, Vorauszahlung (Zahlung bis 10.12.2026)" in text
     assert "1 Dokumente" in betreff
+
+
+def test_vertrauliche_dublette_nennt_nur_den_ordner(repo, weg, monkeypatch):
+    from belege.vertraulich import Urteil
+
+    monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument(art="gesundheit"))
+    monkeypatch.setattr("belege.vertraulich.pruefen", lambda *_a, **_k: Urteil(True, "Gesundheit"))
+    erste = repo / "a.pdf"
+    erste.write_bytes(b"arztbrief")
+    verarbeiten.verarbeite(Fund(erste, "scan", erste.name, date(2026, 10, 28)), True)
+    zweite = repo / "downloads" / "b.pdf"
+    zweite.write_bytes(b"arztbrief")
+    ergebnis = verarbeiten.verarbeite(Fund(zweite, "downloads", zweite.name, date(2026, 10, 28), verschieben=True), True)
+    assert ergebnis.status == "nichts"
+    text, _ = bericht.text_und_betreff(kern.ereignisse())
+    assert "Telefonica" not in text and "Handyvertrag" not in text
+    assert "Dokumente/Gesundheit" in text
+
+
+def test_scheitert_das_verschieben_bleibt_nichts_im_verzeichnis(repo, weg, monkeypatch):
+    monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument())
+
+    def kaputt(*_a, **_k):
+        raise OSError("Platte voll")
+
+    monkeypatch.setattr("belege.dokumente.shutil.move", kaputt)
+    datei = repo / "handy" / "vertrag.pdf"
+    datei.write_bytes(b"voll")
+    ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 28), verschieben=True), True)
+    assert ergebnis.status == "fehler"
+    assert datei.exists() and _dokindex(repo) == {}
+
+
+def test_postfach_dokument_markiert_mail_als_erledigt(repo, weg, monkeypatch):
+    from argparse import Namespace
+
+    from belege import quellen, takt
+
+    monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument())
+    datei = repo / "anhang.pdf"
+    datei.write_bytes(b"takt")
+    fund = Fund(datei, "postfach", datei.name, date(2026, 10, 28), mail={"id": "m1", "konto": "geschaeft"})
+    monkeypatch.setattr(takt, "_funde", lambda *_a: [fund])
+    monkeypatch.setattr(takt, "_postfach_konten", lambda *_a: ["geschaeft"])
+    erledigt = []
+    monkeypatch.setattr(quellen, "mail_erledigt", lambda konto, mail_id, echt: erledigt.append(mail_id))
+    monkeypatch.setattr(quellen, "lauf_abschliessen", lambda *_a: None)
+    ergebnisse = takt.quelle_abarbeiten("postfach", Namespace(echt=True))
+    assert ergebnisse[0].status == "ok"
+    assert erledigt == ["m1"]
