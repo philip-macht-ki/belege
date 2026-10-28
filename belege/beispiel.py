@@ -383,16 +383,31 @@ def _zahlfix_receipt(
     pdf.output(str(ziel))
 
 
-def _scan_pdf(ziel: Path, quelle_pdf: Path) -> None:
-    """Fotografiert eine echte Rechnung nach: grau, 1° gedreht, verrauscht, 150 dpi."""
-    with tempfile.TemporaryDirectory() as tmp:
-        basis = Path(tmp) / "seite"
+def _erste_seite_png(quelle_pdf: Path, ordner: Path, dpi: int) -> Path:
+    """Rendert die erste PDF-Seite: mit pdftoppm, sonst mit macOS selbst (ohne Homebrew)."""
+    if shutil.which("pdftoppm"):
+        basis = ordner / "seite"
         subprocess.run(
-            ["pdftoppm", "-png", "-r", "150", "-l", "1", str(quelle_pdf), str(basis)],
+            ["pdftoppm", "-png", "-r", str(dpi), "-l", "1", str(quelle_pdf), str(basis)],
             check=True,
             capture_output=True,
         )
-        seite = sorted(Path(tmp).glob("seite*.png"))[0]
+        return sorted(ordner.glob("seite*.png"))[0]
+    from .text import _pdf_bilder_quartz
+
+    bilder = _pdf_bilder_quartz(quelle_pdf, ordner, dpi=dpi, seiten=1)
+    if not bilder:
+        raise RuntimeError(
+            "Die PDF-Seite ließ sich nicht als Bild erzeugen. Auf dem Mac geht das ohne "
+            "Zusatzprogramm; sonst hilft `brew install poppler`."
+        )
+    return bilder[0]
+
+
+def _scan_pdf(ziel: Path, quelle_pdf: Path) -> None:
+    """Fotografiert eine echte Rechnung nach: grau, 1° gedreht, verrauscht, 150 dpi."""
+    with tempfile.TemporaryDirectory() as tmp:
+        seite = _erste_seite_png(quelle_pdf, Path(tmp), 150)
         bild = Image.open(seite).convert("L").convert("RGB")
         grau = Image.new("RGB", bild.size, "#c9c4b8")
         bild = Image.blend(bild, grau, 0.18)
@@ -900,7 +915,12 @@ def befehl(args) -> int:
     )
     for p in (postfach, handy, downloads, dokumente):
         print(f"ok: {p.relative_to(basis)}/ ({len(list(p.iterdir()))})")
+    (basis / FERTIG).touch()
     return 0
+
+
+# Liegt erst am Ende von `befehl` im Musterbetrieb; fehlt sie, brach er ab.
+FERTIG = ".fertig"
 
 
 # Die fünf Rechnungen der Übung, mit den Namen, unter denen Rechnungen wirklich
@@ -922,7 +942,8 @@ def einrichten_beispiel(ziel: Path) -> Path:
     damit Übungsbelege nie im echten Belegverzeichnis auftauchen.
     """
     quelle = pfad("beispiel", "erzeugt")
-    if not quelle.exists():
+    if not (quelle / FERTIG).exists():
+        # Fehlt oder brach ab (etwa ohne pdftoppm): neu erzeugen statt halb kopieren.
         befehl(type("Args", (), {})())
     ziel = Path(ziel).expanduser()
     for name in ("Eingang", "Handy", "Downloads", "Ablage", ".system"):
@@ -997,23 +1018,7 @@ def vorschau(args=None) -> int:
         png = ziel / f"{Path(name).stem}.png"
         if datei.suffix.lower() == ".pdf":
             with tempfile.TemporaryDirectory() as tmp:
-                basis_bild = Path(tmp) / "seite"
-                subprocess.run(
-                    [
-                        "pdftoppm",
-                        "-png",
-                        "-r",
-                        "100",
-                        "-l",
-                        "1",
-                        str(datei),
-                        str(basis_bild),
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
-                seite = sorted(Path(tmp).glob("seite*.png"))[0]
-                shutil.copy2(seite, png)
+                shutil.copy2(_erste_seite_png(datei, Path(tmp), 100), png)
         elif datei.suffix.lower() in {".jpg", ".jpeg", ".png"}:
             with Image.open(datei) as bild:
                 bild = bild.convert("RGB")

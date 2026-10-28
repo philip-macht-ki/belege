@@ -54,6 +54,8 @@ def _zugferd(fund: Fund) -> tuple[Einordnung, Text] | None:
     if fund.datei.suffix.lower() != ".pdf" or not zugferd_in(fund.datei):
         return None
     xml = get_xml_from_pdf(fund.datei.read_bytes(), check_xsd=False)
+    if isinstance(xml, tuple):  # factur-x liefert (dateiname, xml_bytes)
+        xml = xml[1]
     if not xml:
         raise ValueError("Im ZUGFeRD-PDF wurde keine XML-Rechnung gefunden.")
     xml_datei = kern.pfad("arbeit", "tmp", f"{_sha(fund.datei)}.xml")

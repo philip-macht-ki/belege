@@ -1,6 +1,7 @@
 import csv
 import email.policy
 import os
+import sys
 from email.parser import BytesParser
 
 import pytest
@@ -110,3 +111,38 @@ def test_vorschau_erzeugt_ein_png_je_beleg(repo):
     pngs = list((basis / "vorschau").glob("*.png"))
     assert len(pngs) >= 10
     assert (basis / "vorschau" / "pixelwerk.png").exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Quartz gibt es nur auf dem Mac")
+def test_pdf_seite_ohne_pdftoppm(repo, tmp_path, monkeypatch):
+    """Die Übung braucht kein Homebrew: ohne pdftoppm rendert macOS selbst."""
+    from fpdf import FPDF
+
+    from belege import beispiel
+
+    quelle = tmp_path / "r.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=20)
+    pdf.cell(text="Rechnung")
+    pdf.output(str(quelle))
+    monkeypatch.setattr(beispiel.shutil, "which", lambda name: None)
+    ordner = tmp_path / "bild"
+    ordner.mkdir()
+    png = beispiel._erste_seite_png(quelle, ordner, 100)
+    assert png.exists() and png.suffix == ".png"
+
+
+def test_abgebrochenes_muster_wird_neu_erzeugt(repo, monkeypatch):
+    """Ein halber Musterbetrieb ohne Fertig-Marke wird nicht in die Übung kopiert."""
+    from belege import beispiel
+
+    halb = repo / "beispiel" / "erzeugt"
+    (halb / "handy").mkdir(parents=True, exist_ok=True)
+    aufrufe = []
+    original = beispiel.befehl
+    monkeypatch.setattr(beispiel, "befehl", lambda args: aufrufe.append(1) or original(args))
+    beispiel.einrichten_beispiel(repo / "uebung")
+    assert aufrufe == [1]
+    assert (halb / beispiel.FERTIG).exists()
+    assert len(list((repo / "uebung" / "Eingang").iterdir())) == 5

@@ -68,3 +68,40 @@ def test_claude_starter_nimmt_hoehere_versionsnummer(monkeypatch, tmp_path):
         env={"HOME": str(tmp_path), "PATH": os.environ["PATH"]},
     )
     assert ergebnis.stdout.strip() == "2.1.304"
+
+
+def test_claude_starter_reicht_die_eingabe_durch(monkeypatch, tmp_path):
+    """`echo … | claude -p` aus der Claude-App: Die Eingabe kommt beim gestarteten Claude an."""
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    original = einrichten.starter_text
+    monkeypatch.setattr(
+        einrichten, "starter_text",
+        lambda: original().replace(
+            '"$HOME/.claude/local/claude" /opt/homebrew/bin/claude /usr/local/bin/claude',
+            '"$HOME/kein-cli"',
+        ),
+    )
+    cli = tmp_path / "Library/Application Support/Claude/claude-code/2.1.0/claude.app/Contents/MacOS/claude"
+    cli.parent.mkdir(parents=True)
+    cli.write_text('#!/bin/zsh\nprint -r -- "$(cat)"\n')
+    cli.chmod(0o755)
+    ok, ziel = einrichten.anlegen()
+    assert ok
+    ergebnis = subprocess.run(
+        [ziel, "-p"], input="Hallo Beleg", capture_output=True, text=True, check=True,
+        env={"HOME": str(tmp_path), "PATH": os.environ["PATH"]},
+    )
+    assert ergebnis.stdout.strip() == "Hallo Beleg"
+
+
+def test_auffrischen_ersetzt_nur_eigenen_alten_starter(monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    claude = tmp_path / ".local/bin/claude"
+    codex = tmp_path / ".local/bin/codex"
+    claude.parent.mkdir(parents=True)
+    claude.write_text(f"#!/bin/zsh\n{einrichten.MARKER}\nalt\n")
+    codex.write_text("fremd")
+    assert einrichten.auffrischen()
+    assert claude.read_text() == einrichten.starter_text()
+    assert codex.read_text() == "fremd"
+    assert not einrichten.auffrischen()

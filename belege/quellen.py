@@ -21,6 +21,44 @@ def _gesehen() -> dict:
     return kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
 
 
+def _kennung(konto: str) -> str:
+    """Welches Postfach hinter einem Kontonamen steht: Weg und Adresse oder Ordner."""
+    try:
+        daten = kern.konto(konto)
+    except RuntimeError:
+        return ""
+    return f"{daten.get('weg', 'a')}:{daten.get('adresse') or daten.get('ordner') or ''}"
+
+
+def _fremder_stand(stand: dict, kennung: str) -> bool:
+    """Gehört der Stand zu einem anderen Postfach mit demselben Kontonamen?
+
+    Typisch: Erst läuft der Musterbetrieb als Konto „geschaeft“, dann trägt die
+    Person ihr echtes Postfach unter demselben Namen ein. Dessen erster Lauf soll
+    die vollen ``erste_tage`` zurückschauen, nicht drei Tage ab dem Musterlauf.
+    Ältere Stände ohne Kennung erkennt man am Musterpostfach: nur .eml-Dateinamen.
+    """
+    if not stand or not kennung:
+        return False
+    if stand.get("kennung"):
+        return stand["kennung"] != kennung
+    mails = stand.get("mails") or []
+    return not kennung.startswith("ordner:") and bool(mails) and all(
+        str(m).endswith(".eml") for m in mails
+    )
+
+
+def _konto_stand(gesehen: dict, konto: str) -> dict:
+    """Der beschreibbare Stand eines Postfachs; ein fremder Stand wird ersetzt."""
+    kennung = _kennung(konto)
+    daten = gesehen.get(konto)
+    if not isinstance(daten, dict) or _fremder_stand(daten, kennung):
+        daten = gesehen[konto] = {"mails": []}
+    if kennung:
+        daten["kennung"] = kennung
+    return daten
+
+
 def _mail_datum(mail: dict) -> date:
     """Liest das Maildatum und nimmt bei einem defekten Datum den heutigen Tag."""
     try:
@@ -57,10 +95,13 @@ def postfach_funde(konto: str, tage: int | None = None, echt: bool = False):
 
     postfach = oeffnen(konto)
     stand = _gesehen().get(konto, {})
+    if _fremder_stand(stand, _kennung(konto)):
+        stand = {}
     konfiguration = kern.konfig("belege").get("postfach", {})
     anzahl_tage = tage if tage is not None else rueckblick_tage(stand, konfiguration)
     seit = kern.jetzt().date() - timedelta(days=anzahl_tage)
-    mails = postfach.suchen(seit=seit, nur_anhang=True)
+    # Ohne max nähme jeder Weg nur die 20 neuesten Mails; ältere Rechnungen fielen heraus.
+    mails = postfach.suchen(seit=seit, nur_anhang=True, max=500)
     if getattr(postfach, "weg", "") == "b":
         mails.extend(postfach.mit_label(str(konfiguration.get("label", "Beleg"))))
     bekannte = set(stand.get("mails", []))
@@ -156,7 +197,7 @@ def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:
     if not echt:
         return
     gesehen = _gesehen()
-    daten = gesehen.setdefault(konto, {"mails": []})
+    daten = _konto_stand(gesehen, konto)
     liste = daten.setdefault("links_geprueft", [])
     if mail_id not in liste:
         liste.append(mail_id)
@@ -173,7 +214,7 @@ def _link_offen(konto: str, mail_id: str, datum: date, echt: bool) -> None:
     if not echt:
         return
     gesehen = _gesehen()
-    offen = gesehen.setdefault(konto, {"mails": []}).setdefault("offen", {})
+    offen = _konto_stand(gesehen, konto).setdefault("offen", {})
     offen.setdefault(mail_id, datum.isoformat())
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
@@ -215,7 +256,7 @@ def lauf_abschliessen(konto: str, liegen: dict[str, str], echt: bool) -> None:
     if not echt:
         return
     gesehen = _gesehen()
-    daten = gesehen.setdefault(konto, {"mails": []})
+    daten = _konto_stand(gesehen, konto)
     erledigt = set(daten.get("mails", []))
     offen = {i: d for i, d in (daten.get("offen") or {}).items() if i not in erledigt}
     offen.update(liegen)
@@ -243,7 +284,7 @@ def mail_erledigt(konto: str, mail_id: str, echt: bool):
     if not echt:
         return
     gesehen = _gesehen()
-    daten = gesehen.setdefault(konto, {"mails": []})
+    daten = _konto_stand(gesehen, konto)
     mails = daten.setdefault("mails", [])
     if mail_id not in mails:
         mails.append(mail_id)

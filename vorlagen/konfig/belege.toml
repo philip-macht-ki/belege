@@ -31,6 +31,8 @@ adresse = "mara@studio-beispiel.example"
 ordner = "beispiel/erzeugt/postfach"
 imap_server = ""
 smtp_server = ""
+# Nur Weg A: Unterordner, in die Filter Rechnungen verschieben, zusätzlich zum Posteingang
+# imap_ordner = ["INBOX/Rechnungen"]
 belege = true
 waechter = true
 
@@ -49,7 +51,9 @@ handy_ordner = "~/Belege/Eingang"
 # mit. Die Originale bleiben dort liegen. Leer = keine Papierpost.
 scan_ordner = ""
 downloads = "~/Downloads"
-downloads_an = true
+# Ab Werk aus: Downloads kommen erst in Teil 3 dran. Bis dahin liest kein Lauf,
+# auch nicht der Musterlauf, den echten Downloads-Ordner.
+downloads_an = false
 # Rechnungen, die nur als Link in einer Mail stehen (kein PDF-Anhang): belege
 # holt sie, wenn die Mail nach Rechnung aussieht und genau einen PDF-Link hat.
 # Nur öffentliche https-Links, nur echte PDFs. false = ausschalten.

@@ -104,6 +104,12 @@ sie beim Postfach als `imap_server` und `smtp_server` ein (mit Port, etwa
 Abschnitt „Microsoft-Postfach“ unten. Bei Google Workspace muss der Admin App-Passwörter
 erlauben.
 
+**Frag** bei einem IMAP-Postfach, ob das Mailprogramm Rechnungen per Filter in
+Unterordner verschiebt (Thunderbird, Apple Mail, Regeln beim Anbieter). belege
+liest sonst nur den Posteingang. Die Ordner trägt Claude beim Postfach ein, mit
+dem Namen, den der Server nennt (oft mit `INBOX/` davor):
+`imap_ordner = ["INBOX/Rechnungen", "INBOX/Software, Hosting"]`.
+
 Bevor Claude zum ersten Mal ins Postfach schaut, sagt er in einem Satz: Briefe
 von Arzt, Gericht, Krankenkasse oder über Mitarbeitende erkennt belege selbst
 und liest sie nur auf diesem Mac, nie mit einem Cloud-Modell. Dann fragt er:
@@ -344,7 +350,9 @@ Nur wenn die Person Teil 3 hat.
 
 1. **Cloud-Ordner.** Claude fragt, welchen Dienst die Person auf Handy und Mac
    nutzt (iCloud Drive, Google Drive, Dropbox, OneDrive), legt dort `Belege/Eingang`
-   an und trägt den Pfad als `[quellen] handy_ordner` ein. Die Person prüft am
+   an und trägt den Pfad als `[quellen] handy_ordner` ein. Im selben Block setzt
+   Claude `downloads_an = true`; ab Werk ist das aus, damit vor Teil 3 kein Lauf
+   den echten Downloads-Ordner liest. Die Person prüft am
    Handy, dass der Ordner erscheint. Fotos landen dort über die Dateien-App
    (iPhone) oder die App des Dienstes (Android).
 2. **Festplattenvollzugriff.** Der Zeitplan braucht für Cloud-Ordner und
@@ -362,7 +370,7 @@ Nur wenn die Person Teil 3 hat.
    Mac wird vor dem Einsatz noch einmal geprüft.
 3. **Downloads.** `uv run belege downloads` zeigt, was verschoben würde, erst
    nach Ja `--echt`. Danach räumt der Tagestermin um 21 Uhr von allein auf
-   (`[quellen] downloads_an = true`).
+   (`[quellen] downloads_an = true` aus Schritt 1).
 4. **Papierpost (optional).** **Frag**, ob Briefe auf Papier kommen. Bei wenigen
    Briefen genügt ein Foto wie bei einem Kassenbon im Handy-Eingang. Bei vielen
    oder regelmäßigen Briefen nutzt du einen Scan-Dienst (zum Beispiel Dropscan
