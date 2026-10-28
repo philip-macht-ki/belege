@@ -187,3 +187,10 @@ def test_hauptfirma_mit_eigenen_konten_behaelt_buchungen_ohne_kennung():
     buchungen = [{"konto": "DE01"}, {"konto": "DE02"}, {"konto": ""}, {}, {"konto": "DE99"}]
     assert _buchungen_fuer_firma(buchungen, firmen[0], firmen) == [{"konto": "DE01"}, {"konto": ""}, {}, {"konto": "DE99"}]
     assert _buchungen_fuer_firma(buchungen, firmen[1], firmen) == [{"konto": "DE02"}]
+
+
+def test_gleiche_umsaetze_auf_zwei_firmenkonten_sind_keine_dublette(tmp_path, monkeypatch):
+    _mehrere(tmp_path, monkeypatch)
+    (tmp_path / "a.csv").write_text("Buchungstag;Name;Betrag;Konto\n01.10.2026;Telekom;-30,00;DE01\n", encoding="utf-8")
+    (tmp_path / "b.csv").write_text("Buchungstag;Name;Betrag;Konto\n01.10.2026;Telekom;-30,00;DE02\n", encoding="utf-8")
+    assert len(monat.buchungen_aus([tmp_path / "a.csv", tmp_path / "b.csv"], "2026-10")) == 2

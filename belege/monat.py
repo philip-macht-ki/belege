@@ -202,6 +202,7 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
     """
     gesehen: dict[tuple, int] = {}
     ergebnis: list[dict] = []
+    mehrere_firmen = len(kern.firmen()) > 1
     for datei in dateien:
         try:
             gefunden, karte = _buchungen_und_format(datei, monat)
@@ -211,6 +212,9 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
         in_datei: dict[tuple, int] = {}
         for buchung in gefunden:
             schluessel = _dublettenschluessel(buchung, karte)
+            if mehrere_firmen and buchung.get("konto"):
+                # Bei mehreren Firmen sind gleiche Umsätze auf verschiedenen Firmenkonten keine Dublette.
+                schluessel = (_konto_kennung(buchung["konto"]),) + schluessel
             in_datei[schluessel] = in_datei.get(schluessel, 0) + 1
             # Neu ist nur, was diese Datei öfter enthält als jede Datei davor.
             if in_datei[schluessel] <= gesehen.get(schluessel, 0):
