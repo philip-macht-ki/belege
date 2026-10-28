@@ -21,6 +21,8 @@ def schwaerzen(text: str) -> str:
     # Werte in Anführungszeichen ganz, auch mit Leerzeichen; sonst bis zum nächsten Trenner.
     text = re.sub(rf'(?i)(["\']?{geheim_name}["\']?\s*[:=]\s*)(?:"[^"\r\n]*"|\'[^\'\r\n]*\'|[^,\s}}]+)', r"\1<geheimnis>", text)
     text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer <geheimnis>", text)
+    text = re.sub(r"(?i)\b(authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]+", r"\1: <geheimnis>", text)
+    text = re.sub(r"(?i)([?&\s](?:code|state|id_token|session|sid)=)[^&\s]+", r"\1<geheimnis>", text)
     # Der ganze Pfad wird ersetzt: Dateinamen dürfen Leerzeichen und Umlaute enthalten.
     text = re.sub(
         r"(?i)(?:(?:~|/|[A-Za-z]:[\\/])[^\r\n]*?\.(?:pdf|png|jpg|jpeg|heic|xml|zip)\b|\b[^\s/\\]+\.(?:pdf|png|jpg|jpeg|heic|xml|zip)\b)",

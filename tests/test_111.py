@@ -91,3 +91,10 @@ def test_schwaerzen_geheimnis_mit_leerzeichen_in_anfuehrungszeichen():
     assert "geheimes" not in text and "a b c" not in text
     assert text.count("<geheimnis>") == 2
 
+
+
+def test_schwaerzen_header_cookie_und_oauth_code():
+    from belege.fehlerbericht import schwaerzen
+
+    text = schwaerzen("Authorization: Basic dXNlcjpwYXNz\nCookie: sid=abc; x=1\nGET /cb?code=4/0AbcDef&state=xyz")
+    assert "dXNlcjpwYXNz" not in text and "abc;" not in text and "0AbcDef" not in text and "xyz" not in text

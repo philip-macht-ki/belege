@@ -166,7 +166,7 @@ def test_uebergabe_trennt_arten_merkt_teilerfolge_und_firmen(repo, monkeypatch):
     gesendet = []
     fehlend = {"ausgang"}
     def senden(an, betreff, text, anhaenge, echt, **kwargs):
-        art = betreff.rsplit("(", 1)[1][:-1]
+        art = betreff.rsplit("(", 1)[1].split(")", 1)[0]
         gesendet.append((art, an, kwargs["fortschritt"]))
         return kern.Ergebnis("fehler" if art in fehlend else "ok")
     monkeypatch.setattr("belege.senden.senden", senden)

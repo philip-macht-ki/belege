@@ -835,6 +835,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     adressen = cfg.get("adressen") if isinstance(cfg.get("adressen"), dict) else None
     if adressen and cfg.get("weg", "mail") == "mail":
         from .senden import senden
+        name = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
         for art in ("eingang", "ausgang", "sonstige"):
             eigene = f"{schluessel}:{art}"
             if gesehen.get("uebergabe", {}).get(eigene):
@@ -846,7 +847,10 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
             if not adresse:
                 print(f"befund: {art}: keine Übergabe-Adresse eingetragen, nicht gesendet.")
                 continue
-            r = senden(adresse, f"Belege {monat[5:]}/{monat[:4]} ({art})", f"Hallo,\n\nanbei {len(dateien)} Belege ({art}).", dateien, echt, fortschritt=f"uebergabe:{eigene}")
+            # Die offenen Posten stehen wie bei der gemeinsamen Übergabe im Text, hier in der Mail mit den Eingangsbelegen.
+            posten = ("\n\n" + offene_posten_text(monat, ergebnis)) if art == "eingang" else ""
+            text_art = f"Hallo,\n\nanbei {len(dateien)} Belege ({art}) für {monat[5:]}/{monat[:4]}.{posten}\n\nViele Grüße\n{name}"
+            r = senden(adresse, f"Belege {monat[5:]}/{monat[:4]} ({art}), {name}", text_art, dateien, echt, fortschritt=f"uebergabe:{eigene}")
             print(f"{r.status}: {r.meldung}")
             if echt and r.status == "ok":
                 gesehen.setdefault("uebergabe", {})[eigene] = kern.jetzt().isoformat(timespec="seconds")
