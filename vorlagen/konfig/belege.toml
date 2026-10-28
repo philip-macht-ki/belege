@@ -49,6 +49,11 @@ handy_ordner = "~/Belege/Eingang"
 scan_ordner = ""
 downloads = "~/Downloads"
 downloads_an = true
+# Rechnungen, die nur als Link in einer Mail stehen (kein PDF-Anhang): belege
+# holt sie, wenn die Mail nach Rechnung aussieht und genau einen PDF-Link hat.
+# Nur öffentliche https-Links, nur echte PDFs. false = ausschalten.
+rechnungslinks = true
+rechnungslink_max_mb = 15
 
 [texterkennung]
 claude = true

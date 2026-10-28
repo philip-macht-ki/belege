@@ -37,3 +37,15 @@ def kein_lokales_modell(monkeypatch):
     from belege import vertraulich
 
     monkeypatch.setattr(vertraulich, "lokales_modell", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def kein_netz_fuer_rechnungslinks(monkeypatch):
+    """Rechnungslinks laden in Tests nie wirklich; wer Netz braucht, ersetzt beides selbst."""
+    from belege import rechnungslink
+
+    def _verboten(*_a, **_k):
+        raise AssertionError("Test hat versucht, einen Rechnungslink wirklich zu laden")
+
+    monkeypatch.setattr(rechnungslink, "_host_erlaubt", lambda host, port: False)
+    monkeypatch.setattr(rechnungslink, "_anfrage", _verboten)

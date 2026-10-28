@@ -38,7 +38,7 @@ def _funde(name: str, args) -> list:
         return list(getattr(quellen, f"{name}_funde")())
     funde = []
     for konto in _postfach_konten(args):
-        funde.extend(quellen.postfach_funde(konto, getattr(args, "tage", None)))
+        funde.extend(quellen.postfach_funde(konto, getattr(args, "tage", None), echt(args)))
     return funde
 
 

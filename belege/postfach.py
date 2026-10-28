@@ -104,6 +104,34 @@ def _inhalt(nachricht) -> str:
     return re.sub(r"[ \t]+", " ", wert).strip()[:20_000]
 
 
+_URL = re.compile(r"https://[^\s\"'<>()\[\]{}]+", re.IGNORECASE)
+
+
+def _links(nachricht) -> list[str]:
+    """Sammelt https-Links aus Text- und HTML-Teilen, eindeutig, höchstens 50.
+
+    Nur gelesen, nie geöffnet: Was mit einem Link geschieht, entscheidet
+    ``rechnungslink.py`` nach festen Regeln, nie der Mailtext.
+    """
+    gefunden: list[str] = []
+    for teil in nachricht.walk():
+        if teil.is_multipart() or teil.get_content_type() not in {"text/plain", "text/html"}:
+            continue
+        if teil.get_content_disposition() == "attachment":
+            continue
+        try:
+            wert = teil.get_content()
+        except (AttributeError, LookupError, UnicodeError):
+            wert = (teil.get_payload(decode=True) or b"").decode("utf-8", "replace")
+        for url in _URL.findall(html.unescape(str(wert))):
+            url = url.rstrip(".,;:!?")
+            if url not in gefunden:
+                gefunden.append(url)
+            if len(gefunden) >= 50:
+                return gefunden
+    return gefunden
+
+
 def _sicherer_name(name: str) -> str:
     """Entfernt Pfadbestandteile aus einem Anhangnamen."""
     return Path(name).name.replace("/", "_").replace("\\", "_") or "Anhang"
@@ -227,6 +255,7 @@ class OrdnerPostfach(Postfach):
         daten = _kopf(nachricht, ident)
         daten["text"] = _inhalt(nachricht)
         daten["anhaenge"] = _anhaenge(nachricht)
+        daten["links"] = _links(nachricht)
         return daten
 
     def anhaenge(self, ident: str, ziel: Path) -> list[Path]:
@@ -379,6 +408,7 @@ class ImapPostfach(Postfach):
         daten = _kopf(nachricht, ident)
         daten["text"] = _inhalt(nachricht)
         daten["anhaenge"] = _anhaenge(nachricht)
+        daten["links"] = _links(nachricht)
         return daten
 
     def anhaenge(self, ident: str, ziel: Path) -> list[Path]:
@@ -640,6 +670,7 @@ class GmailPostfach(Postfach):
         daten = _kopf(nachricht, ident)
         daten["text"] = _inhalt(nachricht)
         daten["anhaenge"] = _anhaenge(nachricht)
+        daten["links"] = _links(nachricht)
         return daten
 
     def anhaenge(self, ident: str, ziel: Path) -> list[Path]:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import kern
 from .typen import Fund
@@ -46,7 +47,7 @@ def _mail_tmp(konto: str, mail_id: str) -> Path:
     return kern.pfad("arbeit", "tmp", f"{konto}-{sicher}")
 
 
-def postfach_funde(konto: str, tage: int | None = None):
+def postfach_funde(konto: str, tage: int | None = None, echt: bool = False):
     """Liefert neue passende Anhänge aus genau einem konfigurierten Postfach.
 
     Der Takt übernimmt bewusst die Schleife über mehrere Konten. Gesehene Mails
@@ -78,6 +79,85 @@ def postfach_funde(konto: str, tage: int | None = None):
             kopf = dict(mail)
             kopf["konto"] = konto
             yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
+    if kern.konfig("belege").get("quellen", {}).get("rechnungslinks", True):
+        yield from _link_funde(postfach, konto, stand, seit, set(eindeutig), echt)
+
+
+def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt: bool):
+    """Rechnungen, die nur als Link in einer Mail ohne Anhang stehen.
+
+    Höchstens ein Link je Mail, und nur, wenn es genau einen plausiblen gibt.
+    Mail- und Linktexte sind Daten: Nichts wird geöffnet, weil die Mail es sagt.
+    """
+    from . import rechnungslink
+    from .abofalle import erkennen
+
+    max_mb = float(kern.konfig("belege").get("quellen", {}).get("rechnungslink_max_mb", 15))
+    bekannte = set(stand.get("mails", [])) | set(stand.get("links_geprueft", [])) | schon
+    kandidaten: dict = {}
+    for wort in rechnungslink.SUCHWOERTER:
+        try:
+            treffer = postfach.suchen(abfrage=wort, seit=seit)
+        except Exception as fehler:  # ein Suchwort, das der Server ablehnt, soll den Rest nicht kippen
+            kern.log(f"Rechnungslinks {konto}: Suche nach {wort} fehlgeschlagen ({fehler})")
+            continue
+        for mail in treffer:
+            mail_id = mail.get("id")
+            if mail_id and mail_id not in bekannte and not mail.get("anhaenge") and not ausgeschlossen(mail):
+                kandidaten.setdefault(mail_id, mail)
+    for mail_id, mail in kandidaten.items():
+        try:
+            voll = postfach.lesen(str(mail_id))
+        except Exception as fehler:  # Netz weg: beim nächsten Lauf noch einmal
+            kern.log(f"Rechnungslink {konto}:{mail_id} später noch einmal: Mail nicht lesbar ({fehler})")
+            continue
+        grund = None
+        links: list[str] = []
+        if voll.get("anhaenge"):
+            continue
+        if not rechnungslink.sieht_nach_rechnung(str(voll.get("betreff", "")), str(voll.get("text", ""))):
+            grund = "sieht nicht nach Rechnung aus"
+        else:
+            abofalle, merkmale = erkennen(str(voll.get("text", "")), name=str(voll.get("betreff", "")),
+                                          absender=str(voll.get("von", "")))
+            if abofalle:
+                grund = f"Verdacht Abofalle ({merkmale})"
+                if echt:
+                    kern.ereignis("zweifel", f"Vorsicht Abofalle: Mail „{voll.get('betreff', '')}“ von "
+                                  f"{voll.get('von', '')} enthält einen Link, belege hat ihn nicht geöffnet. "
+                                  "Nicht unterschreiben, nicht zahlen.", konto=konto, id=mail_id, grund=merkmale)
+            else:
+                links = rechnungslink.pdf_links(list(voll.get("links") or []))
+                if len(links) != 1:
+                    grund = f"{len(links)} plausible PDF-Links statt genau einem"
+        if grund is None:
+            try:
+                datei = rechnungslink.laden(links[0], _mail_tmp(konto, str(mail_id)), int(max_mb * 1024 * 1024))
+            except rechnungslink.LinkFehler as fehler:
+                if not fehler.endgueltig:
+                    kern.log(f"Rechnungslink {konto}:{mail_id} später noch einmal: {fehler.grund}")
+                    continue
+                grund = f"Link nicht geladen: {fehler.grund}"
+            else:
+                kopf = dict(mail)
+                kopf["konto"] = konto
+                kopf["link"] = urlsplit(links[0]).hostname or ""
+                kern.log(f"Rechnungslink {konto}:{mail_id} geladen von {kopf['link']}")
+                yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
+                continue
+        kern.log(f"Rechnungslink {konto}:{mail_id} übersprungen: {grund}")
+        _link_geprueft(konto, str(mail_id), echt)
+
+
+def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:
+    """Merkt eine übersprungene Link-Mail, damit sie nicht jeden Lauf wiederkommt."""
+    if not echt:
+        return
+    gesehen = _gesehen()
+    liste = gesehen.setdefault(konto, {"mails": []}).setdefault("links_geprueft", [])
+    if mail_id not in liste:
+        liste.append(mail_id)
+        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
 def rueckblick_tage(stand: dict, konfiguration: dict) -> int:
