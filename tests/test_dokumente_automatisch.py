@@ -276,3 +276,20 @@ def test_postfach_dokument_markiert_mail_als_erledigt(repo, weg, monkeypatch):
     ergebnisse = takt.quelle_abarbeiten("postfach", Namespace(echt=True))
     assert ergebnisse[0].status == "ok"
     assert erledigt == ["m1"]
+
+
+def test_vertraulich_verzeichnis_kaputt_ohne_dateinamen(repo, weg, monkeypatch):
+    from belege.vertraulich import Urteil
+
+    monkeypatch.setattr("belege.dokumente.dokument_einordnen", _dokument(art="gesundheit"))
+    monkeypatch.setattr("belege.vertraulich.pruefen", lambda *_a, **_k: Urteil(True, "Gesundheit"))
+
+    def kaputt(*_a, **_k):
+        raise PermissionError("kein Schreibrecht")
+
+    monkeypatch.setattr("belege.dokumente._speichere", kaputt)
+    datei = repo / "handy" / "Befund_Dr_Mueller.pdf"
+    datei.write_bytes(b"geheim2")
+    ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 28), verschieben=True), True)
+    assert ergebnis.status == "fehler" and "Mueller" not in ergebnis.meldung
+    assert datei.exists()

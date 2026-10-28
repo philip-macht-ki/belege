@@ -426,6 +426,38 @@ def _naechste_frist(fristen: list[dict]) -> dict | None:
     return kommend[0] if kommend else None
 
 
+def _ablegen_und_merken(fund, ziel_pfad: Path, sha: str, eintrag: dict, text: str,
+                        vertraulich: bool) -> Path:
+    """Erst ins Verzeichnis, dann die Datei: scheitert das Bewegen, bleibt sie an der Quelle."""
+    ziel_pfad = kern.freier_name(ziel_pfad)
+    ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
+    index = _index()
+    index[sha] = {
+        "pfad": str(ziel_pfad.relative_to(ablage_ordner())),
+        "art": eintrag["art"],
+        "bereich": eintrag["bereich"],
+        "gegenueber": eintrag["gegenueber"],
+        "titel": eintrag["titel"],
+        "datum": eintrag["datum"],
+        "fristen": eintrag["fristen"],
+        "text": text[:6000],
+        "abgelegt": True,
+        "vertraulich": vertraulich,
+        "quelle": fund.quelle,
+    }
+    _speichere(index)
+    try:
+        if fund.verschieben:
+            shutil.move(str(fund.datei), str(ziel_pfad))
+        else:
+            shutil.copy2(fund.datei, ziel_pfad)
+    except OSError:
+        index.pop(sha, None)
+        _speichere(index)
+        raise
+    return ziel_pfad
+
+
 def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Ergebnis | None:
     """Dokumentweiche im Belegweg: legt ein sicher erkanntes Dokument ab.
 
@@ -445,39 +477,16 @@ def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Erg
               f"{ziel_pfad.relative_to(ablage_ordner())} ({eintrag['art']})")
         return kern.Ergebnis("nichts", f"Würde unter {ziel_pfad} ablegen.",
                              {"pfad": str(ziel_pfad), "status": "dokument"})
-    ziel_pfad = kern.freier_name(ziel_pfad)
-    ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
-    relativ = str(ziel_pfad.relative_to(ablage_ordner()))
-    index = _index()
-    index[sha] = {
-        "pfad": relativ,
-        "art": eintrag["art"],
-        "bereich": eintrag["bereich"],
-        "gegenueber": eintrag["gegenueber"],
-        "titel": eintrag["titel"],
-        "datum": eintrag["datum"],
-        "fristen": eintrag["fristen"],
-        "text": text.text[:6000],
-        "abgelegt": True,
-        "vertraulich": vertraulich,
-        "quelle": fund.quelle,
-    }
-    # Erst ins Verzeichnis, dann die Datei: scheitert das Schreiben, bleibt sie an der Quelle.
-    _speichere(index)
     try:
-        if fund.verschieben:
-            shutil.move(str(fund.datei), str(ziel_pfad))
-        else:
-            shutil.copy2(fund.datei, ziel_pfad)
-    except OSError as fehler:
-        index.pop(sha, None)
-        _speichere(index)
+        ziel_pfad = _ablegen_und_merken(fund, ziel_pfad, sha, eintrag, text.text, vertraulich)
+    except Exception:
         if vertraulich:
             # Die allgemeine Fehlermeldung nennt den Dateinamen; der bleibt hier draußen.
             raise VertraulichGescheitert(
                 "Ein vertrauliches Dokument ließ sich nicht ablegen und liegt noch an der Quelle. "
                 "Der nächste Lauf versucht es wieder.") from None
-        raise fehler
+        raise
+    relativ = str(ziel_pfad.relative_to(ablage_ordner()))
     if vertraulich:
         meldung = f"Vertrauliches Dokument liegt jetzt unter {grober_ordner(relativ)}."
     else:
