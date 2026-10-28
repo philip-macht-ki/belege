@@ -111,3 +111,10 @@ def test_schwaerzen_header_mit_escapten_anfuehrungszeichen():
     from belege.fehlerbericht import schwaerzen
 
     assert "XQ7Z9" not in schwaerzen('{"Cookie":"sid=\\"XQ7Z9\\"; x=1"}')
+
+
+def test_schwaerzen_oauth_werte_als_json():
+    from belege.fehlerbericht import schwaerzen
+
+    text = schwaerzen('{"code": "4/0AQlEd8", \'state\': \'k9Lm2\', "id_token": "eyJhbGciOi"}')
+    assert "0AQlEd8" not in text and "k9Lm2" not in text and "eyJhbGciOi" not in text

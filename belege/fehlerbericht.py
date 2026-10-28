@@ -17,7 +17,7 @@ def schwaerzen(text: str) -> str:
     text = re.sub(r"(?i)\b[A-Z]{2}\d{2}(?:[ ]?\d){10,30}(?![\d.])\b", "<iban>", text)
     text = re.sub(r"(?<![\w.])-?\d{1,3}(?:[. ]\d{3})*,\d{2}(?!\d)", "<betrag>", text)
     text = re.sub(r"(?<![\w.])-?\d+\.\d{2}(?!\d)", "<betrag>", text)
-    geheim_name = r"(?:access_token|refresh_token|client_secret|api[_ -]?key|token|passwort|password|secret)"
+    geheim_name = r"(?:access_token|refresh_token|id_token|client_secret|api[_ -]?key|token|passwort|password|secret|code|state|session|sid)"
     # Werte in Anführungszeichen ganz, auch mit Leerzeichen; sonst bis zum nächsten Trenner.
     text = re.sub(rf'(?i)(["\']?{geheim_name}["\']?\s*[:=]\s*)(?:"[^"\r\n]*"|\'[^\'\r\n]*\'|[^,\s}}]+)', r"\1<geheimnis>", text)
     text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer <geheimnis>", text)
