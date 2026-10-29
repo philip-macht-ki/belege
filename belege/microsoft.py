@@ -21,7 +21,17 @@ from pathlib import Path
 import requests
 
 from . import kern
-from .postfach import Postfach, _anhaenge, _anhaenge_speichern, _inhalt, _kopf, _links, _nachricht
+from .postfach import (
+    Postfach,
+    _anhaenge,
+    _anhaenge_speichern,
+    _inhalt,
+    _kopf,
+    _links,
+    _nachricht,
+    _newsletter_kopf,
+    ziel_gesperrt,
+)
 
 # Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra
 # (Deern & Jung, Multi-Tenant, öffentlicher Client, Redirect http://localhost,
@@ -162,7 +172,7 @@ def _fehlertext(ergebnis: dict) -> str:
 
 
 # Well-known names in Microsoft Graph; dort liegen keine eingehenden Rechnungen.
-AUSGELASSENE_ORDNER = ("sentitems", "deleteditems", "junkemail", "drafts", "outbox")
+AUSGELASSENE_ORDNER = ("inbox", "sentitems", "drafts", "deleteditems", "junkemail", "outbox", "archive", "conversationhistory", "scheduled", "searchfolders", "syncissues", "recoverableitemsdeletions", "clutter")
 
 
 def _graph_suche(abfrage: str) -> str:
@@ -305,7 +315,164 @@ class MicrosoftPostfach(Postfach):
         # Namen der Anhänge liefert erst lesen(); hier reicht, dass es welche gibt.
         daten["anhaenge"] = ["Anhang"] if mail.get("hasAttachments") else []
         daten["auszug"] = str(mail.get("bodyPreview", ""))[:300]
+        reply = (mail.get("replyTo") or [{}])[0].get("emailAddress", {}).get("address", "")
+        daten["antwort_an"] = reply or daten.get("von", "")
+        daten["message_id"] = str(mail.get("internetMessageId", ""))
         return daten
+
+    def posteingang(self, seit=None, max=20, text=False, zustand=False, beantwortet=False):
+        """Liest nur Outlooks Posteingang in Graph-Seiten von höchstens 100 Mails."""
+        # Ohne bodyPreview: Der Postfach-Agent bekommt keinen Mailtext zu sehen, auch keinen Anfang.
+        felder = "id,subject,from,toRecipients,replyTo,receivedDateTime,hasAttachments,internetMessageId,internetMessageHeaders"
+        if text:
+            felder += ",body"
+        if zustand:
+            felder += ",isRead,categories,flag"
+        params = {"$select": felder, "$top": min(100, max), "$orderby": "receivedDateTime desc"}
+        if zustand:
+            params["$expand"] = "singleValueExtendedProperties($filter=id eq 'Integer 0x1081')"
+        if seit:
+            params["$filter"] = f"receivedDateTime ge {seit.isoformat()}T00:00:00Z"
+        ergebnis = []
+        url = "/me/mailFolders/inbox/messages"
+        while url and len(ergebnis) < max:
+            kopf = {"Prefer": 'outlook.body-content-type="text"'} if text else None
+            daten = self._anfrage("GET", url, params=params, headers=kopf).json()
+            params = None
+            for mail in daten.get("value", []):
+                eintrag = self._eintrag(mail)
+                eintrag.pop("auszug", None)
+                headers = {
+                    str(header.get("name", "")): str(header.get("value", ""))
+                    for header in mail.get("internetMessageHeaders", [])
+                }
+                eintrag["newsletter"] = _newsletter_kopf(headers)
+                if text:
+                    eintrag["text"] = str((mail.get("body") or {}).get("content", ""))[:4000]
+                if zustand:
+                    eigenschaften = mail.get("singleValueExtendedProperties") or []
+                    verb = next((x.get("value") for x in eigenschaften if x.get("id") == "Integer 0x1081"), "")
+                    kategorien = list(mail.get("categories") or [])
+                    eintrag["zustand"] = {"beantwortet": str(verb) in {"102", "103"}, "erledigt": str((mail.get("flag") or {}).get("flagStatus", "")) == "complete", "gelesen": bool(mail.get("isRead")), "markiert": str((mail.get("flag") or {}).get("flagStatus", "")) == "flagged", "markierungen": kategorien}
+                ergebnis.append(eintrag)
+                if len(ergebnis) >= max:
+                    break
+            url = daten.get("@odata.nextLink")
+        return ergebnis
+
+    def _systemordner(self) -> set[str]:
+        """Ermittelt well-known-Ordner per ID; fehlende Varianten sind normal."""
+        if getattr(self, "_systemordner_ids", None) is None:
+            ids = set()
+            for name in AUSGELASSENE_ORDNER:
+                try:
+                    daten = self._anfrage("GET", f"/me/mailFolders/{name}", params={"$select": "id"}).json()
+                except RuntimeError as fehler:
+                    if "404" in str(fehler):
+                        continue
+                    raise
+                if daten.get("id"):
+                    ids.add(daten["id"])
+            self._systemordner_ids = ids
+        return self._systemordner_ids
+
+    def ordnung(self):
+        """Liest Outlook-Ordner und Kategorien ohne Änderungen."""
+        systemordner, ordner, wartend = self._systemordner(), [], [("/me/mailFolders", "")]
+        while wartend:
+            url, pfad = wartend.pop(0)
+            daten = self._anfrage("GET", url, params={"$select": "id,displayName"}).json()
+            for eintrag in daten.get("value", []):
+                if eintrag.get("id") in systemordner:
+                    continue
+                name = eintrag.get("displayName", "")
+                voll = f"{pfad}/{name}".strip("/")
+                ordner.append(voll)
+                wartend.append((f"/me/mailFolders/{eintrag.get('id')}/childFolders", voll))
+            if daten.get("@odata.nextLink"):
+                wartend.append((daten["@odata.nextLink"], pfad))
+        kategorien = self._anfrage("GET", "/me/outlook/masterCategories").json().get("value", [])
+        return {"ordner": ordner, "labels": [x.get("displayName", "") for x in kategorien], "labels_sichtbar": True, "hinweis": ""}
+
+    def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
+        """Liest Absender aus Outlook-Ordnern und Kategorien mit festem Budget."""
+        ordnung, rest, ergebnis = self.ordnung(), 3000, {"ordner": {}, "labels": {}}
+        for art, namen in (("ordner", ordnung["ordner"]), ("labels", ordnung["labels"])):
+            for name in namen[:30]:
+                if rest <= 0:
+                    return ergebnis
+                limit = min(je_ordner, rest)
+                if art == "ordner":
+                    try:
+                        ziel = self._ordnerpfad(name, anlegen=False)
+                    except RuntimeError:
+                        continue
+                    pfad, params = f"/me/mailFolders/{ziel['id']}/messages", {"$select": "from", "$top": limit}
+                else:
+                    escaped = name.replace("'", "''")
+                    pfad, params = "/me/messages", {"$select": "from", "$top": limit, "$filter": f"categories/any(c:c eq '{escaped}')"}
+                daten = self._anfrage("GET", pfad, params=params).json().get("value", [])
+                ergebnis[art][name] = [str((m.get("from") or {}).get("emailAddress", {}).get("address", "")).lower() for m in daten if (m.get("from") or {}).get("emailAddress", {}).get("address")]
+                rest -= len(daten)
+        return ergebnis
+
+    def aufraeumen(self, ident, aktion, name=""):
+        """Verschiebt in Graph-Ordner oder ergänzt Kategorien ohne doppelte Werte."""
+        try:
+            if aktion == "archivieren":
+                neu = self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": "archive"}).json().get("id", "")
+                from .postfach import AktionErgebnis
+                return AktionErgebnis("archiviert", neu)
+            if ziel_gesperrt(name):
+                return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
+            if aktion == "label":
+                mail = self._anfrage("GET", f"/me/messages/{ident}", params={"$select": "categories"}).json()
+                kategorien = list(mail.get("categories") or [])
+                if name not in kategorien:
+                    kategorien.append(name)
+                self._anfrage("PATCH", f"/me/messages/{ident}", json={"categories": kategorien})
+                return f"mit Kategorie {name} markiert"
+            ziel = self._ordnerpfad(name)
+            neu = self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": ziel["id"]}).json().get("id", "")
+            from .postfach import AktionErgebnis
+            return AktionErgebnis(f"nach {name} verschoben", neu)
+        except RuntimeError as fehler:
+            if " 403" in str(fehler):
+                return f"Microsoft erlaubt noch kein Verschieben: einmal neu anmelden mit `uv run belege anmelden --microsoft {self.name}`"
+            raise
+
+    def zurueckholen(self, eintrag: dict) -> str:
+        ident = str(eintrag.get("neue_id") or eintrag.get("id") or "")
+        if eintrag.get("aktion") in {"archivieren", "ordner"}:
+            self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": "inbox"})
+        elif eintrag.get("aktion") == "label":
+            mail = self._anfrage("GET", f"/me/messages/{ident}", params={"$select": "categories"}).json()
+            kategorien = [x for x in mail.get("categories", []) if str(x).lower() != str(eintrag.get("ziel", "")).lower()]
+            self._anfrage("PATCH", f"/me/messages/{ident}", json={"categories": kategorien})
+        else:
+            return "nicht zurückgeholt (Aktion unbekannt)"
+        return "in Posteingang zurückgeholt"
+
+    def _ordnerpfad(self, name: str, anlegen: bool = True) -> dict:
+        """Löst Kunden/Müller Ebene für Ebene auf (Graph kennt keine Pfadordner).
+        Lesende Aufrufer übergeben anlegen=False: dann wird nie ein Ordner erzeugt."""
+        parent_url, ziel = "/me/mailFolders", None
+        for stufe in (x.strip() for x in name.split("/") if x.strip()):
+            escaped = stufe.replace("'", "''")
+            ordner = self._anfrage("GET", parent_url, params={"$filter": f"displayName eq '{escaped}'", "$select": "id,displayName"}).json().get("value", [])
+            ziel = next((x for x in ordner if str(x.get("displayName", "")).lower() == stufe.lower()), None)
+            if ziel is None and len(ordner) == 1 and not ordner[0].get("displayName"):
+                # Ältere Graph-Fakes und ungewöhnliche Server lassen displayName trotz
+                # $select weg; der Filter hat die Ebene bereits eindeutig eingegrenzt.
+                ziel = ordner[0]
+            if ziel is None and not anlegen:
+                raise RuntimeError(f"Microsoft-Ordner {name} nicht gefunden")
+            if ziel is None:
+                ziel = self._anfrage("POST", parent_url, json={"displayName": stufe}).json()
+            parent_url = f"/me/mailFolders/{ziel['id']}/childFolders"
+        if not ziel:
+            raise RuntimeError("Microsoft-Ordnername ist leer")
+        return ziel
 
     def _rohmail(self, ident: str):
         roh = self._anfrage("GET", f"/me/messages/{ident}/$value").content
@@ -327,17 +494,20 @@ class MicrosoftPostfach(Postfach):
     def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
         """Verschiebt nur mit Graph-Schreibrecht; Graph kennt keine Keywords."""
         # Ein Ordner ist bei Graph das sichtbare Gegenstück zum erledigt-Label.
-        filter_name = ordner.replace("'", "''")
-        ordnerliste = self._anfrage("GET", "/me/mailFolders", params={"$filter": f"displayName eq '{filter_name}'", "$select": "id,displayName"}).json().get("value", [])
-        ziel = ordnerliste[0] if ordnerliste else self._anfrage("POST", "/me/mailFolders", json={"displayName": ordner}).json()
+        if ziel_gesperrt(ordner):
+            return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
+        ziel = self._ordnerpfad(ordner)
         if art == "verschieben":
             self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": ziel["id"]})
             return f"nach {ordner} verschoben"
         self._anfrage("PATCH", f"/me/messages/{ident}", json={"isRead": True})
         return f"als gelesen markiert (Ordner {ordner} bereit)"
 
-    def entwurf(self, an, betreff, text, anhaenge):
+    def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
         """Legt einen Entwurf im Entwürfe-Ordner von Outlook an."""
+        if antwort_auf and antwort_auf.get("id"):
+            antwort = self._anfrage("POST", f"/me/messages/{antwort_auf['id']}/createReply", json={"comment": text})
+            return antwort.json().get("id", betreff)
         roh = base64.b64encode(_nachricht(an, betreff, text, anhaenge, self.adresse).as_bytes())
         antwort = self._anfrage(
             "POST", "/me/messages", data=roh, headers={"Content-Type": "text/plain"}

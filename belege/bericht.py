@@ -13,7 +13,7 @@ from datetime import datetime
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen")
 
 
 def _gesehen() -> dict:
@@ -145,6 +145,42 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
 
     if gruppen["update"]:
         absaetze.append("Belege-Update\n" + "\n".join("- " + e.get("text", "") for e in gruppen["update"]))
+
+    if gruppen["aufraeumen"]:
+        zahlen_auf = Counter("erledigte archiviert" if e.get("daten", {}).get("durchlauf") == "erledigt" and e.get("daten", {}).get("aktion") == "archivieren" else str(e.get("daten", {}).get("aktion", "")) for e in gruppen["aufraeumen"])
+        namen = {
+            "archivieren": "archiviert",
+            "ordner": "in Ordner",
+            "label": "Label",
+            "entwurf": "Entwurf",
+            "melden": "gemeldet",
+            "melden, sofort": "gemeldet",
+            "liegen lassen": "liegen gelassen",
+            "erledigte archiviert": "erledigte archiviert",
+        }
+        zusammen = Counter()
+        for aktion, anzahl in zahlen_auf.items():
+            zusammen[namen.get(aktion, aktion)] += anzahl
+        absaetze.append("Postfach aufgeräumt\n" + ", ".join(f"{anzahl} {name}" for name, anzahl in zusammen.items()))
+        braucht = [e for e in gruppen["aufraeumen"] if e.get("daten", {}).get("aktion") in {"liegen lassen", "melden", "melden, sofort"}]
+        if braucht:
+            zeilen = []
+            for e in braucht[:30]:
+                daten = e.get("daten", {})
+                if daten.get("privat"):
+                    zeilen.append(f"- {daten.get('von', '')} – {daten.get('aktion', '')}")
+                    continue
+                kurz = str(daten.get("kurz", "")).strip()
+                if kurz:
+                    zeile = f"- {daten.get('von', '')} – {daten.get('betreff', '')}: {kurz}"
+                    if daten.get("antwort_noetig"):
+                        zeile += " (Antwort nötig)"
+                    zeilen.append(zeile)
+                else:
+                    zeilen.append("- " + e.get("text", ""))
+            if len(braucht) > 30:
+                zeilen.append(f"- und {len(braucht)-30} weitere")
+            absaetze.append("Braucht dich\n" + "\n".join(zeilen))
 
     if gruppen["fehler"]:
         zeilen = ["- Etwas ist schiefgelaufen: " + e.get("text", "") for e in gruppen["fehler"]]

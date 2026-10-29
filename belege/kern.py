@@ -72,16 +72,25 @@ def konfig(name: str) -> dict:
                 raise
     zeilen = datei.read_text(encoding="utf-8").splitlines()
     bereich = None
+    aufraeumen = False
     gesehen: dict[str, int] = {}
     for nr, zeile in enumerate(zeilen):
         if zeile.strip() == "[[konto]]":
             bereich = nr
+            aufraeumen = False
+        elif zeile.strip() == "[aufraeumen]":
+            aufraeumen = True
         elif bereich is not None and re.match(r"^\s*nach_ablage\s*=", zeile):
             vorher = gesehen.get(str(bereich))
             if vorher is None:
                 gesehen[str(bereich)] = nr
             else:
                 zeilen[nr] = "# durch frühere nach_ablage-Angabe ersetzt"
+        elif aufraeumen and re.match(r"^\s*lesen\s*=", zeile):
+            if "aufraeumen:lesen" in gesehen:
+                zeilen[nr] = "# durch frühere lesen-Angabe ersetzt"
+            else:
+                gesehen["aufraeumen:lesen"] = nr
     return tomllib.loads("\n".join(zeilen))
 
 

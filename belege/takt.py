@@ -120,6 +120,12 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
         if name == "waechter":
             code = importlib.import_module("belege.waechter").befehl(_weiterreichen(args))
             return ("ok" if not code else f"Exit {code}"), []
+        if name == "aufraeumen":
+            cfg = konfig("belege").get("aufraeumen", {})
+            if not cfg.get("an"):
+                return "aus", []
+            code = importlib.import_module("belege.postfach_agent").laufen(_weiterreichen(args), nur_faellig=True)
+            return ("ok" if not code else f"Exit {code}"), []
         if name == "bericht":
             code = importlib.import_module("belege.bericht").befehl(_weiterreichen(args))
             return ("ok" if not code else f"Exit {code}"), []
@@ -191,10 +197,13 @@ def lebenszeichen(wach: bool = False) -> None:
 
 
 def befehl(args) -> int:
-    """`belege takt`: Postfach, Handy, Papierpost und Wächter."""
+    """`belege takt`: Postfach, Handy, Papierpost, Wächter und Opt-in-Aufräumen."""
     if echt(args):
         lebenszeichen(wach=True)
-    if _lauf(args, ("postfach", "handy", "scan", "waechter"), "takt") and echt(args):
+    schritte = ("postfach", "handy", "scan", "waechter")
+    if konfig("belege").get("aufraeumen", {}).get("an"):
+        schritte += ("aufraeumen",)
+    if _lauf(args, schritte, "takt") and echt(args):
         lebenszeichen()
     return 0
 

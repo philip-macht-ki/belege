@@ -71,6 +71,18 @@ def befehl(args) -> int:
         print(f"{f}: {text}" + (f" -> {hinweis}" if hinweis and f != "GRUEN" else ""))
 
     try:
+        if konfig("belege").get("aufraeumen", {}).get("an"):
+            from .postfach_agent import regeln
+            _, fehler = regeln()
+            z("GRUEN" if not fehler else "ROT", "Postfach-Regeln gültig" if not fehler else "; ".join(fehler))
+    except Exception as e:
+        z("ROT", f"Postfach-Regeln nicht prüfbar: {e}")
+    if konfig("belege").get("aufraeumen", {}).get("lesen", "kopf") == "text":
+        modell = konfig("belege").get("aufraeumen", {}).get("modell", "eingestellt")
+        backend = konfig("belege").get("urteil", {}).get("backend", "claude")
+        print("INFO: Mailtexte bleiben lokal (Ollama nötig)." if modell == "lokal" else f"INFO: Mailtexte für Kurzfassungen gehen an das eingestellte Modell ({backend}).")
+
+    try:
         from . import __version__
         print(f"INFO: Belege-Version {__version__}")
         # Das ist bewusst nur ein Hinweis: Ohne Netz bleibt der Selbsttest grün.

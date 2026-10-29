@@ -62,7 +62,9 @@ arbeit/                   Laufzeit, nie im Git
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
-  gesehen.json            {"<konto>": {"mails": [message-id …], "stand": iso}, "waechter:<konto>": {...}, "downloads_gemeldet": [sha …]}
+  gesehen.json            {"<konto>": {"mails": [message-id …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …]}
+  aufraeumen.jsonl        jede echte Postfach-Aktion, mit Konto, ID, Regel und Ergebnis
+  postfach-vorschlag.md   trocken erzeugte Gruppen und Regelvorschläge
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600
   ereignisse/<datum>.jsonl  eine Zeile je Ereignis, siehe unten
   monat/<JJJJ-MM>/        abgleich.json, fehlt_noch.csv, fehlt_noch.md, pruefen.md, klaerung.md, paket/
@@ -200,6 +202,46 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 
 ## Modulvertrag
 
+## Postfach-Agent
+
+`konfig/postfach-regeln.md` ist eine SOP-Datei. Nur Zeilen mit `- ` sind Regeln;
+die erste passende Regel gewinnt. Das Format lautet `- <Bedingung> -> <Aktion>`
+oder mit `→`. Bedingungen sind `von:`, `betreff:`, `newsletter`, `anhang` und
+`sonst`, verknüpft mit ` und ` außerhalb von Anführungszeichen. Aktionen sind
+`archivieren`, `ordner: Name`, `label: Name`, `entwurf: Text`, `melden`,
+`melden, sofort` und `liegen lassen`. Mit `lesen = "kopf"` liest der Agent nur
+Kopfdaten; bei `lesen = "text"` höchstens 4000 Zeichen Klartext für Textregeln
+und unverbindliche Kurzfassungen. Zustandsregeln (`beantwortet`, `erledigt`,
+`gelesen`, `älter als N tage`) laufen danach in einem zweiten Durchlauf und
+dürfen nur archivieren oder verschieben. `ordnung()` und `zuordnung()` lesen
+Ordner, Labels und bestehende Absenderzuordnungen ohne Änderungen.
+
+Echte Aktionen stehen je Mail in `arbeit/aufraeumen.jsonl` (Zeit, Konto, ID,
+Absender, gekürzter Betreff, Regel, Aktion, Ziel, Ergebnis, nach MOVE `neue_id`).
+`belege aufraeumen zurueck [--seit JJJJ-MM-TT] [--echt]` nutzt diese Kennung,
+holt Verschiebungen in den Posteingang zurück und protokolliert `aktion: zurueck`.
+`arbeit/postfach-vorschlag.md` ist ein trockener, deterministischer Vorschlag
+aus Kopfdaten. `gesehen.json` enthält `aufraeumen:<konto>` mit höchstens 5000 IDs
+und Stand sowie `aufraeumen:takt` für den letzten Terminlauf.
+
+Ablauf je Mail: Aktion, dann Zeile in `aufraeumen.jsonl`, dann sofort die ID in
+`gesehen.json` (kein zweiter Entwurf nach einem Abbruch), zuletzt das Ereignis
+für den Bericht. Ein Ergebnis, das mit „nicht “ oder „Microsoft erlaubt noch kein“
+beginnt, oder eine Ausnahme gilt als Fehlversuch: Ereignis `fehler`, keine ID,
+nächster Lauf versucht es erneut, Exit 1. Fehlversuche zählen nicht gegen
+`max_je_lauf`, haben aber eine eigene Grenze von 10 je Konto und Lauf. Der
+Erledigt-Durchlauf prüft höchstens `erledigt_max` (Standard 1000) neueste
+Posteingangsmails und verändert dabei weder IDs noch Stand in `gesehen.json`.
+Bleibt etwas
+liegen, rückt der Stand nicht vor. Grenze: Ein Lauf sieht höchstens die neuesten
+5000 Posteingangsmails seit dem Stand.
+
+Die Postfach-Backends liefern `posteingang(seit, max, text=False, zustand=False)` nur für den Posteingang,
+inklusive `newsletter` und `anhaenge`, und führen über
+`aufraeumen(id, aktion, name)` ausschließlich Archivieren, Ordner und Label aus.
+Sie löschen niemals. Antworten entstehen über `senden.entwurf`; eine
+Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger()`.
+
 | Modul | liefert |
 |---|---|
 | `kern.py` | ROOT (Env `BELEGE_ROOT`), `konfig()`, `pfad()`, `lesen()`, `schreiben()`, `jetzt()`, `log()`, `ereignis()`, `Sperre`, `Ergebnis`, `ablage_ordner()`, `echt(args)` |
@@ -212,7 +254,8 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
 | `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `hinweise(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
 | `aufraeumen.py` | Anbieterstand und `liste(eintraege, zustand) -> (betreff, text)` für wiederkehrende Rechnungsbefunde; `belege pruefung aufraeumen`, `belege pruefung anbieter` |
-| `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
+| `postfach.py` | `oeffnen(konto_name) -> Postfach`, `posteingang(seit,max)` nur Inbox mit Newsletter-Metadaten, `aufraeumen(id,aktion,name)`; Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
+| `postfach_agent.py` | Befehl `belege aufraeumen`: Klartextregeln aus `konfig/postfach-regeln.md`, trockener Vorschlag und Opt-in-Aktionen |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
 | `rechnungslink.py` | `sieht_nach_rechnung(betreff, text) -> bool`, `pdf_links(links) -> list[str]`, `laden(url, ziel, max_bytes) -> Path` (wirft `LinkFehler(grund, endgueltig)`) |

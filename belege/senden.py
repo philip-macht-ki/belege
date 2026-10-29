@@ -80,7 +80,8 @@ def _betreff(betreff: str, nummer: int, anzahl: int) -> str:
 
 
 def entwurf(
-    an: str, betreff: str, text: str, anhaenge: list[Path], echt: bool, konto=None
+    an: str, betreff: str, text: str, anhaenge: list[Path], echt: bool, konto=None,
+    antwort_auf: dict | None = None,
 ) -> kern.Ergebnis:
     """Legt nur mit --echt einen Entwurf an und gibt seine IDs zurück."""
     if not echt:
@@ -95,9 +96,10 @@ def entwurf(
     postfach = oeffnen(konto)
     ids = []
     for nummer, teil in enumerate(teile, 1):
-        ids.append(
-            postfach.entwurf(an, _betreff(betreff, nummer, len(teile)), text, teil)
-        )
+        if antwort_auf is None:
+            ids.append(postfach.entwurf(an, _betreff(betreff, nummer, len(teile)), text, teil))
+        else:
+            ids.append(postfach.entwurf(an, _betreff(betreff, nummer, len(teile)), text, teil, antwort_auf=antwort_auf))
     kern.ereignis("entwurf", f"Entwurf an {an} angelegt", an=an, ids=ids)
     return kern.Ergebnis("ok", f"Entwurf an {an} angelegt.", {"ids": ids})
 

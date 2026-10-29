@@ -2,6 +2,23 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.14.0] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Dein Posteingang kann sich zweimal am Tag nach deinen eigenen Regeln aufräumen: archivieren, in Ordner legen, Label setzen, Antwortentwurf anlegen oder dich melden. Gelöscht wird nie, verschickt wird nichts, Antworten sind nur Entwürfe.
+- Erledigtes verschwindet von selbst aus dem Posteingang: Mails, auf die du geantwortet hast, die du als erledigt markiert hast oder die gelesen und älter als ein paar Tage sind.
+- Deine bisherigen Ordner und Labels werden übernommen: `belege aufraeumen labels` schlägt Regeln vor, die zu deiner Ordnung passen.
+- Du entscheidest, ob der Agent nur Absender und Betreff liest oder auch den Mailtext. Vertrauliches kann auf deinem Mac bleiben, und der Bericht nennt auf Wunsch keine Betreffe.
+- Etwas falsch einsortiert? `belege aufraeumen zurueck` holt es in den Posteingang zurück.
+- Ohne Einschalten ändert sich nichts.
+
+### Musst du etwas tun?
+
+Nein. Wenn du es möchtest, sag deinem Claude: „Lies mit mir die letzten vier Wochen meines Postfachs und schlag mir Regeln vor.“
+
 ## [1.13.1] – 29.10.2026
 
 aktion: keine
