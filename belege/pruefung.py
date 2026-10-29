@@ -49,17 +49,41 @@ def _unlesbar(text: str) -> bool:
 
 
 def _kein_rechnungsdokument(text: str) -> bool:
-    kopf = "\n".join(zeile for zeile in text.splitlines() if zeile.strip())
-    return bool(re.search(
-        r"\b(?:gutschrift|credit note|erstattung|refund|zahlungserinnerung|mahnung|"
-        r"auftragsbestätigung|order confirmation|pro[ -]?forma|angebot|kontoauszug|"
-        r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|bescheid|"
-        r"lohnabrechnung|vertrag)\b", "\n".join(kopf.splitlines()[:15]), re.I))
+    zeilen = [zeile.strip() for zeile in text.splitlines() if zeile.strip()]
+    kopf = "\n".join(zeilen[:15])
+    if re.search(r"\b(?:das\s+ist\s+keine\s+rechnung|this\s+is\s+not\s+an\s+invoice)\b", text, re.I):
+        return True
+    if re.search(r"\b(?:gutschrift|credit note|erstattung|refund|zahlungserinnerung|mahnung|"
+                 r"auftragsbestätigung|order confirmation|pro[ -]?forma|angebot|kontoauszug|"
+                 r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|zahlungsbeleg|"
+                 r"lohnabrechnung|berechnung der umsatzsteuer)\b|\w*(?:vertrag|bescheid)\w*|"
+                 r"(?:landesjustizkasse|gerichtskasse|justizkasse)", kopf, re.I):
+        return True
+    if (re.search(r"\bpayment\s+receipt\b", kopf, re.I)
+            and not re.search(r"\b(?:invoice|rechnung)\b", kopf, re.I)):
+        return True
+    rechnungswort = (r"\b(?:rechnung(?:s(?:nummer|datum))?|invoice|receipt|quittung|"
+                     r"gutschrift|beleg|bill)\b")
+    return not bool(re.search(rechnungswort, "\n".join(zeilen[:40]), re.I))
+
+
+def _behoerde_im_kopf(text: str) -> bool:
+    kopf = "\n".join(zeile.strip() for zeile in text.splitlines() if zeile.strip())
+    return bool(re.search(r"\b(?:finanzamt|landesjustizkasse|amtsgericht)\b", "\n".join(kopf.splitlines()[:5]), re.I))
 
 
 def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
     if str((xml or {}).get("nummer", "")).strip():
         return True
+    # Manche Layouts nennen nur den Titel und setzen die Nummer direkt dahinter oder darunter.
+    titel_nummer = re.compile(r"\b(?:rechnung|invoice|receipt|quittung|beleg)\b[ \t:#.]*"
+                              r"(?:\n[ \t]*)?([A-Z0-9][A-Z0-9./-]*)", re.I)
+    datum = re.compile(r"(?:\d{1,2}[./-]\d{1,2}[./-](?:\d{2}|\d{4})|"
+                       r"\d{4}[./-]\d{1,2}[./-]\d{1,2})$")
+    for treffer in titel_nummer.finditer(text):
+        kandidat = treffer.group(1).strip(".,:;#")
+        if len(re.sub(r"\D", "", kandidat)) >= 4 and not datum.fullmatch(kandidat):
+            return True
     # Das Muster aus 1.12.0 gilt weiter, damit kurze Nummern wie "RE-22" nicht neu auffallen.
     if re.search(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|belegnummer|"
                  r"invoice\s*(?:no\.?|number|nr\.?)|(?:rechnung|invoice)\s*\n\s*(?:nr\.?|no\.?|number))"
@@ -69,7 +93,7 @@ def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
     etikett = re.compile(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|"
                          r"beleg(?:nummer|\s*-?nr\.?)|invoice|receipt|credit note number|"
                          r"(?:\bnummer\b|\bnr\.?\b|\bno\.?\b|#))", re.I)
-    datum = re.compile(r"^\d{1,2}[./-]\d{1,2}[./-](?:\d{2}|\d{4})$")
+    datum = re.compile(r"^(?:\d{1,2}[./-]\d{1,2}[./-](?:\d{2}|\d{4})|\d{4}[./-]\d{1,2}[./-]\d{1,2})$")
     for nr, zeile in enumerate(zeilen):
         if not etikett.search(zeile):
             continue
@@ -81,10 +105,13 @@ def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
     return False
 
 
-def _drittland_usa(text: str, xml: dict | None, firma: dict | None) -> bool:
-    usa = bool(re.search(r"\b(?:united states|usa|u\.s\.a\.)\b", text, re.I))
-    usd = bool(re.search(r"(?:\$\s*\d|\bUSD\b)", text, re.I))
-    return usa and usd and not _lieferanten_ust(text, xml, firma)
+def _drittland(text: str, xml: dict | None, firma: dict | None) -> bool:
+    """Drittländer ohne Lieferanten-USt-IdNr. nicht nach EU-Pflichtangaben bewerten."""
+    land = (r"\b(?:united states|usa|u\.s\.a\.|australia|australien|singapore|singapur|"
+            r"canada|united kingdom|\buk\b|großbritannien|switzerland|schweiz|norway|norwegen|"
+            r"israel|india|indien|japan|china|hong kong)\b|\bABN\s*\d")
+    waehrung = r"(?:\$\s*\d|\b(?:USD|AUD|SGD|CAD|GBP|CHF)\b)"
+    return not _lieferanten_ust(text, xml, firma) and bool(re.search(land, text, re.I) or re.search(waehrung, text, re.I))
 
 
 _POSITION_ODER_SUMME = re.compile(r"(?:\bpos\.?\b|\bmenge\b|\bbeschreibung\b|\bnetto\b|\bsumme\b|\bgesamt\b|\btotal\b)", re.I)
@@ -332,9 +359,13 @@ def _ust_id_maskieren(nummer: str) -> str:
 
 
 def _reverse_charge_hinweis(text: str) -> bool:
-    return bool(re.search(
+    if re.search(
         r"reverse[\s-]*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers|"
-        r"(?:gemäß|gemass|under)\s+(?:artikel|article)\s*196", text, re.I))
+        r"(?:gemäß|gemass|under)\s+(?:artikel|article)\s*196", text, re.I):
+        return True
+    return any(re.search(r"(?:artikel|article|art\.)\s*196", absatz, re.I)
+               and re.search(r"(?:2006\s*/\s*112|leistungsempf)", absatz, re.I)
+               for absatz in re.split(r"\n\s*\n", text))
 
 
 def _keine_umsatzsteuer_berechnet(text: str) -> bool:
@@ -378,10 +409,10 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     if firma and firma.get("pruefung") is False:
         return []
     inhalt = _inhalt(text.text)
-    if _unlesbar(inhalt) or _kein_rechnungsdokument(inhalt):
+    if _unlesbar(inhalt) or _kein_rechnungsdokument(inhalt) or _behoerde_im_kopf(inhalt):
         return []
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
-    drittland = _drittland_usa(inhalt, xml, firma)
+    drittland = _drittland(inhalt, xml, firma)
     befund: list[str] = []
     if "empfaenger" in regeln and not kleinbetrag:
         punkt = _empfaenger(inhalt, _firma(e), xml)
@@ -393,7 +424,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
             befund.append(punkt)
     # Der Ausleser hält nur den Anfang langer Abrechnungen vor. Alles weitere
     # könnte auf einer abgeschnittenen letzten Seite stehen.
-    if len(text.text) >= 5990:
+    if text.seiten > 2 or len(text.text) >= 5990:
         return befund
     if "ust_id_lieferant" in regeln and not kleinbetrag and not drittland and not _hat_lieferantensteuer(inhalt, xml):
         befund.append(NAMEN["ust_id_lieferant"] + " fehlt")

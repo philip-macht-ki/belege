@@ -40,7 +40,7 @@ def test_anschrift_abweichend_und_kleinbetrag(repo):
 
 def test_anschrift_abweichend_bei_alter_eigener_adresse(repo):
     _konfig(repo)
-    alt = Text("Eigene GmbH\nAlte Straße 3\n54321 Bonn", "klartext", 1)
+    alt = Text("Rechnung\nEigene GmbH\nAlte Straße 3\n54321 Bonn", "klartext", 1)
     assert any("Anschrift abweichend" in x for x in pruefe(_einordnung(), alt))
 
 
@@ -68,7 +68,7 @@ def test_empfaengerblock_nur_im_sicheren_rechnungskopf(repo):
 
 def test_vies_ungueltig_cache_und_netzfehler(repo, monkeypatch):
     _konfig(repo, "ust_id_amtlich = true\n")
-    text = Text("Lieferant\nUSt-IdNr. FR12345678901", "klartext", 1)
+    text = Text("Rechnung\nLieferant\nUSt-IdNr. FR12345678901", "klartext", 1)
 
     class Antwort:
         def __enter__(self): return self
@@ -84,7 +84,7 @@ def test_vies_ungueltig_cache_und_netzfehler(repo, monkeypatch):
 
 
 def test_vies_nur_bei_aktivierter_pruefung_und_amtlicher_abfrage(repo, monkeypatch):
-    text = Text("Lieferant\nUSt-IdNr. FR12345678901", "klartext", 1)
+    text = Text("Rechnung\nLieferant\nUSt-IdNr. FR12345678901", "klartext", 1)
     aufrufe = []
     monkeypatch.setattr("belege.pruefung._vies_pruefen", lambda nummer: aufrufe.append(nummer))
     _konfig(repo, "ust_id_amtlich = true\n")
