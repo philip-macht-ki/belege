@@ -188,21 +188,23 @@ def _nummer_normal(wert: object) -> str:
 
 
 def _empfaengerraum(zeilen: list[str]) -> str:
-    """Kopf plus Empfängerfenster, aber nie den Lieferantenfuß einer Rechnung."""
-    marker = re.compile(r"rechnung\s+an|rechnungsempf[äa]nger|\bempf[äa]nger\b|\bkunde\b|\ban\s*:", re.I)
+    """Eigene Nummern im Eingangsbeleg, ohne Ausstellerkopf und -impressum."""
+    # Die ersten drei belegten Zeilen gehören regelmäßig zum Briefkopf des
+    # Ausstellers. Danach darf die Empfängeranschrift auch ohne "Rechnung an"
+    # bis zu Zeile 45 stehen; so bleiben Stripe- und Auslandsvorlagen erfasst.
+    kopf = {nr for nr, zeile in enumerate(zeilen) if zeile.strip()}
+    aussteller = set(sorted(kopf)[:3]) if len(kopf) > 3 else set()
+    raum = []
     for nr, zeile in enumerate(zeilen):
-        if marker.search(zeile):
-            return "\n".join(zeilen[nr:min(nr + 8, len(zeilen))])
-    # Ohne Marker ist nur der knappe Kopf belastbar. So zählt die USt-IdNr.
-    # eines Lieferanten im späteren Impressum nicht als eigene Nummer.
-    kurz = []
-    for zeile in zeilen[:12]:
-        # Ab hier steht bei klassischen PDFs das Lieferanten-Impressum. Seine
-        # Nummer darf ohne Empfängerbezug nie eine eigene Firma auswählen.
-        if re.search(r"\bimpressum\b|\b(?:lieferant|verkäufer|seller)\b", zeile, re.I):
+        # Im Lieferantenfuß können fremde USt-IdNrn. stehen. Er beginnt den
+        # auszuschließenden Rest, auch wenn kein Empfängermarker vorhanden ist.
+        if nr not in aussteller and re.search(
+            r"\bimpressum\b|\b(?:lieferant|verkäufer|seller)\b", zeile, re.I
+        ):
             break
-        kurz.append(zeile)
-    return "\n".join(kurz)
+        if nr not in aussteller:
+            raum.append(zeile)
+    return "\n".join(raum)
 
 
 def _anschrift_treffer(zeilen: list[str]) -> set[str]:
@@ -243,6 +245,39 @@ def _merkmale(text: str, art: str | None = None) -> tuple[set[str], set[str], se
     return nummer_treffer, _anschrift_treffer(zeilen), namen_treffer
 
 
+_RECHTSFORM = re.compile(
+    r"\b(?:gmbh|ug|ag|kg|ohg|gbr|e\.?\s*k\.?|se|ltd\.?|mb|uab|"
+    r"s\.?\s*à\s*r\.?\s*l\.?|sarl)\b",
+    re.I,
+)
+
+
+def _gesellschaft(eintrag: dict) -> bool:
+    """Erkennt Gesellschaften über Rechtsformfeld oder kanonischen Namen."""
+    return bool(_RECHTSFORM.search(
+        f"{eintrag.get('name', '')} {eintrag.get('rechtsform', '')}"
+    ))
+
+
+def _namensrang(treffer: set[str]) -> set[str]:
+    """Bevorzugt Gesellschaften vor Personen und ignoriert Geschäftsführer."""
+    eintraege = {eintrag["name"]: eintrag for eintrag in firmen()}
+    gesellschaften = {name for name in treffer if _gesellschaft(eintraege[name])}
+    if gesellschaften:
+        return gesellschaften
+    # Ist eine natürliche Person nur als Geschäftsführer einer ebenfalls
+    # genannten Firma hinterlegt, ist sie dort Ansprechpartner, nicht Empfänger.
+    ohne_geschaeftsfuehrer = set(treffer)
+    for name in treffer:
+        for andere in treffer - {name}:
+            wert = eintraege[andere].get("geschaeftsfuehrer", eintraege[andere].get("geschäftsführer", ""))
+            werte = wert if isinstance(wert, list) else [wert]
+            if any(str(wert).casefold().strip() == name.casefold() for wert in werte):
+                ohne_geschaeftsfuehrer.discard(name)
+                break
+    return ohne_geschaeftsfuehrer
+
+
 def _firmen_im_text(text: str) -> set[str]:
     """Alle erkannten eigenen Firmen (für die Unklarheitsbehandlung)."""
     nummern, anschriften, namen = _merkmale(text)
@@ -256,54 +291,16 @@ def _firma_aus_abschnitt(text: str, kandidaten: set[str]) -> str | None:
 
 
 def _firma_aus_text(text: str, art: str | None = None) -> str | None:
-    """Erkennt die Firma nach allen Treffern und ihrer Belegposition.
-
-    Bei mehreren eigenen Firmen entscheidet bei Eingangsrechnungen ausschließlich
-    der Empfängerblock, bei Ausgangsrechnungen der kurze Ausstellerkopf.
-    """
+    """Erkennt die Firma über das jeweils höchste eindeutige Merkmal."""
     nummern, anschriften, namen = _merkmale(text, art)
-    # Nummern sind die stärkste Zuordnung. Verschiedene eigene Nummern oder
-    # eine dazu eindeutig widersprüchliche Namensnennung bleiben unklar.
+    # Die Ränge entscheiden strikt: Ein eindeutiger höherer Rang wird nie von
+    # einem niedrigeren Merkmal relativiert.
     if nummern:
-        if len(nummern) != 1:
-            return None
-        erkannt = next(iter(nummern))
-        # Bei Eingangsrechnungen ist ein anderer eigener Name im Ausstellerkopf
-        # kein Widerspruch: maßgeblich bleibt der explizite Empfängerblock.
-        relevante_namen = namen
-        zeilen = text.splitlines()[:45]
-        marker = re.compile(r"rechnung\s+an|rechnungsempf[äa]nger|kunde|an\s*:", re.I)
-        marker_nr = next((i for i, zeile in enumerate(zeilen) if marker.search(zeile)), None)
-        if art != "ausgang" and marker_nr is not None:
-            im_block = _merkmale("\n".join(zeilen[marker_nr:marker_nr + 7]))[2]
-            if im_block:
-                relevante_namen = im_block
-        if relevante_namen and relevante_namen != {erkannt}:
-            return None
-        return erkannt
+        return next(iter(nummern)) if len(nummern) == 1 else None
     if anschriften:
-        if len(anschriften) != 1:
-            return None
-        erkannt = next(iter(anschriften))
-        if namen and namen != {erkannt}:
-            return None
-        return erkannt
-    treffer = namen
-    if len(treffer) != 1:
-        if not treffer:
-            return None
-        zeilen = text.splitlines()[:45]
-        marker = re.compile(r"rechnung\s+an|rechnungsempf[äa]nger|kunde|an\s*:", re.I)
-        marker_nr = next((i for i, zeile in enumerate(zeilen) if marker.search(zeile)), None)
-        if art == "ausgang":
-            return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
-        if marker_nr is not None:
-            empfaenger = _firma_aus_abschnitt("\n".join(zeilen[marker_nr:marker_nr + 7]), treffer)
-            if empfaenger:
-                return empfaenger
-            return _firma_aus_abschnitt("\n".join(zeilen[:marker_nr]), treffer)
-        return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
-    return next(iter(treffer))
+        return next(iter(anschriften)) if len(anschriften) == 1 else None
+    treffer = _namensrang(namen)
+    return next(iter(treffer)) if len(treffer) == 1 else None
 
 
 def _eigener_betrieb(text: str) -> bool:

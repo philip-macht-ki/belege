@@ -80,9 +80,12 @@ sind `name`, mindestens `ust_id` oder `steuernummer` sowie `anschrift` mit
 gehören ebenfalls dorthin. `belege.toml` behält Betriebsschlüssel wie
 `bereich`, `konten`, `uebergabe` und `pruefung`; gleiche Namen ergänzen die
 Stammdaten. Fehlt das optionale Blatt, gelten alle bisherigen `[[firma]]`- und
-`[betrieb]`-Einstellungen unverändert. Die Zuordnung nutzt zuerst eigene
+`[betrieb]`-Einstellungen unverändert. Die Zuordnung nutzt strikt zuerst eigene
 USt-IdNr./Steuernummer, dann eine unter den Stammdaten eindeutige Straße+PLZ,
-danach Namen; widersprüchliche Merkmale bleiben Unsortiert.
+danach Namen: Ein eindeutiger höherer Rang entscheidet allein; nur mehrere
+Treffer auf seinem Rang bleiben Unsortiert. Auf dem Namensrang gewinnt eine
+Gesellschaft mit Rechtsform vor einer natürlichen Person; ein alleiniger
+Personenname bleibt einem Einzelunternehmen zugeordnet.
 
 ## Ablage (im synchronisierten Ordner des Mitglieds)
 

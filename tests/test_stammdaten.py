@@ -52,19 +52,66 @@ def test_stammdaten_ueberschreiben_nur_betriebsschluessel(tmp_path, monkeypatch)
     assert alpha["ust_id"] == "DE 344 935 206"
 
 
-def test_ust_id_steuernummer_anschrift_und_widerspruch(tmp_path, monkeypatch):
+def test_ust_id_steuernummer_anschrift_und_rangfolge(tmp_path, monkeypatch):
     _einrichtung(tmp_path, monkeypatch, _firmen())
     assert _firma_aus_text("Rechnung an:\nAnderer Name\nDE344.935/206") == "Alpha GmbH"
     assert _firma_aus_text("Rechnungsempfänger:\nUnbekannt\n32 / 670 . 10144") == "Alpha GmbH"
     assert _firma_aus_text("Rechnung an:\nUnbekannt\nMusterstraße 12\n12345 Berlin") == "Alpha GmbH"
     assert _firma_aus_text("Rechnung an:\nUnbekannt\nGemeinsamer Weg 1\n99999 Köln") is None
-    assert _firma_aus_text("Rechnung an:\nBeta GmbH\nDE344935206") is None
+    # Philips Vorgabe: USt-IdNr. und Steuernummer zählen als stärkstes Merkmal.
+    assert _firma_aus_text("Rechnung an:\nBeta GmbH\nDE344935206") == "Alpha GmbH"
 
 
 def test_lieferanten_ust_im_fuss_zaehlt_nicht(tmp_path, monkeypatch):
     _einrichtung(tmp_path, monkeypatch, _firmen())
     text = "Lieferant GmbH\nRechnung\nPositionen\n\nImpressum\nUSt-IdNr. DE344935206"
     assert _firma_aus_text(text, "eingang") is None
+
+
+def test_eingang_sucht_eigene_nummer_bis_zeile_45_ohne_empfaengermarker(tmp_path, monkeypatch):
+    stamm = _firmen() + '''
+[[firma]]
+name = "Max Muster"
+ust_id = "DE333333333"
+anschrift = { strasse = "Musterstraße 12", plz = "12345", ort = "Berlin" }
+'''
+    _einrichtung(tmp_path, monkeypatch, stamm)
+    text = "\n".join([
+        "Invoice", "Invoice number 1E157A1-0047", "Date of issue August 5, 2026",
+        "", "Example Labs Inc.", "169 Example Avenue #2484", "New York, New York 10016",
+        "United States", "EU OSS VAT EU372062016", "Max Muster", "Musterstraße 12",
+        "12345 Berlin", "DE VAT DE344935206",
+    ])
+    assert _firma_aus_text(text, "eingang") == "Alpha GmbH"
+
+
+def test_gesellschaft_schlaegt_personennamen_und_geschaeftsfuehrer(tmp_path, monkeypatch):
+    stamm = _firmen() + '''
+[[firma]]
+name = "Max Muster"
+ust_id = "DE333333333"
+anschrift = { strasse = "Musterstraße 12", plz = "12345", ort = "Berlin" }
+
+[[firma]]
+name = "POK Beispiel Verwaltung"
+rechtsform = "GmbH"
+ust_id = "DE444444444"
+anschrift = { strasse = "Andere Straße 1", plz = "54321", ort = "Bonn" }
+geschaeftsfuehrer = "Max Muster"
+'''
+    _einrichtung(tmp_path, monkeypatch, stamm)
+    assert _firma_aus_text("POK Beispiel Verwaltung\nRechnungsnummer: 2026\nMax Muster\nMusterstr 1") == "POK Beispiel Verwaltung"
+
+
+def test_einzelunternehmen_bleibt_bei_nur_personennamen(tmp_path, monkeypatch):
+    stamm = _firmen() + '''
+[[firma]]
+name = "Max Muster"
+ust_id = "DE333333333"
+anschrift = { strasse = "Gemeinsamer Weg 1", plz = "99999", ort = "Köln" }
+'''
+    _einrichtung(tmp_path, monkeypatch, stamm)
+    assert _firma_aus_text("Rechnung an:\nMax Muster\nGemeinsamer Weg 1\n99999 Köln") == "Max Muster"
 
 
 def test_weitere_anschrift_ist_fuer_rechnungspruefung_gueltig(tmp_path, monkeypatch):
