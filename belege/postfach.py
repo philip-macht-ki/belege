@@ -6,14 +6,16 @@ import base64
 import email
 import html
 import imaplib
+import json
 import os
 import re
 import smtplib
 import subprocess
 import urllib.parse
-from datetime import date
+from datetime import date, timedelta
 from email import policy
 from email.header import decode_header, make_header
+from email.utils import parseaddr
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -30,6 +32,19 @@ ANMELDE_HINWEIS = (
 def imap_ablage_ordner_gueltig(ordner: str) -> bool:
     """Erlaubt nur sichere, einzelne IMAP-Ordnernamen für CREATE/MOVE."""
     return bool(ordner.strip() and len(ordner) <= 100 and '"' not in ordner and not any(ord(c) < 32 or ord(c) == 127 for c in ordner))
+
+
+def ziel_gesperrt(name: str) -> bool:
+    """Erkennt Papierkorb- und Spam-Ziele aller unterstützten Postfachwege."""
+    # Ohne Leerzeichen, Binde- und Unterstriche: „Junk-E-Mail“, „Junk E-Mail“ und „junkemail“ sind dasselbe.
+    # IMAP trennt Ebenen auch mit „.“ (INBOX.Trash), darum auch dort teilen.
+    teile = [re.sub(r"[\s_-]+", "", teil).casefold() for teil in re.split(r"[/.\\]", str(name)) if teil.strip()]
+    gesperrt = {
+        "trash", "bin", "papierkorb", "spam", "junk", "junkemail", "junkmail", "deleted", "deleteditems",
+        "deletedmessages", "gelöscht", "gelöschteelemente", "gelöschteobjekte", "gelöschtenachrichten",
+        "spamverdacht", "unerwünscht",
+    }
+    return any(teil in gesperrt for teil in teile)
 
 
 def schluesselbund_passwort(name: str) -> str | None:
@@ -61,7 +76,10 @@ def _text(wert: str | None) -> str:
 def _datum(nachricht) -> str:
     """Liest das Maildatum und nutzt heute, wenn der Kopf fehlt oder defekt ist."""
     try:
-        return parsedate_to_datetime(nachricht.get("Date")).date().isoformat()
+        zeitpunkt = parsedate_to_datetime(nachricht.get("Date"))
+        if zeitpunkt.tzinfo is not None:
+            zeitpunkt = zeitpunkt.astimezone(kern.zone())
+        return zeitpunkt.date().isoformat()
     except (IndexError, TypeError, ValueError):
         return date.today().isoformat()
 
@@ -82,7 +100,24 @@ def _kopf(nachricht, ident: str) -> dict:
         "betreff": _text(nachricht.get("Subject")),
         "datum": _datum(nachricht),
         "anhaenge": anhaenge,
+        "antwort_an": parseaddr(_text(nachricht.get("Reply-To") or nachricht.get("From")))[1],
+        "message_id": _text(nachricht.get("Message-ID")).strip(),
     }
+
+
+def _newsletter_kopf(headers: dict) -> bool:
+    """Erkennt Newsletter ausschließlich an den übergebenen RFC-Kopfdaten."""
+    kopf = {str(name).lower(): str(wert) for name, wert in headers.items()}
+    return bool(
+        kopf.get("list-unsubscribe")
+        or kopf.get("list-id")
+        or kopf.get("precedence", "").lower() in {"bulk", "list"}
+    )
+
+
+def _newsletter(nachricht) -> bool:
+    """Übergibt die RFC-Kopfdaten einer Nachricht an die gemeinsame Erkennung."""
+    return _newsletter_kopf(dict(nachricht.items()))
 
 
 def _inhalt(nachricht) -> str:
@@ -221,6 +256,39 @@ class Postfach:
         """Behandelt eine vollständig abgelegte Mail; Standard bleibt folgenlos."""
         return "nicht unterstützt"
 
+    def posteingang(self, seit: date | None, max: int, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
+        """Meldet fehlende Posteingangs-Unterstützung, statt alle Ordner zu suchen."""
+        kern.log("Dieser Postfachweg unterstützt den Posteingang nicht.")
+        return []
+
+    def ordnung(self) -> dict:
+        """Liest sichtbare Ordner und Labels, ohne etwas zu verändern."""
+        return {"ordner": [], "labels": [], "labels_sichtbar": False, "hinweis": ""}
+
+    def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
+        """Liefert Absender aus der vorhandenen Ordnung, wenn verfügbar."""
+        return {}
+
+    def aufraeumen(self, ident: str, aktion: str, name: str = "") -> str:
+        """Führt eine ausdrücklich erlaubte, nicht löschende Postfachaktion aus."""
+        return "nicht unterstützt"
+
+    def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
+        """Legt einen Entwurf an; Backends können ihn an eine Mail anhängen."""
+        raise NotImplementedError
+
+    def zurueckholen(self, eintrag: dict) -> str:
+        """Holt eine protokollierte Aktion zurück, ohne je eine Mail zu löschen."""
+        return "nicht unterstützt"
+
+
+class AktionErgebnis(str):
+    """Textkompatibles Aktionsergebnis mit der Kennung nach einem MOVE."""
+    def __new__(cls, text: str, neue_id: str = ""):
+        wert = super().__new__(cls, text)
+        wert.neue_id = neue_id
+        return wert
+
 
 class OrdnerPostfach(Postfach):
     """Liest .eml-Dateien aus einem lokalen Ordner für Muster und Tests."""
@@ -257,6 +325,52 @@ class OrdnerPostfach(Postfach):
                 break
         return treffer
 
+    def posteingang(self, seit: date | None = None, max: int = 20, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
+        """Liest lokale .eml-Dateien als Test-Posteingang ohne Datumszwang."""
+        treffer = []
+        for datei, nachricht in self._alle():
+            kopf = _kopf(nachricht, datei.name)
+            if seit:
+                try:
+                    if date.fromisoformat(kopf["datum"]) < seit:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            kopf["newsletter"] = _newsletter(nachricht)
+            if text:
+                kopf["text"] = _inhalt(nachricht)[:4000]
+            if zustand:
+                kopf["zustand"] = {"beantwortet": False, "erledigt": False, "gelesen": False, "markierungen": []}
+            treffer.append(kopf)
+            if len(treffer) >= max:
+                break
+        return treffer
+
+    def ordnung(self) -> dict:
+        """Liest die optionale Testordnung aus dem Mailordner."""
+        datei = self.ordner / "ordnung.json"
+        daten = json.loads(datei.read_text(encoding="utf-8")) if datei.exists() else {}
+        return {"ordner": list(daten.get("ordner", [])), "labels": list(daten.get("labels", [])), "labels_sichtbar": bool(daten.get("labels_sichtbar", True)), "hinweis": str(daten.get("hinweis", ""))}
+
+    def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
+        """Liest Testzuordnungen aus der optionalen Ordnungsdatei."""
+        datei = self.ordner / "ordnung.json"
+        daten = json.loads(datei.read_text(encoding="utf-8")) if datei.exists() else {}
+        return dict(daten.get("zuordnung", {}))
+
+    def aufraeumen(self, ident: str, aktion: str, name: str = "") -> str:
+        """Notiert lokale Aktionen, ohne die zugrunde liegenden .eml-Dateien anzufassen."""
+        import json
+
+        if aktion in {"ordner", "label"} and ziel_gesperrt(name):
+            return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
+
+        ziel = kern.pfad("arbeit", "postfach-ordner-aktionen.jsonl")
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        with ziel.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"id": ident, "aktion": aktion, "name": name}, ensure_ascii=False) + "\n")
+        return f"{aktion}: {name}".rstrip(": ")
+
     def lesen(self, ident: str) -> dict:
         """Liest Kopf, Text und Anhanggrößen einer lokalen Mail."""
         nachricht = email.message_from_bytes(
@@ -287,7 +401,7 @@ class OrdnerPostfach(Postfach):
         )
         return ziel.name
 
-    def entwurf(self, an, betreff, text, anhaenge):
+    def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
         """Legt einen lokalen Entwurf ab, ohne ihn zu versenden."""
         return self._ablage("entwurf", an, betreff, text, anhaenge)
 
@@ -362,14 +476,45 @@ class ImapPostfach(Postfach):
         finally:
             verbindung.logout()
         for zeile in zeilen or []:
-            text = (
-                zeile.decode(errors="replace")
-                if isinstance(zeile, bytes)
-                else str(zeile)
-            )
-            if flag.lower() in text.lower():
-                return text.rsplit('"', 2)[-2] if '"' in text else text.split()[-1]
+            teile = _imap_list_zeile(zeile)
+            if teile and flag.lower() in teile[0]:
+                return teile[2]
+        # Thunderbird/klassische IMAP-Server markieren Archive oft nicht.
+        for zeile in zeilen or []:
+            teile = _imap_list_zeile(zeile)
+            if teile and _mutf7(teile[2]).rsplit(teile[1] or "/", 1)[-1].lower() in {x.lower() for x in namen}:
+                return teile[2]
         return namen[0]
+
+    def _zielordner(self, verbindung, name: str) -> str:
+        """Übersetzt sichtbare Pfade in die Hierarchie und legt Ebenen sicher an."""
+        if not hasattr(verbindung, "list"):
+            verbindung.create(_imap_quote(_mutf7_encode(name)))
+            return _mutf7_encode(name)
+        status, zeilen = verbindung.list()
+        infos = [_imap_list_zeile(z) for z in (zeilen or [])]
+        infos = [x for x in infos if x]
+        trenner = next((x[1] for x in infos if x[1]), "/")
+        teile = [x for x in name.replace("\\", "/").split("/") if x]
+        if not teile:
+            return ""
+        # Courier/Strato: alle persönlichen Ordner liegen unter INBOX.
+        vorhandene = [_mutf7(x[2]) for x in infos]
+        praefix = "INBOX" if vorhandene and all(x.upper() == "INBOX" or x.upper().startswith("INBOX" + trenner.upper()) for x in vorhandene) else ""
+        sichtbar = trenner.join(([praefix] if praefix else []) + teile)
+        stufen = sichtbar.split(trenner)
+        aktuell = []
+        vorhandene_klein = {_mutf7(x[2]).lower(): x[2] for x in infos}
+        for stufe in stufen:
+            aktuell.append(stufe)
+            klar = trenner.join(aktuell)
+            roh = vorhandene_klein.get(klar.lower())
+            if roh is None:
+                verbindung.create(_imap_quote(_mutf7_encode(klar)))
+                roh = _mutf7_encode(klar)
+                vorhandene_klein[klar.lower()] = roh
+            aktuell[-1] = _mutf7(roh).split(trenner)[-1]
+        return vorhandene_klein.get(sichtbar.lower(), _mutf7_encode(sichtbar))
 
     def _suche(self, verbindung, teile: list[str]):
         """Sucht mit UTF-8 und fällt bei Serverproblemen auf ASCII zurück."""
@@ -447,6 +592,162 @@ class ImapPostfach(Postfach):
         finally:
             verbindung.logout()
 
+    def posteingang(self, seit: date | None = None, max: int = 20, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
+        """Liest nur INBOX per PEEK und liefert die neuesten Nachrichten zuerst."""
+        verbindung = self._imap()
+        try:
+            if verbindung.select("INBOX", readonly=True)[0] != "OK":
+                return []
+            _, daten = self._suche(verbindung, _imap_kriterien("", seit))
+            treffer = []
+            uids = (daten[0].split() if daten and daten[0] else [])[-max:][::-1]
+            for uid in uids:
+                teile = "BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE REPLY-TO MESSAGE-ID LIST-UNSUBSCRIBE LIST-ID PRECEDENCE)] BODYSTRUCTURE"
+                if text:
+                    teile += " BODY.PEEK[]"
+                if zustand:
+                    teile += " FLAGS"
+                _, roh = verbindung.uid(
+                    "fetch",
+                    uid,
+                    f"({teile})",
+                )
+                nachricht = _imap_nachricht(roh)
+                if not nachricht:
+                    continue
+                kopf = _kopf(nachricht, f"INBOX:{uid.decode()}")
+                kopf["anhaenge"] = _imap_anhaenge(roh)
+                kopf["newsletter"] = _newsletter(nachricht)
+                if text:
+                    kopf["text"] = _inhalt(nachricht)[:4000]
+                if zustand:
+                    flags_text = b" ".join(
+                        teil[0] if isinstance(teil, tuple) and isinstance(teil[0], bytes)
+                        else str(teil[0] if isinstance(teil, tuple) else teil).encode()
+                        for teil in roh or []
+                    )
+                    gefunden = re.search(rb"FLAGS \(([^)]*)\)", flags_text, re.I)
+                    # imaplib.ParseFlags braucht das Wort FLAGS davor, sonst liefert es nichts.
+                    flags = gefunden.group(1).split() if gefunden else []
+                    flags = [x.decode("utf-8", "replace") if isinstance(x, bytes) else str(x) for x in flags]
+                    markierungen = [x for x in flags if not x.startswith("\\")]
+                    marker = str(kern.konfig("belege").get("aufraeumen", {}).get("erledigt_markierung", "Erledigt"))
+                    kopf["zustand"] = {"beantwortet": "\\Answered" in flags, "erledigt": bool(marker and any(x.lower() == marker.lower() for x in markierungen)), "gelesen": "\\Seen" in flags, "markiert": "\\Flagged" in flags, "markierungen": markierungen}
+                treffer.append(kopf)
+            return treffer
+        finally:
+            verbindung.logout()
+
+    def ordnung(self) -> dict:
+        """Liest IMAP-Ordner und mögliche Keywords nur lesend."""
+        verbindung = self._imap()
+        try:
+            _, zeilen = verbindung.list()
+            sichtbar = _imap_sichtbar(zeilen)
+            ordner = []
+            for zeile in zeilen or []:
+                teile = _imap_list_zeile(zeile)
+                if not teile:
+                    continue
+                flags, _, name = teile
+                if name.upper() != "INBOX" and not flags & _IMAP_SONDER:
+                    ordner.append(sichtbar.get(name, _mutf7(name)))
+            verbindung.select("INBOX", readonly=True)
+            _, flags = verbindung.response("PERMANENTFLAGS")
+            roh = b" ".join(x if isinstance(x, bytes) else str(x).encode() for x in (flags or []))
+            innen = re.search(rb"\(([^)]*)\)", roh)
+            werte = (innen.group(1) if innen else roh).split()
+            werte = [x.decode("utf-8", "replace") if isinstance(x, bytes) else str(x) for x in werte]
+            labels = [x for x in werte if not x.startswith("\\")]
+            return {"ordner": ordner, "labels": labels, "labels_sichtbar": False, "keywords_erlaubt": "\\*" in werte, "hinweis": "Thunderbird zeigt eigene Labels als Schlagwörter; Apple Mail, iPhone und die meisten Webmailer zeigen sie nicht. Nimm dort lieber ordner:."}
+        finally:
+            verbindung.logout()
+
+    def aufraeumen(self, ident: str, aktion: str, name: str = "") -> str:
+        """Verschiebt nur bei IMAP-MOVE; Labels setzen ein harmloses Keyword."""
+        ordner_alt, uid = ident.rsplit(":", 1)
+        verbindung = self._imap()
+        try:
+            if verbindung.select(_imap_quote(ordner_alt), readonly=False)[0] != "OK":
+                return "nicht verschoben (IMAP SELECT fehlgeschlagen)"
+            if ziel_gesperrt(name):
+                return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
+            if aktion == "label":
+                keyword = re.sub(r"[^A-Za-z0-9_-]", "-", name)[:50]
+                typ, _ = verbindung.uid("store", uid, "+FLAGS", f"({keyword})")
+                if typ == "OK":
+                    return f"mit Label {name} markiert"
+                return "nicht markiert (IMAP STORE fehlgeschlagen)"
+            ziel = name if aktion == "ordner" else self._ordner("\\Archive", ["Archive", "Archives", "Archiv"])
+            if not imap_ablage_ordner_gueltig(ziel):
+                return "nicht verschoben (Ordnername ist ungültig)"
+            typ, daten = verbindung.capability()
+            faehig = typ == "OK" and b"MOVE" in b" ".join(
+                d if isinstance(d, bytes) else str(d).encode() for d in (daten or [])
+            ).upper()
+            if not faehig:
+                return "nicht verschoben (Server kann kein MOVE)"
+            ziel = self._zielordner(verbindung, ziel)
+            typ, daten = verbindung.uid("move", uid, _imap_quote(ziel))
+            if typ != "OK":
+                return "nicht verschoben (IMAP MOVE fehlgeschlagen)"
+            neue_uid = _copyuid(daten)
+            if not neue_uid:
+                neue_uid = self._ziel_uid_nach_message_id(verbindung, ziel, ident)
+            return AktionErgebnis(f"nach {_mutf7(ziel)} verschoben", f"{_mutf7(ziel)}:{neue_uid}" if neue_uid else "")
+        finally:
+            verbindung.logout()
+
+    def zurueckholen(self, eintrag: dict) -> str:
+        if eintrag.get("aktion") == "label":
+            # Ein Label ist ein Keyword an derselben Mail; zurück heißt: Keyword wieder weg.
+            ordner, uid = str(eintrag.get("id", "")).rsplit(":", 1)
+            keyword = re.sub(r"[^A-Za-z0-9_-]", "-", str(eintrag.get("ziel", "")))[:50]
+            verbindung = self._imap()
+            try:
+                if verbindung.select(_imap_quote(_mutf7_encode(ordner)), readonly=False)[0] != "OK":
+                    return "nicht zurückgeholt (IMAP SELECT fehlgeschlagen)"
+                typ, _ = verbindung.uid("store", uid, "-FLAGS", f"({keyword})")
+                return f"Label {eintrag.get('ziel', '')} entfernt" if typ == "OK" else "nicht zurückgeholt (IMAP STORE fehlgeschlagen)"
+            finally:
+                verbindung.logout()
+        ident = str(eintrag.get("neue_id") or "")
+        if ":" not in ident:
+            return "nicht zurückgeholt (Zielkennung fehlt)"
+        ordner, uid = ident.rsplit(":", 1)
+        verbindung = self._imap()
+        try:
+            if verbindung.select(_imap_quote(_mutf7_encode(ordner)), readonly=False)[0] != "OK":
+                return "nicht zurückgeholt (IMAP SELECT fehlgeschlagen)"
+            typ, _ = verbindung.uid("move", uid, "INBOX")
+            return "in Posteingang zurückgeholt" if typ == "OK" else "nicht zurückgeholt (IMAP MOVE fehlgeschlagen)"
+        finally:
+            verbindung.logout()
+
+    def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
+        """Liest Absender aus bis zu 30 IMAP-Ordnern mit gemeinsamem Mailbudget."""
+        verbindung, ergebnis, rest = self._imap(), {}, 3000
+        try:
+            seit = (date.today() - timedelta(days=tage)).strftime("%d-%b-%Y")
+            sichtbar = _imap_sichtbar(verbindung.list()[1])
+            # Der Posteingang ist kein Ziel, sonst schlüge labels „ordner: INBOX“ vor.
+            for ordner in [x for x in _imap_alle_ordner(verbindung) if x.upper() != "INBOX"][:30]:
+                if rest <= 0 or verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
+                    continue
+                _, daten = verbindung.uid("search", None, "SINCE", seit)
+                uids = (daten[0].split() if daten and daten[0] else [])[-min(je_ordner, rest):]
+                absender = []
+                for uid in uids:
+                    _, roh = verbindung.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM)])")
+                    nachricht = _imap_nachricht(roh)
+                    if nachricht:
+                        absender.append(parseaddr(str(nachricht.get("From", "")))[1].lower())
+                rest -= len(uids)
+                ergebnis[sichtbar.get(ordner, _mutf7(ordner))] = [x for x in absender if x]
+        finally:
+            verbindung.logout()
+        return {"ordner": ergebnis, "labels": {}}
+
     def lesen(self, ident: str) -> dict:
         """Liest eine IMAP-Mail vollständig, ohne ihren Gelesen-Status zu ändern."""
         nachricht = self._fetch_mail(ident)
@@ -488,18 +789,31 @@ class ImapPostfach(Postfach):
         finally:
             verbindung.logout()
 
-    def entwurf(self, an, betreff, text, anhaenge):
+    def _ziel_uid_nach_message_id(self, verbindung, ziel: str, ident: str) -> str:
+        nachricht = self._fetch_mail(ident)
+        message_id = str(nachricht.get("Message-ID") or "").strip()
+        if not message_id or verbindung.select(_imap_quote(ziel), readonly=True)[0] != "OK":
+            return ""
+        typ, daten = verbindung.uid("search", None, "HEADER", "Message-ID", message_id)
+        return (daten[0].split()[-1].decode() if typ == "OK" and daten and daten[0] else "")
+
+    def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
         """Legt einen Entwurf im IMAP-Entwurfsordner ab."""
         verbindung = self._imap()
         try:
             ordner = self._ordner(
                 "\\Drafts", ["Entwürfe", "Drafts", "[Gmail]/Entwürfe"]
             )
+            ordner = self._zielordner(verbindung, ordner)
+            nachricht = _nachricht(an, betreff, text, anhaenge, self.adresse)
+            if antwort_auf and antwort_auf.get("message_id"):
+                nachricht["In-Reply-To"] = antwort_auf["message_id"]
+                nachricht["References"] = antwort_auf["message_id"]
             verbindung.append(
                 ordner,
                 "\\Draft",
                 None,
-                _nachricht(an, betreff, text, anhaenge, self.adresse).as_bytes(),
+                nachricht.as_bytes(),
             )
         finally:
             verbindung.logout()
@@ -539,7 +853,7 @@ def _imap_ordnerliste(konto: dict) -> list[str]:
 
 
 # Sonderordner nach RFC 6154; dort liegen keine eingehenden Rechnungen (\\All wäre doppelt).
-_IMAP_SONDER = {"\\sent", "\\trash", "\\junk", "\\drafts", "\\all", "\\flagged", "\\important", "\\noselect", "\\nonexistent"}
+_IMAP_SONDER = {"\\sent", "\\trash", "\\junk", "\\archive", "\\drafts", "\\all", "\\flagged", "\\important", "\\noselect", "\\nonexistent"}
 # Für Server ohne Sonderkennzeichen: übliche Namen, deutsch und englisch, kleingeschrieben.
 _IMAP_AUSLASSEN = {
     "sent", "sent items", "sent messages", "sent mail", "gesendet", "gesendete elemente",
@@ -567,6 +881,34 @@ def _mutf7(name: str) -> str:
     return re.sub(r"&([A-Za-z0-9+,]*)-", teil, name)
 
 
+def _mutf7_encode(name: str) -> str:
+    """Kodiert IMAP-Ordnernamen nach RFC 3501 5.1.3 (modified UTF-7)."""
+    teile, nicht_ascii = [], []
+    def flush():
+        if nicht_ascii:
+            roh = "".join(nicht_ascii).encode("utf-16-be")
+            teile.append("&" + base64.b64encode(roh).decode().rstrip("=").replace("/", ",") + "-")
+            nicht_ascii.clear()
+    for zeichen in name:
+        if "\x20" <= zeichen <= "\x7e" and zeichen != "&":
+            flush()
+            teile.append(zeichen)
+        elif zeichen == "&":
+            flush()
+            teile.append("&-")
+        else:
+            nicht_ascii.append(zeichen)
+    flush()
+    return "".join(teile)
+
+
+def _copyuid(daten) -> str:
+    """Liest die Ziel-UID aus einer UIDPLUS COPYUID-Antwort."""
+    roh = b" ".join(x if isinstance(x, bytes) else str(x).encode() for x in (daten or []))
+    treffer = re.search(rb"COPYUID\s+\d+\s+[^ ]+\s+([^ )]+)", roh, re.I)
+    return treffer.group(1).decode("ascii", "replace").split(",")[-1] if treffer else ""
+
+
 def _imap_list_zeile(zeile) -> tuple[set[str], str, str] | None:
     """Zerlegt eine LIST-Antwort in Kennzeichen, Trennzeichen und Ordnernamen."""
     if isinstance(zeile, tuple):  # Name als Literal {n}
@@ -586,6 +928,22 @@ def _imap_list_zeile(zeile) -> tuple[set[str], str, str] | None:
             name = re.sub(r'\\(.)', r"\1", name[1:-1])
     trenner = "" if trenner == "NIL" else re.sub(r'\\(.)', r"\1", trenner.strip('"'))
     return {f.lower() for f in flags.split()}, trenner, name
+
+
+def _imap_sichtbar(zeilen) -> dict[str, str]:
+    """Ordnet jedem IMAP-Rohnamen den Pfad zu, den Nutzer in Regeln schreiben:
+    dekodiert, mit „/“ als Trenner und ohne INBOX-Präfix bei Courier/Strato.
+    Genau diese Schreibweise löst ImapPostfach._zielordner wieder auf."""
+    infos = [x for x in (_imap_list_zeile(z) for z in (zeilen or [])) if x]
+    trenner = next((x[1] for x in infos if x[1]), "/")
+    klar = {x[2]: _mutf7(x[2]) for x in infos}
+    praefix = bool(klar) and all(n.upper() == "INBOX" or n.upper().startswith("INBOX" + trenner.upper()) for n in klar.values())
+    sichtbar = {}
+    for roh, name in klar.items():
+        if praefix and name.upper().startswith("INBOX" + trenner.upper()):
+            name = name[len("INBOX" + trenner):]
+        sichtbar[roh] = name.replace(trenner, "/") if trenner != "/" else name
+    return sichtbar
 
 
 def _imap_alle_ordner(verbindung) -> list[str]:
@@ -840,6 +1198,119 @@ class GmailPostfach(Postfach):
             for eintrag in antwort.get("messages", [])
         ]
 
+    def posteingang(self, seit: date | None = None, max: int = 20, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
+        """Liest den Gmail-Posteingang seitenweise, höchstens ``max`` Nachrichten."""
+        query = "in:inbox" + (f" after:{seit.isoformat()}" if seit else "")
+        dienst = self._dienst()
+        ergebnis = []
+        seite = None
+        while len(ergebnis) < max:
+            parameter = {
+                "userId": "me",
+                "q": query,
+                "maxResults": min(500, max - len(ergebnis)),
+            }
+            if seite:
+                parameter["pageToken"] = seite
+            antwort = dienst.users().messages().list(**parameter).execute()
+            for eintrag in antwort.get("messages", []):
+                mail = dienst.users().messages().get(
+                    userId="me",
+                    id=eintrag["id"],
+                    format="raw" if text else "metadata",
+                    metadataHeaders=["From", "To", "Subject", "Date", "Reply-To", "Message-ID", "List-Unsubscribe", "List-Id", "Precedence"],
+                ).execute()
+                if text:
+                    nachricht = email.message_from_bytes(base64.urlsafe_b64decode(mail["raw"] + "==="), policy=policy.default)
+                    kopf = _kopf(nachricht, eintrag["id"])
+                    kopf["anhaenge"] = _anhaenge(nachricht)
+                    headers = dict(nachricht.items())
+                else:
+                    kopf = _gmail_metadata(mail)
+                    # Gmail liefert den Textanfang (snippet) mit; der Postfach-Agent sieht ihn nie.
+                    kopf.pop("auszug", None)
+                    headers = {x["name"]: x["value"] for x in mail.get("payload", {}).get("headers", [])}
+                kopf["newsletter"] = _newsletter_kopf(headers)
+                kopf["thread_id"] = mail.get("threadId", "")
+                if text:
+                    kopf["text"] = _inhalt(nachricht)[:4000]
+                if zustand:
+                    if not hasattr(self, "_labelnamen"):
+                        self._labelnamen = {x.get("id"): x.get("name", "") for x in dienst.users().labels().list(userId="me").execute().get("labels", [])}
+                    labels = mail.get("labelIds", [])
+                    markierungen = [self._labelnamen.get(x, x) for x in labels]
+                    marker = str(kern.konfig("belege").get("aufraeumen", {}).get("erledigt_markierung", "Erledigt"))
+                    ist_beantwortet = False
+                    if beantwortet and mail.get("threadId"):
+                        if not hasattr(self, "_thread_antworten"):
+                            self._thread_antworten = {}
+                        thread = self._thread_antworten.get(mail["threadId"])
+                        if thread is None:
+                            thread = dienst.users().threads().get(userId="me", id=mail["threadId"], format="minimal").execute()
+                            self._thread_antworten[mail["threadId"]] = thread
+                        datum = int(mail.get("internalDate", 0) or 0)
+                        ist_beantwortet = any("SENT" in x.get("labelIds", []) and int(x.get("internalDate", 0) or 0) > datum for x in thread.get("messages", []))
+                    kopf["zustand"] = {"beantwortet": ist_beantwortet, "erledigt": any(x.lower() == marker.lower() for x in markierungen), "gelesen": "UNREAD" not in labels, "markiert": "STARRED" in labels, "markierungen": markierungen}
+                ergebnis.append(kopf)
+                if len(ergebnis) >= max:
+                    break
+            seite = antwort.get("nextPageToken")
+            if not seite:
+                break
+        return ergebnis
+
+    def ordnung(self) -> dict:
+        """Liest eigene Gmail-Labels ohne Änderungen."""
+        labels = self._dienst().users().labels().list(userId="me").execute().get("labels", [])
+        eigene = [x.get("name", "") for x in labels if x.get("type") == "user"]
+        rest = max(0, len(eigene) - 30)
+        return {"ordner": [], "labels": eigene, "labels_sichtbar": True, "hinweis": f"{rest} weitere Labels nicht ausgewertet" if rest else ""}
+
+    def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
+        """Liest Absender je Gmail-Label innerhalb eines festen Budgets."""
+        dienst, ergebnis, seit, rest = self._dienst(), {}, date.today() - timedelta(days=tage), 3000
+        for label in self.ordnung()["labels"][:30]:
+            if rest <= 0:
+                break
+            antwort = dienst.users().messages().list(userId="me", q=f'label:"{label}" after:{seit.isoformat()}', maxResults=je_ordner).execute()
+            absender = []
+            for eintrag in antwort.get("messages", [])[:min(je_ordner, rest)]:
+                mail = dienst.users().messages().get(userId="me", id=eintrag["id"], format="metadata", metadataHeaders=["From"]).execute()
+                absender.append(parseaddr(_gmail_metadata(mail).get("von", ""))[1].lower())
+            rest -= len(absender)
+            ergebnis[label] = absender
+        return {"ordner": {}, "labels": ergebnis}
+
+    def aufraeumen(self, ident: str, aktion: str, name: str = "") -> str:
+        """Entfernt höchstens INBOX oder ergänzt ein Gmail-Label."""
+        if aktion == "archivieren":
+            dienst = self._dienst()
+            dienst.users().messages().modify(userId="me", id=ident, body={"removeLabelIds": ["INBOX"]}).execute()
+            return AktionErgebnis("archiviert", ident)
+        if ziel_gesperrt(name):
+            return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
+        dienst = self._dienst()
+        labels = dienst.users().labels().list(userId="me").execute().get("labels", [])
+        label = next((x for x in labels if x.get("name") == name), None)
+        if label is None:
+            label = dienst.users().labels().create(userId="me", body={"name": name}).execute()
+        body = {"addLabelIds": [label["id"]]}
+        if aktion == "ordner":
+            body["removeLabelIds"] = ["INBOX"]
+        dienst.users().messages().modify(userId="me", id=ident, body=body).execute()
+        return AktionErgebnis(f"nach {name} verschoben" if aktion == "ordner" else f"mit Label {name} markiert", ident)
+
+    def zurueckholen(self, eintrag: dict) -> str:
+        dienst, ident = self._dienst(), str(eintrag["id"])
+        body = {"addLabelIds": ["INBOX"]} if eintrag.get("aktion") in {"archivieren", "ordner"} else {}
+        if eintrag.get("aktion") in {"ordner", "label"}:
+            labels = dienst.users().labels().list(userId="me").execute().get("labels", [])
+            label = next((x for x in labels if x.get("name") == eintrag.get("ziel")), None)
+            if label:
+                body["removeLabelIds"] = [label["id"]]
+        dienst.users().messages().modify(userId="me", id=ident, body=body).execute()
+        return "in Posteingang zurückgeholt"
+
     def lesen(self, ident: str) -> dict:
         """Liest eine Gmail-Mail vollständig, wenn ihr Text gebraucht wird."""
         roh = (
@@ -875,16 +1346,21 @@ class GmailPostfach(Postfach):
             ziel,
         )
 
-    def entwurf(self, an, betreff, text, anhaenge):
+    def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
         """Legt über die Gmail-API einen Entwurf an."""
+        nachricht = _nachricht(an, betreff, text, anhaenge, self.adresse)
+        if antwort_auf and antwort_auf.get("message_id"):
+            message_id = str(antwort_auf["message_id"])
+            nachricht["In-Reply-To"] = message_id
+            nachricht["References"] = message_id
         roh = base64.urlsafe_b64encode(
-            _nachricht(an, betreff, text, anhaenge, self.adresse).as_bytes()
+            nachricht.as_bytes()
         ).decode()
         antwort = (
             self._dienst(True)
             .users()
             .drafts()
-            .create(userId="me", body={"message": {"raw": roh}})
+            .create(userId="me", body={"message": {"raw": roh, **({"threadId": antwort_auf["thread_id"]} if antwort_auf and antwort_auf.get("thread_id") else {})}})
             .execute()
         )
         return antwort["id"]
@@ -912,6 +1388,8 @@ class GmailPostfach(Postfach):
         self.nach_ablage(ident, "markieren", label)
 
     def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        if ziel_gesperrt(ordner):
+            return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
         dienst = self._dienst()
         labels = dienst.users().labels().list(userId="me").execute().get("labels", [])
         label = next((x for x in labels if x.get("name") == ordner), None)

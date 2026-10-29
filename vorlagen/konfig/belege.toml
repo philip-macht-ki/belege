@@ -60,6 +60,7 @@ smtp_server = ""
 # nur_posteingang = true
 belege = true
 waechter = true
+aufraeumen = false
 # Nach erfolgreicher echter Ablage: "aus" (Standard), "markieren" oder "verschieben".
 # IMAP verschiebt nur, wenn der Server MOVE kann; sonst bleibt die Mail markiert.
 nach_ablage = "aus"
@@ -71,6 +72,25 @@ laufend_tage = 3
 # Rückblick ab dem letzten erledigten Lauf, höchstens so viele Tage (MacBook zu, Urlaub)
 max_tage = 60
 label = "Beleg"
+
+[aufraeumen]
+# Postfach-Agent: räumt den Posteingang nach konfig/postfach-regeln.md auf. Ab Werk aus.
+an = false
+zeiten = ["07:30", "17:30"]
+# "kopf" liest nur Absender und Betreff; "text" darf zusätzlich im Mailtext suchen.
+lesen = "kopf"
+erste_tage = 7
+max_je_lauf = 200
+# So viele Tage prüft der Agent erledigte Mails noch einmal zum Archivieren.
+erledigt_tage = 90
+# So viele der neuesten Posteingangsmails prüft der Erledigt-Durchlauf je Lauf.
+erledigt_max = 1000
+# Dieses Label, diese Kategorie oder dieses Keyword bedeutet für dich: erledigt.
+erledigt_markierung = "Erledigt"
+# "lokal": Mailtexte verlassen deinen Mac nie (Ollama nötig).
+modell = "eingestellt"
+# false: Bericht und Mitteilungen nennen nur Absenderdomain und Aktion.
+betreffe_im_bericht = true
 
 [quellen]
 handy_ordner = "~/Belege/Eingang"

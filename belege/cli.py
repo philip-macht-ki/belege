@@ -42,13 +42,14 @@ BEFEHLE = {
     "fristen": ("dokumente", "befehl_fristen", "Fristen aus Verträgen zeigen und für den Kalender ausgeben"),
     "notfall": ("notfall", "befehl", "Notfallordner erstellen"),
     "aktualisieren": ("update", "befehl", "Verbesserungen sicher einspielen"),
+    "aufraeumen": ("postfach_agent", "befehl", "Posteingang nach deinen Regeln aufräumen"),
 }
 
 
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
 OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten", "pruefung"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten", "pruefung", "aufraeumen"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -73,6 +74,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--monate", type=int, default=3)
     argumente.add_argument("--vorschau", metavar="DATEI")
+    argumente.add_argument("--seit", help="Postfach-Agent: ab JJJJ-MM-TT zurückholen")
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
     argumente.add_argument("--microsoft", metavar="NAME", help="Microsoft-Postfach im Browser anmelden")

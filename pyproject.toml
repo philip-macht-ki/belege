@@ -1,6 +1,6 @@
 [project]
 name = "belege"
-version = "1.13.1"
+version = "1.14.0"
 description = "Belege sortieren sich selbst: Postfach, Handy und Downloads in einen sauberen Ordner, Monatsabgleich, Übergabe an den Steuerberater."
 requires-python = ">=3.11"
 dependencies = [
