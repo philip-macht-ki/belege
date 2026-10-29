@@ -253,10 +253,12 @@ def befehl(args) -> int:
                     _imap(k)
                     z("GRUEN", f"Postfach {name}: Anmeldung klappt")
                 except Exception as e:
+                    hinweis = (f"Die Anmeldung bei {name} klappt nicht mehr. Hast du dein Passwort geändert oder das App-Passwort gelöscht? "
+                               "Sag deinem Claude: Verbinde mein Postfach neu.")
                     z(
                         "ROT",
                         f"Postfach {name}: Anmeldung fehlgeschlagen",
-                        f"Anbieter, Server und App-Passwort prüfen ({e}).",
+                        f"{hinweis} ({e})",
                     )
             elif weg == "b":
                 g = pfad("arbeit", "geheim")
@@ -297,12 +299,20 @@ def befehl(args) -> int:
                         f"Postfach {name}: Microsoft-Zugang fehlt oder abgelaufen",
                         f"belege anmelden --microsoft {name} ausführen ({e}).",
                     )
+                if str(k.get("nach_ablage", "aus")).lower() != "aus":
+                    z("GELB", "Markieren bei Microsoft braucht neue Anmeldung mit Schreibrecht",
+                      f"belege anmelden --microsoft {name} ausführen, falls Mail.ReadWrite noch nicht bestätigt ist.")
             else:
                 z(
                     "GELB",
                     f"Postfach {name}: Musterpostfach",
                     "Für echte Mails Weg A oder B einrichten.",
                 )
+            if weg == "a" and str(k.get("nach_ablage", "aus")).lower() in {"markieren", "verschieben"}:
+                from .postfach import imap_ablage_ordner_gueltig
+                if not imap_ablage_ordner_gueltig(str(k.get("nach_ablage_ordner", "Belege erledigt"))):
+                    z("GELB", f"Postfach {name}: nach_ablage_ordner ungültig",
+                      "Ordnername darf nicht leer sein, keine Steuerzeichen oder Anführungszeichen enthalten und höchstens 100 Zeichen lang sein.")
     except Exception as e:
         z("ROT", f"Postfächer nicht prüfbar: {e}")
     try:

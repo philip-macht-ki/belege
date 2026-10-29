@@ -8,6 +8,7 @@ import sys
 
 BEFEHLE = {
     "pruefen": ("pruefen", "befehl", "Selbsttest der Einrichtung"),
+    "fehlerbericht": ("fehlerbericht", "befehl", "Geschwärzten Diagnosebericht erstellen"),
     "status": ("bericht", "befehl_status", "Kurzübersicht"),
     "beispiel": ("beispiel", "befehl", "Musterbetrieb anlegen"),
     "takt": ("takt", "befehl", "Postfach, Handy und Wächter abarbeiten"),

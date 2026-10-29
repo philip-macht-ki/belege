@@ -2,6 +2,22 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.11.0] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Abgelegte Mails können auf Wunsch markiert oder aus dem Posteingang genommen werden. Gelöscht wird nie etwas. Markiert wird nur eine Mail, deren Belege alle abgelegt sind.
+- Klappt die Anmeldung bei deinem Postfach nicht mehr, etwa nach einem Passwortwechsel, sagt dir der Bericht das jetzt in Klartext und wie du es behebst.
+- Ein kaputtes oder unvollständig heruntergeladenes PDF landet mit genau diesem Hinweis in Unsortiert.
+- Hakt etwas, schreibt `belege fehlerbericht` einen geschwärzten Text für Philip, ohne Passwörter, Mailadressen, Beträge oder Belegnamen.
+- Die Übergabe an DATEV Unternehmen online kann Eingang, Ausgang und Sonstige an getrennte Upload-Adressen schicken.
+
+### Musst du etwas tun?
+
+Nein. Wenn du es möchtest, sag deinem Claude zum Beispiel: „Nimm abgelegte Mails aus meinem Posteingang“ oder „Schick Eingangs- und Ausgangsrechnungen an getrennte DATEV-Adressen“.
+
 ## [1.10.0] – 29.10.2026
 
 aktion: keine

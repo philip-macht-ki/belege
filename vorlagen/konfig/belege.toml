@@ -56,6 +56,10 @@ smtp_server = ""
 # nur_posteingang = true
 belege = true
 waechter = true
+# Nach erfolgreicher echter Ablage: "aus" (Standard), "markieren" oder "verschieben".
+# IMAP verschiebt nur, wenn der Server MOVE kann; sonst bleibt die Mail markiert.
+nach_ablage = "aus"
+nach_ablage_ordner = "Belege erledigt"
 
 [postfach]
 erste_tage = 30
@@ -99,6 +103,8 @@ leer_senden = false
 # sevDesk) oder "ordner" (ein freigegebener Ordner).
 weg = "mail"
 adresse = ""
+# Für DATEV/Steuerberater je Belegart getrennt (fehlende Art fällt auf adresse zurück):
+# adressen = { eingang = "eingang@datev.example", ausgang = "ausgang@datev.example", sonstige = "" }
 ordner = ""
 tag = 3
 nur_pdf_tif = false

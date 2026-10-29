@@ -244,6 +244,16 @@ sie als PDF in den Eingang.
 
 ### App-Passwort
 
+### Postfach neu verbinden
+
+Meldet `belege pruefen`, dass die Anmeldung nicht mehr klappt, hat sich meist das
+Passwort geändert oder das App-Passwort wurde gelöscht. Claude legt beim Anbieter
+ein neues App-Passwort an und speichert es danach mit
+`uv run belege anmelden --schluesselbund <kontoname>` im Schlüsselbund. Bei
+Microsoft verbindet Claude den Zugang erneut im Browser mit
+`uv run belege anmelden --microsoft <name>`. Anschließend immer
+`uv run belege pruefen` ausführen.
+
 Claude öffnet die passende Seite. Du erzeugst das Passwort selbst und fügst es
 danach in das kleine Mac-Fenster ein. Es wird verdeckt eingegeben und nur im
 Schlüsselbund deines Macs gespeichert, nicht in einer Datei.

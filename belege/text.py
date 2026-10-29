@@ -119,6 +119,28 @@ def _pypdf(datei: Path) -> str:
         return ""
 
 
+def pdf_defekt(datei: Path) -> bool:
+    """Erkennt einen Parserfehler, nicht bloß einen Scan ohne Text."""
+    if Path(datei).suffix.lower() != ".pdf":
+        return False
+    try:
+        roh = Path(datei).read_bytes()
+    except OSError:
+        return True
+    # Eine Textattrappe wird in einigen lokalen Importwegen noch als PDF
+    # bezeichnet. Leere Downloads und typische HTML-/Fehlerseiten dagegen nie.
+    if not roh or not roh.startswith(b"%PDF-"):
+        return not roh or bool(re.search(br"<\s*!?html|<\s*body|\b(error|fehler|access denied)\b", roh[:4096], re.I))
+    if b"%%EOF" not in roh[-2048:]:
+        return True
+    try:
+        from pypdf import PdfReader
+        PdfReader(str(datei), strict=True).pages[0:1]
+        return False
+    except Exception:
+        return True
+
+
 def _pdf_bilder_quartz(datei: Path, ordner: Path, dpi: int = 200, seiten: int = 2) -> list[Path]:
     """Rendert maximal zwei PDF-Seiten mit macOS CoreGraphics nach PNG.
 

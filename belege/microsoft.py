@@ -324,6 +324,18 @@ class MicrosoftPostfach(Postfach):
         """Speichert die Anhänge einer Mail kollisionsfrei."""
         return _anhaenge_speichern(self._rohmail(ident), ziel)
 
+    def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
+        """Verschiebt nur mit Graph-Schreibrecht; Graph kennt keine Keywords."""
+        # Ein Ordner ist bei Graph das sichtbare Gegenstück zum erledigt-Label.
+        filter_name = ordner.replace("'", "''")
+        ordnerliste = self._anfrage("GET", "/me/mailFolders", params={"$filter": f"displayName eq '{filter_name}'", "$select": "id,displayName"}).json().get("value", [])
+        ziel = ordnerliste[0] if ordnerliste else self._anfrage("POST", "/me/mailFolders", json={"displayName": ordner}).json()
+        if art == "verschieben":
+            self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": ziel["id"]})
+            return f"nach {ordner} verschoben"
+        self._anfrage("PATCH", f"/me/messages/{ident}", json={"isRead": True})
+        return f"als gelesen markiert (Ordner {ordner} bereit)"
+
     def entwurf(self, an, betreff, text, anhaenge):
         """Legt einen Entwurf im Entwürfe-Ordner von Outlook an."""
         roh = base64.b64encode(_nachricht(an, betreff, text, anhaenge, self.adresse).as_bytes())
