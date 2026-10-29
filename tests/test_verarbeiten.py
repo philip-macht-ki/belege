@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from pathlib import Path
 
 from belege import verarbeiten
 from belege.typen import Fund, Text
@@ -110,6 +111,60 @@ def test_erechnung_legt_xml_und_sicht_pdf_ab(repo):
     abgelegt = list((repo / "ablage").rglob("*.xml"))
     assert len(abgelegt) == 1
     assert abgelegt[0].with_suffix(".pdf").exists()
+
+
+def test_fehlendes_rechnungsdatum_bekommt_befund_und_eingangsmonat(repo, monkeypatch):
+    """Ohne Ausstellungsdatum bleibt die Rechnung prüfbar und nachvollziehbar."""
+    datei = repo / "ohne-datum.pdf"
+    datei.write_bytes(b"%PDF ohne Datum")
+    fund = Fund(datei, "postfach", datei.name, date(2026, 9, 10), {"von": "lieferant@example.test"})
+    e = _einordnung(fund, Text("", "klartext", 1))
+    e.datum = None
+    e.firma = "Studio Beispiel"
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("an = false", "an = true"), encoding="utf-8")
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_, **__: e)
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text(
+        "Lieferant GmbH\nMusterstraße 1\n12345 Berlin\nRechnung an: Studio Beispiel\n"
+        "USt-IdNr. DE123456789\nRechnungsnummer RE-100\nLeistung: Beratung\nMwSt 19 %\nGesamt 300,00 EUR", "klartext", 1))
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "befund"
+    befund = next((repo / "ablage").rglob("*.befund.txt"))
+    assert "Rechnungsdatum fehlt" in befund.read_text(encoding="utf-8")
+    assert "Eingangsdatum 10.09.2026" in befund.read_text(encoding="utf-8")
+    index = json.loads((repo / "arbeit" / "index.json").read_text(encoding="utf-8"))
+    eintrag = next(iter(index.values()))
+    assert eintrag["datum"] is None and eintrag["befund"].endswith(".befund.txt")
+    assert "/Manuell prüfen/2026/09/" in eintrag["pfad"]
+
+
+def test_unklare_firma_wird_nicht_geprueft_und_erzeugt_keinen_entwurf(repo, monkeypatch):
+    """Mehrfirmen-Funde ohne eindeutige Firma bleiben im Unsortiert-Weg."""
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text('[ablage]\nordner = "ablage"\nprivat = true\nbereich_betrieb = "Betrieb"\n'
+                   '[[firma]]\nname = "Alpha GmbH"\nbereich = "Alpha"\n'
+                   '[[firma]]\nname = "Beta GmbH"\nbereich = "Beta"\n'
+                   '[pruefung]\nan = true\n', encoding="utf-8")
+    datei = repo / "unklar.pdf"; datei.write_bytes(b"%PDF")
+    fund = Fund(datei, "postfach", datei.name, date(2026, 10, 1), {"von": "lieferant@example.test"})
+    unklar = _einordnung(fund, Text("", "klartext", 1)); unklar.firma = "unklar"
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_, **__: unklar)
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.senden.entwurf", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("Entwurf")))
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "befund" and "/Unsortiert/" in ergebnis.daten["pfad"]
+    assert not (repo / "arbeit" / "index.json").exists() or "pruefung" not in (repo / "arbeit" / "index.json").read_text(encoding="utf-8")
+
+
+def test_beanstandete_xml_rechnung_hat_sicht_pdf(repo):
+    """Auch im Ordner Manuell prüfen ist die E-Rechnung lesbar sichtbar."""
+    from belege.ablegen import ablegen_befund
+    xml = repo / "beanstandet.xml"
+    xml.write_text("<Invoice><ID>RE-1</ID><IssueDate>2026-09-10</IssueDate><LegalMonetaryTotal>"
+                   '<PayableAmount currencyID="EUR">300.00</PayableAmount></LegalMonetaryTotal></Invoice>', encoding="utf-8")
+    e = _einordnung(Fund(xml, "handy", xml.name, date(2026, 9, 10)), Text("", "xml", 1)); e.firma = "Studio Beispiel"
+    ergebnis = ablegen_befund(Fund(xml, "handy", xml.name, date(2026, 9, 10)), e, ["Rechnungsnummer fehlt"], True)
+    assert Path(ergebnis.daten["pfad"]).with_suffix(".pdf").exists()
 
 
 def test_freier_name_ueberschreibt_nie(tmp_path):

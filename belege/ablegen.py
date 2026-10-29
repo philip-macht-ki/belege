@@ -131,8 +131,13 @@ def ablegen_befund(fund: Fund, e: Einordnung, punkte: list[str], echt: bool) -> 
     cfg = konfig("belege").get("pruefung", {})
     firma_eintrag = firma(e.firma)
     bereich = firma_eintrag["bereich"] if firma_eintrag and konfig("belege").get("firma") else konfig("belege").get("ablage", {}).get("bereich_betrieb", "Betrieb")
-    kandidat = ablage_ordner() / bereich / str(cfg.get("ordner", "Manuell prüfen")) / f"{e.datum:%Y}" / f"{e.datum:%m}" / dateiname(e, fund.datei.suffix)
-    pfad = _freier_pfad(kandidat)
+    # Fehlt das Ausstellungsdatum, ist der Eingang die einzige sichere
+    # Kalenderzuordnung. Der Befund macht diese Ausnahme sichtbar.
+    ablage_datum = e.datum or fund.eingang
+    einordnung = replace(e, datum=ablage_datum, beschreibung="Rechnung") if fund.datei.suffix.lower() == ".xml" else replace(e, datum=ablage_datum)
+    kandidat = ablage_ordner() / bereich / str(cfg.get("ordner", "Manuell prüfen")) / f"{ablage_datum:%Y}" / f"{ablage_datum:%m}" / dateiname(einordnung, fund.datei.suffix)
+    erechnung = fund.datei.suffix.lower() == ".xml"
+    pfad = _freier_pfad(kandidat, (".pdf",) if erechnung else ())
     befund_datei = pfad.with_name(pfad.name + ".befund.txt")
     daten = {"pfad": str(pfad), "sha": _sha(fund.datei), "status": "befund", "befund": str(befund_datei)}
     if not echt:
@@ -142,5 +147,11 @@ def ablegen_befund(fund: Fund, e: Einordnung, punkte: list[str], echt: bool) -> 
         shutil.move(str(fund.datei), str(pfad))
     else:
         shutil.copy2(fund.datei, pfad)
-    befund_datei.write_text("Rechnungsprüfung – bitte korrigieren:\n\n" + "\n".join(f"- {punkt}" for punkt in punkte) + "\n", encoding="utf-8")
+    if erechnung:
+        from .xrechnung import lesen, sicht_pdf
+        sicht_pdf(lesen(pfad), pfad, pfad.with_suffix(".pdf"))
+        daten["xml"] = str(pfad)
+    hinweis_datum = (f"\n\nKein Ausstellungsdatum erkannt; Ablagemonat aus Eingangsdatum {fund.eingang:%d.%m.%Y}."
+                     if e.datum is None else "")
+    befund_datei.write_text("Rechnungsprüfung – bitte korrigieren:\n\n" + "\n".join(f"- {punkt}" for punkt in punkte) + hinweis_datum + "\n", encoding="utf-8")
     return Ergebnis("befund", f"Mit Befund unter {pfad} abgelegt.", daten)

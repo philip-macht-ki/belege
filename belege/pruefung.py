@@ -58,16 +58,18 @@ def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
 def _hat_lieferantensteuer(text: str, xml: dict | None) -> bool:
     if (xml or {}).get("verkaeufer_ust"):
         return True
-    return bool(re.search(r"\b(?:DE\s?\d{9}|ATU\d{8}|[A-Z]{2}\s?[A-Z0-9]{7,14}|steuer(?:-| )?nr\.?\s*[:#]?\s*[0-9/.-]{6,})\b", text, re.I))
+    kennzeichen = r"(?:steuer\s*(?:-| )?nr\.?|st\.?\s*-?nr\.?|stnr|ust\s*-?id\s*nr\.?|ustidnr|ust\s*-?id|umsatzsteuer\s*-?identifikationsnummer|vat\s*(?:id|no\.?)?)"
+    eu_format = r"(?:DE\s?\d{9}|ATU\s?\d{8}|[A-Z]{2}\s?[A-Z0-9]{7,14})"
+    return bool(re.search(rf"\b{eu_format}\b", text, re.I) or
+                re.search(rf"\b{kennzeichen}\s*[:#.]?\s*[A-Z0-9][A-Z0-9 ./-]{{4,}}", text, re.I))
 
 
 def _hat_steuer(text: str, xml: dict | None) -> bool:
-    if re.search(r"reverse\s*charge|steuerbefrei|kleinunternehmer|§\s*19", text, re.I):
+    if re.search(r"reverse\s*charge|steuerschuldnerschaft\s+des\s+leistungsempfängers|§\s*13b\s*ustg|steuerbefrei|steuerfrei|kleinunternehmer|§\s*19\s*ustg|innergemeinschaftliche\s+lieferung", text, re.I):
         return True
     if (xml or {}).get("steuer"):
         return True
-    return bool(re.search(r"\b(?:\d{1,2}[,.]\d{1,2}|\d{1,2})\s*%", text) and
-                re.search(r"(?:mwst|ust|umsatzsteuer|steuer).{0,45}\d+[,.]\d{2}", text, re.I))
+    return bool(re.search(r"(?:steuersatz|mwst|ust|umsatzsteuer|steuer).{0,45}\b(?:\d{1,2}[,.]\d{1,2}|\d{1,2})\s*%", text, re.I))
 
 
 def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
@@ -84,11 +86,19 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     if "ust_id_lieferant" in regeln and not kleinbetrag and not _hat_lieferantensteuer(inhalt, xml):
         befund.append(NAMEN["ust_id_lieferant"] + " fehlt")
     nummer = str((xml or {}).get("nummer", ""))
-    if "rechnungsnummer" in regeln and not kleinbetrag and not (nummer or re.search(r"(?:rechnung(?:snummer|\s*(?:nr\.?|nummer))|invoice\s*(?:nr\.?|number|no\.?))\s*[:#]?\s*[A-Z0-9][A-Z0-9./-]{2,}", inhalt, re.I)):
+    nummer_muster = (r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|belegnummer|"
+                     r"invoice\s*(?:no\.?|number|nr\.?)|(?:rechnung|invoice)\s*\n\s*(?:nr\.?|no\.?|number))"
+                     r"\s*[:#.]?\s*[A-Z0-9][A-Z0-9./-]{2,}")
+    if "rechnungsnummer" in regeln and not kleinbetrag and not (nummer or re.search(nummer_muster, inhalt, re.I)):
         befund.append(NAMEN["rechnungsnummer"] + " fehlt")
-    if "datum" in regeln and not ((xml or {}).get("datum") or re.search(r"(?:rechnungsdatum|ausstellungsdatum|invoice date|\bdatum\b)\D{0,20}\d{1,2}[.]\d{1,2}[.]20\d{2}", inhalt, re.I)):
-        befund.append(NAMEN["datum"] + " fehlt")
-    if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(r"(?:leistung|artikel|position|menge|leistungszeitraum|service|beschreibung)\D{0,80}\S", inhalt, re.I)):
+    datum_muster = (r"(?:rechnungsdatum|ausstellungsdatum|invoice\s*date|\bdatum\b)\D{0,20}"
+                    r"(?:\d{1,2}[./-]\d{1,2}[./-]20\d{2}|20\d{2}[./-]\d{1,2}[./-]\d{1,2}|"
+                    r"[A-Za-z]+\s+\d{1,2},?\s+20\d{2})")
+    if "datum" in regeln and not ((xml or {}).get("datum") or re.search(datum_muster, inhalt, re.I)):
+        befund.append("Rechnungsdatum fehlt")
+    leistung_muster = (r"(?:leistung(?:sdatum|szeitraum)?|leistungsdatum\s+entspricht\s+rechnungsdatum|"
+                       r"artikel|position|menge|leistungszeitraum|service|beschreibung)\D{0,80}\S")
+    if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(leistung_muster, inhalt, re.I)):
         befund.append(NAMEN["leistung"] + " fehlt")
     steuer_ok = _hat_steuer(inhalt, xml) or (kleinbetrag and bool(re.search(r"\b\d{1,2}\s*%", inhalt)))
     if "steuer" in regeln and not steuer_ok:
@@ -104,7 +114,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
 def befehl(args) -> int:
     """Prüft eine Datei trocken, ohne etwas abzulegen oder zu senden."""
     from datetime import date
-    from .einordnen import einordnen
+    from .einordnen import _aus_xml, einordnen
     from .text import auslesen
     from .typen import Fund
     if len(args.ziel) != 1:
@@ -115,11 +125,48 @@ def befehl(args) -> int:
         print(f"Nicht gefunden: {datei}")
         return 2
     fund = Fund(datei, "handy", datei.name, date.fromtimestamp(datei.stat().st_mtime))
-    text = auslesen(datei)
-    e = einordnen(fund, text)
-    if not (e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb"):
-        print("Nicht geprüft: keine Eingangsrechnung des Betriebs.")
+    xml = None
+    xml_datei = datei
+    temporaer = None
+    if datei.suffix.lower() == ".pdf":
+        try:
+            from facturx import get_xml_from_pdf
+            from .xrechnung import zugferd_in
+            if zugferd_in(datei):
+                import tempfile
+                roh = get_xml_from_pdf(datei.read_bytes(), check_xsd=False)
+                if isinstance(roh, tuple):
+                    roh = roh[1]
+                if roh:
+                    temporaer = tempfile.TemporaryDirectory()
+                    xml_datei = Path(temporaer.name) / "zugferd.xml"
+                    xml_datei.write_bytes(roh)
+        except (OSError, ValueError):
+            pass
+    if xml_datei.suffix.lower() == ".xml":
+        try:
+            from .xrechnung import ist_erechnung, lesen, sichttext
+            if ist_erechnung(xml_datei):
+                xml = lesen(xml_datei)
+                text = Text(sichttext(xml), "xml", 1)
+                xml_fund = Fund(xml_datei, fund.quelle, xml_datei.name, fund.eingang)
+                e = _aus_xml(xml_fund) or einordnen(fund, text)
+            else:
+                text = auslesen(datei)
+                e = einordnen(fund, text)
+        except (OSError, ValueError):
+            text = auslesen(datei)
+            e = einordnen(fund, text)
+    else:
+        text = auslesen(datei)
+        e = einordnen(fund, text)
+    try:
+        if not (e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb"):
+            print("Nicht geprüft: keine Eingangsrechnung des Betriebs.")
+            return 0
+        befund = pruefe(e, text, xml=xml)
+        print("OK: Pflichtangaben erfüllt." if not befund else "Befund:\n- " + "\n- ".join(befund))
         return 0
-    befund = pruefe(e, text)
-    print("OK: Pflichtangaben erfüllt." if not befund else "Befund:\n- " + "\n- ".join(befund))
-    return 0
+    finally:
+        if temporaer:
+            temporaer.cleanup()

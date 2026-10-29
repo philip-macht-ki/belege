@@ -63,6 +63,16 @@ def _ust(block: ET.Element) -> str:
     return ""
 
 
+def _steuer(root: ET.Element) -> bool:
+    """Erkennt Steuerbeträge, -sätze und die steuerfreien EN-16931-Codes."""
+    kategorien = {"AE", "K", "E", "Z"}
+    return any(
+        _lokal(element) in {"ApplicablePercent", "CalculatedAmount", "TaxTotalAmount", "Percent", "TaxAmount", "TaxTotal"}
+        or (_lokal(element) == "CategoryCode" and _text(element).upper() in kategorien)
+        for element in root.iter()
+    )
+
+
 def ist_erechnung(datei: Path) -> bool:
     """Prüft, ob eine XML-Datei CII, UBL-Rechnung oder -Gutschrift enthält."""
     try:
@@ -83,14 +93,14 @@ def lesen(datei: Path) -> dict:
             betrag = _zahl(_erst(zeile, "LineTotalAmount") or "0")
             positionen.append({"text": _erst(zeile, "Name"), "betrag": betrag})
         return {
-            "nummer": _erst(root, "ID"), "datum": _datum(_erst(root, "DateTimeString")),
+            "nummer": _erst(root, "InvoiceNumber", "ID"), "datum": _datum(_erst(root, "IssueDate", "DateTimeString")),
             "verkaeufer": _name(verkaeufer), "verkaeufer_ust": _ust(verkaeufer),
             "kaeufer": _name(kaeufer), "kaeufer_ust": _ust(kaeufer),
             "betrag": _zahl(_erst(root, "GrandTotalAmount")),
             "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                                if _lokal(e) == "GrandTotalAmount"), "EUR"),
             "positionen": positionen, "syntax": "cii",
-            "steuer": any(_lokal(e) in {"ApplicablePercent", "CalculatedAmount", "TaxTotalAmount"} for e in root.iter()),
+            "steuer": _steuer(root),
         }
     if typ not in {"Invoice", "CreditNote"}:
         raise ValueError("Keine unterstützte E-Rechnung (CII oder UBL).")
@@ -104,13 +114,13 @@ def lesen(datei: Path) -> dict:
         positionen.append({"text": _erst(zeile, "Name"), "betrag": betrag})
     gesamt = _erst(root, "PayableAmount") or _erst(root, "TaxInclusiveAmount")
     return {
-        "nummer": _erst(root, "ID"), "datum": _datum(_erst(root, "IssueDate")),
+        "nummer": _erst(root, "InvoiceNumber", "ID"), "datum": _datum(_erst(root, "IssueDate")),
         "verkaeufer": _name(verkaeufer), "verkaeufer_ust": _ust(verkaeufer),
         "kaeufer": _name(kaeufer), "kaeufer_ust": _ust(kaeufer), "betrag": _zahl(gesamt),
         "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                            if _lokal(e) in {"PayableAmount", "TaxInclusiveAmount"}), "EUR"),
         "positionen": positionen, "syntax": "ubl",
-        "steuer": any(_lokal(e) in {"Percent", "TaxAmount", "TaxTotal"} for e in root.iter()),
+        "steuer": _steuer(root),
     }
 
 

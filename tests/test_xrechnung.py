@@ -63,3 +63,23 @@ def test_sicht_pdf_hat_hash_hinweis(repo):
     assert ziel.exists()
     assert xml.name in text
     assert "SHA-256" in text
+
+
+def test_xrechnung_pruefung_uebergibt_steuerfelder(repo, capsys):
+    """Seller-TaxRegistration und steuerfreie CategoryCode sind vollständig genug."""
+    from belege.pruefung import befehl
+    xml = repo / "xrechnung.xml"
+    xml.write_text("""<CrossIndustryInvoice><ExchangedDocument><ID>X-2026-1</ID>
+    <IssueDateTime><DateTimeString>20261029</DateTimeString></IssueDateTime></ExchangedDocument>
+    <SupplyChainTradeTransaction><ApplicableHeaderTradeAgreement><SellerTradeParty><Name>Lieferant GmbH</Name>
+    <SpecifiedTaxRegistration><ID>DE123456789</ID></SpecifiedTaxRegistration></SellerTradeParty>
+    <BuyerTradeParty><Name>Studio Beispiel</Name></BuyerTradeParty></ApplicableHeaderTradeAgreement>
+    <ApplicableHeaderTradeSettlement><ApplicableTradeTax><CategoryCode>E</CategoryCode></ApplicableTradeTax>
+    <SpecifiedTradeSettlementHeaderMonetarySummation><GrandTotalAmount currencyID="EUR">300.00</GrandTotalAmount>
+    </SpecifiedTradeSettlementHeaderMonetarySummation></ApplicableHeaderTradeSettlement>
+    <IncludedSupplyChainTradeLineItem><SpecifiedTradeProduct><Name>Beratung</Name></SpecifiedTradeProduct>
+    <SpecifiedLineTradeSettlement><SpecifiedTradeSettlementLineMonetarySummation><LineTotalAmount>300.00</LineTotalAmount>
+    </SpecifiedTradeSettlementLineMonetarySummation></SpecifiedLineTradeSettlement></IncludedSupplyChainTradeLineItem>
+    </SupplyChainTradeTransaction></CrossIndustryInvoice>""", encoding="utf-8")
+    assert befehl(type("Args", (), {"ziel": [str(xml)]})()) == 0
+    assert "OK: Pflichtangaben erfüllt." in capsys.readouterr().out

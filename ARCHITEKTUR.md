@@ -147,6 +147,7 @@ class Einordnung:
   "art": "eingang", "bereich": "betrieb", "firma": "Studio Beispiel", "sicherheit": "hoch", "status": "abgelegt | unsortiert | befund",
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>",
+  "befund": "<relativer Pfad zur .befund.txt oder null>",
   "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]}}}
 ```
 

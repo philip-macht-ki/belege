@@ -47,7 +47,7 @@ def _aus_xml(daten: dict, fund: Fund) -> Einordnung:
     return einordnung
 
 
-def _zugferd(fund: Fund) -> tuple[Einordnung, Text] | None:
+def _zugferd(fund: Fund) -> tuple[Einordnung, Text, dict] | None:
     """Liest eine eingebettete ZUGFeRD-XML, ohne das PDF selbst zu verändern."""
     from facturx import get_xml_from_pdf
     from .xrechnung import zugferd_in
@@ -67,7 +67,7 @@ def _zugferd(fund: Fund) -> tuple[Einordnung, Text] | None:
     daten = lesen(xml_datei)
     daten["xml_datei"] = xml_datei
     einordnung = _aus_xml(daten, fund)
-    return einordnung, Text(sichttext(daten), "xml", 1)
+    return einordnung, Text(sichttext(daten), "xml", 1), daten
 
 
 def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung, Path] | None:
@@ -181,11 +181,13 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("zweifel", f"{fund.name}: Datei beschädigt oder unvollständig heruntergeladen. Bitte ansehen.", quelle=fund.quelle)
             return ergebnis
         zugferd = _zugferd(fund)
+        xml_daten = None
         if zugferd:
             # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
             from .vertraulich import pruefen
 
-            einordnung, text = zugferd
+            einordnung, text, *zugferd_xml = zugferd
+            xml_daten = zugferd_xml[0] if zugferd_xml else None
             geheim = pruefen(f"{einordnung.lieferant} {einordnung.beschreibung} {text.text}", fund.name, fund.mail,
                              modell=False)
         else:
@@ -237,18 +239,19 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         from .ablegen import ablegen
 
         pruefung = kern.konfig("belege").get("pruefung", {})
+        mehrfirmen = len(kern.firmen()) > 1
+        firma_eindeutig = not mehrfirmen or (einordnung.firma not in {"", "unklar"} and kern.firma(einordnung.firma) is not None)
         pruefbar = (
             pruefung.get("an", False)
             and einordnung.ist_beleg
             and einordnung.art == "eingang"
             and einordnung.bereich == "betrieb"
-            and einordnung.datum is not None
+            and firma_eindeutig
             and not re.search(r"\b(dauerbeleg|bescheid|steuerbescheid|gebührenbescheid)\b", text.text, re.I)
         )
         befund = []
         if pruefbar:
             from .pruefung import pruefe
-            xml_daten = None
             if fund.datei.suffix.lower() == ".xml":
                 try:
                     from .xrechnung import lesen
@@ -297,18 +300,22 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         }
         if pruefbar:
             daten["pruefung"] = {"status": "ok" if not befund else "befund", "punkte": befund}
+        if ergebnis.daten.get("befund"):
+            befund_pfad = Path(ergebnis.daten["befund"])
+            daten["befund"] = str(befund_pfad.relative_to(kern.ablage_ordner()))
         index[fingerabdruck] = daten
         _speichere_index(index)
         _original_erledigt(fund)
         if echt:
             entwurf_angelegt = False
-            if befund and pruefung.get("entwurf_an_absender", True) and fund.mail and fund.mail.get("von") and not any("unklar" in punkt.casefold() for punkt in befund):
+            if befund and firma_eindeutig and pruefung.get("entwurf_an_absender", True) and fund.mail and fund.mail.get("von") and not any("unklar" in punkt.casefold() for punkt in befund):
                 from .senden import entwurf
                 firma_eintrag = kern.firma(einordnung.firma) or {}
                 betreff = "Bitte um korrigierte Rechnung"
+                datum_text = einordnung.datum.strftime("%d.%m.%Y") if einordnung.datum else "nicht erkennbar"
                 mailtext = ("Guten Tag,\n\nbitte sende uns eine korrigierte Rechnung. "
                             "Bei der Prüfung fehlen oder weichen folgende Angaben ab:\n- " + "\n- ".join(befund)
-                            + f"\n\nZur Zuordnung: Rechnungsnummer: nicht erkennbar, Datum: {einordnung.datum:%d.%m.%Y}, Betrag: {einordnung.betrag or 'nicht erkennbar'} EUR."
+                            + f"\n\nZur Zuordnung: Rechnungsnummer: nicht erkennbar, Datum: {datum_text}, Betrag: {einordnung.betrag or 'nicht erkennbar'} EUR."
                             + f"\n\nKorrekte Empfängerdaten: {firma_eintrag.get('name', '')}, USt-IdNr.: {firma_eintrag.get('ust_id', '')}.\n\nVielen Dank.")
                 try:
                     entwurf(str(fund.mail["von"]), betreff, mailtext, [], True, fund.mail.get("konto"))
