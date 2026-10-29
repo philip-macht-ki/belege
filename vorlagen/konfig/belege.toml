@@ -56,6 +56,10 @@ smtp_server = ""
 # nur_posteingang = true
 belege = true
 waechter = true
+# Nach erfolgreicher echter Ablage: "aus" (Standard), "markieren" oder "verschieben".
+# IMAP verschiebt nur, wenn der Server MOVE kann; sonst bleibt die Mail markiert.
+nach_ablage = "aus"
+nach_ablage_ordner = "Belege erledigt"
 
 [postfach]
 erste_tage = 30
