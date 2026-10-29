@@ -177,3 +177,13 @@ def test_echtlauf_reste_leergut_anlage_canva_und_steuer_id(repo):
                    "Steuer ID: DE111111111\nSteuer ID: FR12000000000\n€10,00",
                    "klartext", 1)
     assert pruefe(_e(), mistral) == []
+
+
+def test_erinnerung_ohne_hinweise_quittung_mit(repo):
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("an = false", "an = true"), encoding="utf-8")
+    quittung = Text("Receipt\nMuster SAS\nReceipt number RCPT-000001\nInvoice number INV-1\nVAT FR12000000000\nVAT 0 %", "klartext", 1)
+    # Stripe-Belege sind oft der einzige Beleg mit Reverse-Charge-Angabe; Hinweise bleiben.
+    assert hinweise(_e(), quittung) != []
+    erinnerung = Text("Muster Verrechnungsstelle\nUSt-IdNr. DE123456789\n\nERINNERUNG\nRechnung RE-1", "klartext", 1)
+    assert hinweise(_e(), erinnerung) == []

@@ -599,7 +599,7 @@ def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None, absender: st
     if firma and firma.get("pruefung") is False:
         return []
     inhalt = _inhalt(text.text)
-    klar_ausgeschlossen = r"zahlungserinnerung|\bmahnung\b|zahlungsaufforderung|(?:veräußerungs|verkaufs)katalog|leergut|pfand|anlage\s+rechnungskonten|for\s+ach\s+delivery|wire\s+transfer"
+    klar_ausgeschlossen = r"zahlungserinnerung|\berinnerung\b|\bmahnung\b|zahlungsaufforderung|(?:veräußerungs|verkaufs)katalog|leergut|pfand|anlage\s+rechnungskonten|for\s+ach\s+delivery|wire\s+transfer"
     if _unlesbar(inhalt) or _nie_beleg(inhalt, absender) or (_kein_rechnungsdokument(inhalt) and re.search(klar_ausgeschlossen, inhalt, re.I)):
         return []
     ust = _lieferanten_ust(inhalt, xml, firma) or ""
