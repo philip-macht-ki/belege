@@ -68,18 +68,20 @@ def _anschrift_normal(wert: str) -> str:
     return re.sub(r"[^a-z0-9]", "", wert)
 
 
-def _anschrift_zeilen(firma: dict, text: str) -> list[str]:
+def _anschrift_zeilen(firma: dict, text: str) -> tuple[list[str], bool]:
+    """Liest den zusammenhängenden Fensterkuvert-Block um den Empfängernamen."""
     namen = [str(firma.get("name", "")), *map(str, firma.get("namen", []))]
     zeilen = text.splitlines()[:55]
     for nr, zeile in enumerate(zeilen):
         if any(_normal(name) and _normal(name) in _normal(zeile) for name in namen):
-            block = []
-            for folgende in zeilen[nr + 1:nr + 6]:
-                if not folgende.strip():
-                    break
-                block.append(folgende.strip())
-            return block
-    return []
+            anfang = nr
+            while anfang and zeilen[anfang - 1].strip():
+                anfang -= 1
+            ende = nr + 1
+            while ende < len(zeilen) and zeilen[ende].strip():
+                ende += 1
+            return [zeile.strip() for zeile in zeilen[max(anfang, nr - 5):min(ende, nr + 6)]], True
+    return [], False
 
 
 def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
@@ -92,13 +94,21 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     erwartet_ort = str(ziel["ort"])
     gefunden = str((xml or {}).get("kaeufer_anschrift", "")).strip()
     if not gefunden:
-        zeilen = _anschrift_zeilen(firma, text) if firma else []
+        zeilen, name_gefunden = _anschrift_zeilen(firma, text) if firma else ([], False)
         gefunden = "\n".join(zeilen)
+    else:
+        name_gefunden = True
     if not gefunden:
-        return None  # Ohne eindeutigen Empfängerblock wäre das Raten.
+        return "Anschrift fehlt" if name_gefunden else None
     normal = _anschrift_normal(gefunden)
     if (_anschrift_normal(erwartet_strasse) in normal and erwartet_plz in normal
             and _anschrift_normal(erwartet_ort) in normal):
+        return None
+    oben = "\n".join(text.splitlines()[:55])
+    oben_normal = _anschrift_normal(oben)
+    if (_anschrift_normal(erwartet_strasse) in oben_normal and erwartet_plz in oben_normal):
+        return None
+    if erwartet_plz in oben:
         return None
     hat_adresse = bool(re.search(r"\b\d{5}\b", gefunden) and re.search(r"\d", gefunden)
                        and re.search(r"(?:str(?:\.|asse)|stra(?:ß|ss)e|weg\b|allee\b|platz\b|gasse\b|ufer\b|ring\b)", gefunden, re.I))
@@ -161,7 +171,7 @@ def _ust_id_aus_text(text: str, eigene: str) -> str | None:
 
 def _lieferanten_ust(text: str, xml: dict | None, firma: dict | None) -> str | None:
     """Nimmt nur eine EU-USt-IdNr. des Lieferanten, nie die eigene."""
-    eigene = re.sub(r"\s+", "", str((firma or {}).get("ust_id", "")).upper())
+    eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
     xml_nummer = _ust_id(str((xml or {}).get("verkaeufer_ust", "")))
     if xml_nummer and xml_nummer != eigene:
         return xml_nummer
@@ -186,16 +196,48 @@ def _vies_pruefen(nummer: str) -> bool | None:
         with urlopen(url, timeout=10) as antwort:  # nosec B310 - feste URL der EU-Kommission
             daten = json.loads(antwort.read().decode("utf-8"))
     except (OSError, URLError, HTTPError, ValueError, json.JSONDecodeError) as fehler:
-        kern.log(f"EU-USt-IdNr.-Abfrage für {nummer} nicht verfügbar: {fehler}")
+        code = getattr(fehler, "code", None)
+        zusatz = f" ({code})" if code is not None else ""
+        kern.log(f"EU-USt-IdNr.-Abfrage für {_ust_id_maskieren(nummer)} nicht verfügbar{zusatz}")
         return None
     fehlercode = str(daten.get("userError", "")).upper()
     if fehlercode and fehlercode not in {"VALID", "INVALID"}:
-        kern.log(f"EU-USt-IdNr.-Abfrage für {nummer} nicht verfügbar: {fehlercode}")
+        kern.log(f"EU-USt-IdNr.-Abfrage für {_ust_id_maskieren(nummer)} nicht verfügbar: {fehlercode}")
         return None
     gueltig = bool(daten.get("isValid"))
     cache[nummer] = {"am": jetzt.isoformat(), "gueltig": gueltig}
     kern.schreiben(cache_datei, cache)
     return gueltig
+
+
+def _ust_id_maskieren(nummer: str) -> str:
+    return f"{nummer[:2]}***{nummer[-3:]}"
+
+
+def _reverse_charge_hinweis(text: str) -> bool:
+    return bool(re.search(r"reverse\s*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers", text, re.I))
+
+
+def _keine_umsatzsteuer_berechnet(text: str) -> bool:
+    """Erkennt einen ausgewiesenen Null-Steuersatz, nicht bloß eine USt-IdNr."""
+    nullsatz = re.compile(r"(?:mwst|umsatzsteuer|(?<![\w-])ust(?!\s*-?id)|vat|tax|steuerbetrag).{0,45}\b0(?:[,.]0+)?(?:\s*%|\b)", re.I)
+    nullbetrag = re.compile(r"(?:mwst|umsatzsteuer|(?<![\w-])ust(?!\s*-?id)|vat|tax|steuerbetrag).{0,45}\b0[,.]00\b", re.I)
+    positiv = re.compile(r"(?:mwst|umsatzsteuer|(?<![\w-])ust(?!\s*-?id)|vat|tax|steuerbetrag).{0,45}\b(?:[1-9]\d{0,2}(?:[.]\d{3})*|[1-9]\d*)(?:[,.]\d{2})\b", re.I)
+    return bool(nullsatz.search(text) or nullbetrag.search(text)) and not bool(positiv.search(text))
+
+
+def _deutsche_steuernummer_ausserhalb_empfaengerblock(text: str) -> bool:
+    zeilen = text.splitlines()
+    im_empfaengerblock = False
+    for zeile in zeilen:
+        if not zeile.strip():
+            im_empfaengerblock = False
+            continue
+        if _EMPFÄNGERZEILE.search(zeile):
+            im_empfaengerblock = True
+        if not im_empfaengerblock and re.search(r"\b(?:steuer\s*(?:-| )?nr\.?|st\.?\s*-?nr\.?)\s*[:#.]?\s*\d", zeile, re.I):
+            return True
+    return False
 
 
 def _hat_steuer(text: str, xml: dict | None) -> bool:
@@ -266,11 +308,10 @@ def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]
         return []
     inhalt = text.text
     ust = _lieferanten_ust(inhalt, xml, _firma(e)) or ""
-    reverse = (ust and not ust.startswith("DE")) or bool(re.search(
-        r"reverse\s*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers", inhalt, re.I))
+    reverse = _reverse_charge_hinweis(inhalt) or bool(ust and not ust.startswith("DE") and _keine_umsatzsteuer_berechnet(inhalt))
     ergebnis = ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"] if reverse else []
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
-    deutsch = ust.startswith("DE") or bool(re.search(r"\b(?:steuer\s*(?:-| )?nr\.?|st\.?\s*-?nr\.?)\s*[:#.]?\s*\d", inhalt, re.I))
+    deutsch = ust.startswith("DE") or _deutsche_steuernummer_ausserhalb_empfaengerblock(inhalt)
     if deutsch and not kleinbetrag and xml is None:
         ergebnis.append("Lieferant schickt keine E-Rechnung; ab 2027/2028 Pflicht, rechtzeitig nachfragen")
     return ergebnis

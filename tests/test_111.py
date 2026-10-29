@@ -11,6 +11,11 @@ def test_fehlerbericht_schwaerzt_private_werte():
     assert "<mail>" in text and "<iban>" in text and "<betrag>" in text and "<datei>" in text and "token: geheim" not in text
 
 
+def test_fehlerbericht_schwaerzt_ust_id_nummern():
+    text = schwaerzen("USt-IdNr. DE123456789, VAT: ATU12345678 und IE6388047V")
+    assert "DE123456789" not in text and "ATU12345678" not in text and "IE6388047V" not in text
+
+
 def test_fehlerbericht_schwaerzt_token_betraege_und_dateipfade_mit_leerzeichen():
     text = schwaerzen('de12 3456 7890 1234 5678 90 -1.234,56 12.30 access_token=abc "refresh_token": "def" Bearer xyz /tmp/Meine Rechnung ä.pdf')
     assert "de12" not in text and "-1.234,56" not in text and "12.30" not in text
