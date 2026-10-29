@@ -12,6 +12,7 @@ aktion: keine
 - EU-Anbieter, die Reverse Charge nur mit 0 % ausweisen, lösen keinen Alarm und keinen Entwurf mehr aus; das geht als Hinweis an deinen Steuerberater.
 - Hast du die Prüfung eingeschaltet, bekommst du einmal eine Aufräumliste: eine Zeile je Anbieter, mit genau einem Weg – selbst umstellen (mit Klickweg), Lieferant anschreiben oder nur ein Hinweis. Danach meldet sie sich nur bei Neuem.
 - Einen Lieferanten-Entwurf gibt es nur noch einmal je Anbieter, nicht für jede Rechnung.
+- Behoben: 1.13.0 hat beim Update ein Beispiel-Stammdatenblatt („Beispiel & Partner GmbH“) in deine Einstellungen gelegt. Es wird jetzt ignoriert, deine Firmenzuordnung läuft wie vorher.
 
 ### Musst du etwas tun?
 

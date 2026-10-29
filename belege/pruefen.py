@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import requests
 from .kern import (ablage_ordner, jetzt, konfig, konten, pfad, rechner, firmen,
-                   hat_stammdatenblatt, stammdaten_firmen)
+                   hat_stammdatenblatt, stammdaten_beispiel, stammdaten_firmen)
 
 SYNC = (
     "Library/CloudStorage",
@@ -183,7 +183,10 @@ def befehl(args) -> int:
         z("ROT", f"Urteil nicht prüfbar: {e}")
     try:
         cfg = konfig("belege")
-        if not hat_stammdatenblatt():
+        if stammdaten_beispiel():
+            z("GELB", "Stammdatenblatt enthält noch die Beispielfirma und wird nicht benutzt",
+              "Sag deinem Claude: „Leg mein Stammdatenblatt an.“ Bis dahin gilt die Firmenliste aus konfig/belege.toml.")
+        elif not hat_stammdatenblatt():
             z("GELB", "Stammdatenblatt fehlt (optional)",
               "konfig/stammdaten.toml mit allen eigenen Firmen anlegen.")
         else:

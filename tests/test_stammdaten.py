@@ -147,3 +147,14 @@ def test_firmenname_mit_sonderzeichen_ergibt_sicheren_bereich(repo):
     bereiche = {f["name"]: f["bereich"] for f in kern.firmen()}
     assert bereiche["Muster & Co. GmbH"] == "Muster-Co.-GmbH"
     assert bereiche["Beispiel UG (haftungsbeschränkt)"] == "Beispiel-UG-haftungsbeschränkt"
+
+
+def test_beispielblatt_aus_1130_gilt_als_nicht_vorhanden(repo):
+    import shutil
+    from belege import kern, update
+    shutil.copyfile(repo / "vorlagen" / "stammdaten.beispiel.toml", repo / "konfig" / "stammdaten.toml")
+    assert kern.stammdaten_beispiel() and not kern.hat_stammdatenblatt() and kern.stammdaten_firmen() == []
+    assert all("Beispiel & Partner" not in f["name"] for f in kern.firmen())
+    (repo / "konfig" / "stammdaten.toml").unlink()
+    update._konfig_erganzen()
+    assert not (repo / "konfig" / "stammdaten.toml").exists()

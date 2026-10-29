@@ -87,7 +87,9 @@ Die mitgelieferte, beim Update überschreibbare Anleitung liegt in
 ## Stammdaten eigener Firmen
 
 Alle eigenen Firmen stehen, auch bei nur einer Firma, in
-`konfig/stammdaten.toml`, je ein menschenlesbarer `[[firma]]`-Block. Pflicht
+`konfig/stammdaten.toml`, je ein menschenlesbarer `[[firma]]`-Block. Das Muster
+liegt in `vorlagen/stammdaten.beispiel.toml` und wird nie nach `konfig/` kopiert;
+ein Blatt mit der Beispielfirma oder DE123456789 gilt als nicht vorhanden. Pflicht
 sind `name`, mindestens `ust_id` oder `steuernummer` sowie `anschrift` mit
 `strasse`, `plz`, `ort`; weitere Betriebsanschriften, IBANs und Registerdaten
 gehören ebenfalls dorthin. `belege.toml` behält Betriebsschlüssel wie

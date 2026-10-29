@@ -85,7 +85,9 @@ ein und hält wieder an.
 ## Stammdatenblatt anlegen
 
 Noch vor dem ersten echten Einordnen legt Claude immer `konfig/stammdaten.toml`
-an, auch bei nur einer Firma. Claude fragt für jede Firma nach Name,
+an, auch bei nur einer Firma. Als Muster dient `vorlagen/stammdaten.beispiel.toml`;
+Claude kopiert sie nicht, sondern schreibt das Blatt neu mit den echten Angaben.
+Ein Blatt, das noch „Beispiel & Partner GmbH“ oder DE123456789 enthält, wird ignoriert. Claude fragt für jede Firma nach Name,
 Schreibweisen auf Rechnungen, Anschrift und weiteren Anschriften,
 USt-IdNr., Steuernummer, Geschäftsführung, Handelsregister und IBANs. Nichts
 wird geraten: Fehlende Angaben bleiben als leere Felder mit dem Kommentar
