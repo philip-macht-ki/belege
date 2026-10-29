@@ -81,3 +81,15 @@ def test_pruefen_meldet_fehlendes_und_doppelte_stammdaten(repo, capsys):
         '[[firma]]\nname = "B"\nsteuernummer = "3267010144"\nanschrift = { strasse = "B 1", plz = "12345", ort = "B" }\n', encoding="utf-8")
     assert pruefen.befehl(Namespace()) == 1
     assert "ROT: Stammdatenblatt fehlerhaft: steuernummer doppelt" in capsys.readouterr().out
+
+
+def test_firmenname_mit_sonderzeichen_ergibt_sicheren_bereich(repo):
+    from belege import kern
+    (repo / "konfig" / "stammdaten.toml").write_text(
+        '[[firma]]\nname = "Muster & Co. GmbH"\nust_id = "DE111111111"\n'
+        'anschrift = { strasse = "Musterweg 1", plz = "12345", ort = "Berlin" }\n'
+        '[[firma]]\nname = "Beispiel UG (haftungsbeschränkt)"\nsteuernummer = "12/345/67890"\n'
+        'anschrift = { strasse = "Musterweg 1", plz = "12345", ort = "Berlin" }\n', encoding="utf-8")
+    bereiche = {f["name"]: f["bereich"] for f in kern.firmen()}
+    assert bereiche["Muster & Co. GmbH"] == "Muster-Co.-GmbH"
+    assert bereiche["Beispiel UG (haftungsbeschränkt)"] == "Beispiel-UG-haftungsbeschränkt"

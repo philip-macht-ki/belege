@@ -361,7 +361,12 @@ def _firmen_aus_belege(cfg: dict) -> list[dict]:
             # eigenen, aus seinem Namen abgeleiteten Firmenordner.
             bereich = cfg.get("ablage", {}).get("bereich_betrieb", "Betrieb")
         else:
-            bereich = str(firma.get("bereich") or name).strip()
+            bereich = str(firma.get("bereich") or "").strip()
+            if not bereich:
+                # Aus dem Namen abgeleitet: "Muster & Co. (haftungsbeschränkt)" ist ein
+                # gültiger Firmenname, also bereinigen statt abbrechen.
+                bereich = re.sub(r"[^\w .-]+", " ", name, flags=re.UNICODE).replace("..", " ")
+                bereich = re.sub(r"\s+", " ", bereich).strip(" .-") or "Firma"
             if (not bereich or ".." in bereich or "/" in bereich or "\\" in bereich
                     or not re.fullmatch(r"[\w .-]+", bereich, re.UNICODE)):
                 raise RuntimeError(f"Ungültiger Firmenbereich {bereich!r}: nur sichere Zeichen, keine Pfadtrenner und kein '..'.")
