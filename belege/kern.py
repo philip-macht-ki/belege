@@ -60,7 +60,29 @@ def konfig(name: str) -> dict:
             datei.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(vorlage, datei)
     with open(datei, "rb") as f:
-        return tomllib.load(f)
+        try:
+            return tomllib.load(f)
+        except tomllib.TOMLDecodeError as fehler:
+            # Vorlagen älterer Einrichtungen enthielten nach_ablage nicht.
+            # Beim Ergänzen des Schalters wurde er daher gelegentlich noch
+            # einmal im selben Kontoblock eingetragen. Die erste Angabe ist
+            # die ausdrückliche Einstellung und darf die spätere Vorgabe
+            # überstimmen.
+            if name not in {"belege", "belege.toml"} or "Cannot overwrite a value" not in str(fehler):
+                raise
+    zeilen = datei.read_text(encoding="utf-8").splitlines()
+    bereich = None
+    gesehen: dict[str, int] = {}
+    for nr, zeile in enumerate(zeilen):
+        if zeile.strip() == "[[konto]]":
+            bereich = nr
+        elif bereich is not None and re.match(r"^\s*nach_ablage\s*=", zeile):
+            vorher = gesehen.get(str(bereich))
+            if vorher is None:
+                gesehen[str(bereich)] = nr
+            else:
+                zeilen[nr] = "# durch frühere nach_ablage-Angabe ersetzt"
+    return tomllib.loads("\n".join(zeilen))
 
 
 def rechner() -> str:

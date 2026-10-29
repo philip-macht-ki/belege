@@ -315,7 +315,10 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                     entwurf_angelegt = True
                 except Exception as fehler:  # Der Beleg bleibt trotz Postfachfehler sicher abgelegt.
                     kern.ereignis("fehler", f"Entwurf zur Rechnungsprüfung nicht angelegt: {fehler}")
-            art = "abgelegt" if daten["status"] == "abgelegt" else "zweifel"
+            # Ohne eingeschaltete Rechnungsprüfung bleibt die bisherige
+            # Ereignisart unverändert; nur ein tatsächlicher Prüfungsbefund
+            # ist ein Zweifel.
+            art = "zweifel" if befund else ("abgelegt" if daten["status"] == "abgelegt" else "unsortiert")
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
