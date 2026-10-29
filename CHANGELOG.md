@@ -11,6 +11,7 @@ aktion: keine
 - Belege kann jetzt auch deine Anschrift auf Rechnungen prüfen.
 - Auf Wunsch fragt belege Lieferanten-USt-IdNrn. bei der EU ab; Störungen dort erzeugen keinen Fehlalarm.
 - Reverse Charge und fehlende E-Rechnungen erscheinen als Hinweise für die Buchhaltung, nicht als Befund.
+- Weniger Fehlalarme bei ausländischen Rechnungen, Gutschriften und langen Abrechnungen.
 
 ### Musst du etwas tun?
 

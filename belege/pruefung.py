@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from . import kern
+from . import text as texterkennung
 from .typen import Einordnung, Text
 
 
@@ -31,6 +32,54 @@ def _normal(wert: str) -> str:
 
 def _firma(e: Einordnung) -> dict | None:
     return kern.firma(e.firma) or (kern.firmen()[0] if len(kern.firmen()) == 1 else None)
+
+
+def _inhalt(text: str) -> str:
+    """Macht pdftotext-Spalten für die Muster lesbar, ohne Zeilen zu verlieren."""
+    return re.sub(r"[ \t]+", " ", text)
+
+
+def _unlesbar(text: str) -> bool:
+    zeilen = [zeile.strip() for zeile in text.splitlines() if zeile.strip()]
+    glyphen = sum(bool(re.fullmatch(r"(?:/g[0-9a-f]+)+", zeile, re.I)) for zeile in zeilen)
+    # Nummern steigern die allgemeine OCR-Quote; sie zählen nur zusammen mit
+    # einem echten Glyphenfehler als unlesbar.
+    return (bool(zeilen) and glyphen / len(zeilen) > .20) or (
+        texterkennung.fehlerquote(text) > .10 and bool(re.search(r"/g[0-9a-f]+|�", text, re.I)))
+
+
+def _kein_rechnungsdokument(text: str) -> bool:
+    kopf = "\n".join(zeile for zeile in text.splitlines() if zeile.strip())
+    return bool(re.search(
+        r"\b(?:gutschrift|credit note|erstattung|refund|zahlungserinnerung|mahnung|"
+        r"auftragsbestätigung|order confirmation|pro[ -]?forma|angebot|kontoauszug|"
+        r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|bescheid|"
+        r"lohnabrechnung|vertrag)\b", "\n".join(kopf.splitlines()[:15]), re.I))
+
+
+def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
+    if str((xml or {}).get("nummer", "")).strip():
+        return True
+    zeilen = text.splitlines()
+    etikett = re.compile(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|"
+                         r"beleg(?:nummer|\s*-?nr\.?)|invoice|receipt|credit note number|"
+                         r"(?:\bnummer\b|\bnr\.?\b|\bno\.?\b|#))", re.I)
+    datum = re.compile(r"^\d{1,2}[./-]\d{1,2}[./-](?:\d{2}|\d{4})$")
+    for nr, zeile in enumerate(zeilen):
+        if not etikett.search(zeile):
+            continue
+        for kandidatzeile in zeilen[nr:nr + 4]:
+            for token in re.findall(r"[A-Z0-9][A-Z0-9./-]*\d[A-Z0-9./-]*", kandidatzeile, re.I):
+                sauber = token.strip(".,:;#")
+                if len(re.sub(r"\D", "", sauber)) >= 3 and not datum.fullmatch(sauber):
+                    return True
+    return False
+
+
+def _drittland_usa(text: str, xml: dict | None, firma: dict | None) -> bool:
+    usa = bool(re.search(r"\b(?:united states|usa|u\.s\.a\.)\b", text, re.I))
+    usd = bool(re.search(r"(?:\$\s*\d|\bUSD\b)", text, re.I))
+    return usa and usd and not _lieferanten_ust(text, xml, firma)
 
 
 _POSITION_ODER_SUMME = re.compile(r"(?:\bpos\.?\b|\bmenge\b|\bbeschreibung\b|\bnetto\b|\bsumme\b|\bgesamt\b|\btotal\b)", re.I)
@@ -145,6 +194,9 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     erwartet_strasse = str(ziel["strasse"])
     erwartet_plz = str(ziel["plz"])
     erwartet_ort = str(ziel["ort"])
+    kopf = "\n".join(text.splitlines()[:40])
+    if _anschrift_normal(erwartet_strasse) in _anschrift_normal(kopf) and erwartet_plz in kopf:
+        return None
     gefunden = str((xml or {}).get("kaeufer_anschrift", "")).strip()
     if not gefunden:
         zeilen, name_gefunden = _anschrift_zeilen(firma, text) if firma else ([], False)
@@ -273,7 +325,9 @@ def _ust_id_maskieren(nummer: str) -> str:
 
 
 def _reverse_charge_hinweis(text: str) -> bool:
-    return bool(re.search(r"reverse\s*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers", text, re.I))
+    return bool(re.search(
+        r"reverse[\s-]*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers|"
+        r"(?:gemäß|gemass|under)\s+(?:artikel|article)\s*196", text, re.I))
 
 
 def _keine_umsatzsteuer_berechnet(text: str) -> bool:
@@ -299,19 +353,28 @@ def _deutsche_steuernummer_ausserhalb_empfaengerblock(text: str) -> bool:
 
 
 def _hat_steuer(text: str, xml: dict | None) -> bool:
-    if re.search(r"reverse\s*charge|steuerschuldnerschaft\s+des\s+leistungsempfängers|§\s*13b\s*ustg|steuerbefrei|steuerfrei|kleinunternehmer|§\s*19\s*ustg|innergemeinschaftliche\s+lieferung", text, re.I):
+    if _reverse_charge_hinweis(text) or re.search(r"steuerbefrei|steuerfrei|kleinunternehmer|§\s*19\s*ustg|innergemeinschaftliche\s+lieferung", text, re.I):
         return True
     if (xml or {}).get("steuer"):
         return True
-    return bool(re.search(r"(?:steuersatz|mwst|ust|umsatzsteuer|steuer).{0,45}\b(?:\d{1,2}[,.]\d{1,2}|\d{1,2})\s*%", text, re.I))
+    steuerwort = r"(?:steuersatz|mwst|ust|umsatzsteuer|vat|steuer)"
+    prozent = r"(?:\d{1,2}(?:[,.]\d{1,2})?)\s*%"
+    return bool(re.search(rf"{steuerwort}.{{0,45}}\b{prozent}|\b{prozent}.{{0,45}}{steuerwort}", text, re.I)
+                or re.search(rf"{steuerwort}[^\n]{{0,45}}\n[^\n]*\b{prozent}", text, re.I))
 
 
 def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     """Gibt nur klare fehlende oder unklare Pflichtangaben zurück, ohne zu raten."""
     cfg = kern.konfig("belege").get("pruefung", {})
     regeln = list(cfg.get("regeln", STANDARD))
-    inhalt = text.text
+    firma = _firma(e)
+    if firma and firma.get("pruefung") is False:
+        return []
+    inhalt = _inhalt(text.text)
+    if _unlesbar(inhalt) or _kein_rechnungsdokument(inhalt):
+        return []
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
+    drittland = _drittland_usa(inhalt, xml, firma)
     befund: list[str] = []
     if "empfaenger" in regeln and not kleinbetrag:
         punkt = _empfaenger(inhalt, _firma(e), xml)
@@ -321,13 +384,13 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
         punkt = _anschrift(e, inhalt, xml)
         if punkt:
             befund.append(punkt)
-    if "ust_id_lieferant" in regeln and not kleinbetrag and not _hat_lieferantensteuer(inhalt, xml):
+    # Der Ausleser hält nur den Anfang langer Abrechnungen vor. Alles weitere
+    # könnte auf einer abgeschnittenen letzten Seite stehen.
+    if len(text.text) >= 5990:
+        return befund
+    if "ust_id_lieferant" in regeln and not kleinbetrag and not drittland and not _hat_lieferantensteuer(inhalt, xml):
         befund.append(NAMEN["ust_id_lieferant"] + " fehlt")
-    nummer = str((xml or {}).get("nummer", ""))
-    nummer_muster = (r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|belegnummer|"
-                     r"invoice\s*(?:no\.?|number|nr\.?)|(?:rechnung|invoice)\s*\n\s*(?:nr\.?|no\.?|number))"
-                     r"\s*[:#.]?\s*[A-Z0-9][A-Z0-9./-]{2,}")
-    if "rechnungsnummer" in regeln and not kleinbetrag and not (nummer or re.search(nummer_muster, inhalt, re.I)):
+    if "rechnungsnummer" in regeln and not kleinbetrag and not _rechnungsnummer_vorhanden(inhalt, xml):
         befund.append(NAMEN["rechnungsnummer"] + " fehlt")
     monat = (r"(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|"
              r"oktober|november|dezember|january|february|march|april|may|june|july|"
@@ -335,8 +398,8 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
              r"aug|sep|sept|oct|nov|dec)")
     # Jedes vollständige Datum zählt: Ein Fehlbefund samt Entwurf an den Lieferanten wiegt schwerer
     # als ein übersehenes fehlendes Rechnungsdatum.
-    datum_muster = (rf"(?:\d{{1,2}}[./-]\d{{1,2}}[./-]20\d{{2}}|20\d{{2}}[./-]\d{{1,2}}[./-]\d{{1,2}}|"
-                    rf"\d{{1,2}}\.?\s+{monat}\s+20\d{{2}}|{monat}\s+\d{{1,2}},?\s+20\d{{2}})")
+    datum_muster = (rf"(?:\d{{1,2}}\.\d{{1,2}}\.\d{{2,4}}|\d{{1,2}}[/-]\d{{1,2}}[/-]20\d{{2}}|20\d{{2}}[./-]\d{{1,2}}[./-]\d{{1,2}}|"
+                    rf"\d{{1,2}}\.?\s+{monat}\.?\s+20\d{{2}}|{monat}\.?\s+\d{{1,2}},?\s+20\d{{2}})")
     if "datum" in regeln and not ((xml or {}).get("datum") or re.search(datum_muster, inhalt, re.I)):
         befund.append("Rechnungsdatum fehlt")
     leistung_muster = (r"(?:leistung(?:sdatum|szeitraum)?|leistungsdatum\s+entspricht\s+rechnungsdatum|"
@@ -345,10 +408,18 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(leistung_muster, inhalt, re.I)):
         befund.append(NAMEN["leistung"] + " fehlt")
     steuer_ok = _hat_steuer(inhalt, xml) or (kleinbetrag and bool(re.search(r"\b\d{1,2}\s*%", inhalt)))
-    if "steuer" in regeln and not steuer_ok:
+    if "steuer" in regeln and not drittland and not steuer_ok:
         befund.append(NAMEN["steuer"] + " fehlt")
     if kleinbetrag:
-        if not re.search(r"\b\d{5}\s+[A-Za-zÄÖÜäöüß-]+", inhalt):
+        anschrift = (r"(?:\b\d{4,5}\b|\b[A-Z]\d{2}\s?[A-Z0-9]{3}\b|"
+                     r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b|"
+                     r"\b(?:deutschland|germany|ireland|irland|france|frankreich|netherlands|niederlande|"
+                     r"luxembourg|luxemburg|belgium|belgien|österreich|austria|schweiz|switzerland|"
+                     r"united kingdom|united states|usa|lithuania|lietuva|poland|polen|italy|italien|"
+                     r"spain|spanien|portugal|denmark|dänemark|sweden|schweden|finland|finnland|"
+                     r"estonia|estland|latvia|lettland|czech|tschechien|slovakia|slowakei|slovenia|slowenien|"
+                     r"hungary|ungarn|romania|rumänien|bulgaria|croatia|kroatien|greece|griechenland)\b)")
+        if not re.search(anschrift, inhalt, re.I):
             befund.append("Name und Anschrift des Lieferanten fehlt")
         if not (e.betrag or re.search(r"(?:brutto|gesamt|summe).{0,25}\d+[,.]\d{2}", inhalt, re.I)):
             befund.append("Bruttobetrag fehlt")
@@ -364,8 +435,13 @@ def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]
     cfg = kern.konfig("belege").get("pruefung", {})
     if not (cfg.get("an", False) and e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb" and e.firma != "unklar"):
         return []
-    inhalt = text.text
-    ust = _lieferanten_ust(inhalt, xml, _firma(e)) or ""
+    firma = _firma(e)
+    if firma and firma.get("pruefung") is False:
+        return []
+    inhalt = _inhalt(text.text)
+    if _unlesbar(inhalt):
+        return []
+    ust = _lieferanten_ust(inhalt, xml, firma) or ""
     reverse = _reverse_charge_hinweis(inhalt) or bool(ust and not ust.startswith("DE") and _keine_umsatzsteuer_berechnet(inhalt))
     ergebnis = ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"] if reverse else []
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
