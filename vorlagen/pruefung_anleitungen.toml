@@ -1,0 +1,28 @@
+[[anbieter]]
+name = "Meta"
+erkennen = ["meta", "facebook"]
+klickweg = "Werbeanzeigenmanager → Abrechnung und Zahlungen → Zahlungseinstellungen → Unternehmensinformationen: Firmenname, Anschrift und USt-IdNr. eintragen. Menüs können sich ändern."
+[[anbieter]]
+name = "Google (Ads)"
+erkennen = ["google ads"]
+klickweg = "Google Ads → Verwaltung → Abrechnung → Einstellungen → Zahlungsprofil: Name und Adresse der Firma eintragen. Menüs können sich ändern."
+[[anbieter]]
+name = "Amazon"
+erkennen = ["amazon"]
+klickweg = "Amazon → Konto → Amazon-Business- bzw. Steuereinstellungen: Firmenname und USt-IdNr. hinterlegen; die Rechnung richtet sich nach der Rechnungsadresse bei der Bestellung. Menüs können sich ändern."
+[[anbieter]]
+name = "Apple"
+erkennen = ["apple"]
+klickweg = "Apple-Account → Zahlung und Versand → Rechnungsadresse: Firmenname und Anschrift eintragen. Menüs können sich ändern."
+[[anbieter]]
+name = "SumUp"
+erkennen = ["sumup"]
+klickweg = "SumUp-Dashboard → Konto → Unternehmensprofil: Firmenname prüfen; lässt er sich nicht ändern, den SumUp-Support bitten. Menüs können sich ändern."
+[[anbieter]]
+name = "Microsoft"
+erkennen = ["microsoft"]
+klickweg = "Microsoft 365 Admin Center → Abrechnung → Rechnungskonten → Rechnungsprofil: Name, Adresse und USt-IdNr. bearbeiten. Menüs können sich ändern."
+[[anbieter]]
+name = "Hetzner"
+erkennen = ["hetzner"]
+klickweg = "Hetzner Konsole bzw. Robot → Kontodaten: Rechnungsanschrift und USt-IdNr. ändern. Menüs können sich ändern."

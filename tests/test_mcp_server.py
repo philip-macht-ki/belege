@@ -88,7 +88,7 @@ def test_server_antwortet_ueber_stdio():
     prozess.kill()
     assert set(namen) == {
         "konten", "suchen", "lesen", "anhaenge_speichern", "entwurf", "senden",
-        "dokumente_suchen", "fristen", "belege_suchen",
+        "dokumente_suchen", "fristen", "belege_suchen", "pruefung_anbieter",
     }
 
 

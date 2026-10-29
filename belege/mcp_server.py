@@ -150,6 +150,14 @@ def fristen(tage: int = 365) -> dict:
     return liste
 
 
+def pruefung_anbieter(name: str = "", status: str = "") -> list[dict]:
+    """Listet Anbieter der Rechnungsprüfung oder setzt ihren Status offen, erledigt oder ignorieren."""
+    from .aufraeumen import anbieter_befehl
+    if status and status not in {"offen", "erledigt", "ignorieren"}:
+        raise ValueError("Status muss offen, erledigt oder ignorieren sein.")
+    return anbieter_befehl(name, status)
+
+
 def _antwort(ergebnis: kern.Ergebnis) -> dict:
     """Macht ein Sendeergebnis für MCP ohne interne Dataclass-Felder lesbar."""
     return {
@@ -243,6 +251,7 @@ def befehl(args) -> int:
             "Zeigt kommende Fristen aus Verträgen und Versicherungen sowie alle, die "
             "noch geprüft werden müssen. Parameter: tage (Standard 365).",
         ),
+        (pruefung_anbieter, "Listet Anbieter der Rechnungsprüfung oder setzt ihren Status. Parameter: name, status."),
     ]
     for funktion, beschreibung in werkzeuge:
         server.tool(description=beschreibung + HINWEIS)(funktion)

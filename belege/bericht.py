@@ -93,12 +93,23 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         zeilen = [_zeile_dokument(e) for e in gruppen["dokument"]]
         absaetze.append(f"Dokumente abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
 
-    ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
+    # Befunde bekannter Anbieter stehen schon in der Aufräumliste; nicht täglich wiederholen.
+    zweifel = [e for e in gruppen["zweifel"] if e.get("daten", {}).get("pruefung_neu") is not False]
+    ansehen = gruppen["unsortiert"] + zweifel + gruppen["vertraulich"]
     befund = [e for e in gruppen["zweifel"] if e.get("daten", {}).get("pruefung", {}).get("status") == "befund"]
     if befund:
         zeilen = []
         for e in befund:
             d = e.get("daten", {})
+            if d.get("pruefung_neu") is False:
+                continue
+            try:
+                from .aufraeumen import schluessel, zustand
+                status = (zustand().get("anbieter", {}).get(schluessel(str(d.get("lieferant") or "")), {}) or {}).get("status")
+                if status == "ignorieren":
+                    continue
+            except OSError:
+                pass
             if not d.get("lieferant"):  # reines Entwurfsereignis nicht doppelt nennen
                 continue
             betrag = f" {float(d['betrag']):.2f} €".replace(".", ",") if d.get("betrag") is not None else ""
@@ -165,6 +176,17 @@ def empfaenger() -> str:
 
 def befehl(args) -> int:
     """`belege bericht`: ohne --echt nur anzeigen, mit --echt an dich selbst senden."""
+    # Die erste Zusammenfassung läuft einmal am Ende eines echten Tageslaufs;
+    # auch ohne Befund merken wir das, damit später keine Überraschungsmail kommt.
+    if echt(args) and konfig("belege").get("pruefung", {}).get("an", False):
+        from argparse import Namespace
+        from .aufraeumen import befehl as aufraeumen, zustand
+        try:
+            if not zustand().get("erste_liste"):
+                aufraeumen(Namespace(monate=3, vorschau=None, echt=True))
+        except Exception as fehler:  # Der Tagesbericht geht trotzdem raus.
+            from .kern import ereignis
+            ereignis("fehler", f"Aufräumliste der Rechnungsprüfung nicht erstellt: {fehler}")
     liste = neue_ereignisse()
     text, betreff = text_und_betreff(liste)
     if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", False):

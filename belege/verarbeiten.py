@@ -261,8 +261,9 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                     xml_daten = lesen(fund.datei)
                 except (OSError, ValueError):
                     xml_daten = None
-            befund = pruefe(einordnung, text, xml=xml_daten)
-            notizen = hinweise(einordnung, text, xml=xml_daten)
+            absender = str((fund.mail or {}).get("von") or "")
+            befund = pruefe(einordnung, text, xml=xml_daten, absender=absender)
+            notizen = hinweise(einordnung, text, xml=xml_daten, absender=absender)
             if befund:
                 from .ablegen import ablegen_befund
                 ergebnis = ablegen_befund(fund, einordnung, befund, echt)
@@ -313,12 +314,22 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         _original_erledigt(fund)
         if echt:
             entwurf_angelegt = False
+            anbieter = None
+            anbieter_neu = False
+            from .pruefung import EU_OHNE_SATZ
+            if pruefbar and (befund or EU_OHNE_SATZ in notizen):
+                from .aufraeumen import aktualisieren, speichern, zustand
+                stand = zustand()
+                anbieter, anbieter_neu = aktualisieren({"lieferant": einordnung.lieferant, "punkte": befund,
+                                                        "hinweise": notizen, "datum": str(einordnung.datum or fund.eingang)}, stand)
+                speichern(stand)
             firma_eintrag = kern.firma(einordnung.firma) or {}
             eigene_empfaengerdaten = all(
                 str(firma_eintrag.get(feld, "")).strip()
                 for feld in ("name", "ust_id")
             )
-            if (befund and firma_eindeutig and eigene_empfaengerdaten
+            if (befund and anbieter and anbieter.get("weg") == "lieferant" and anbieter.get("status") == "offen"
+                    and not anbieter.get("entwurf", False) and firma_eindeutig and eigene_empfaengerdaten
                     and pruefung.get("entwurf_an_absender", True)
                     and fund.mail and fund.mail.get("von")
                     and not any("unklar" in punkt.casefold() for punkt in befund)):
@@ -332,6 +343,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 try:
                     entwurf(str(fund.mail["von"]), betreff, mailtext, [], True, fund.mail.get("konto"))
                     entwurf_angelegt = True
+                    anbieter["entwurf"] = True
+                    speichern(stand)
                 except Exception as fehler:  # Der Beleg bleibt trotz Postfachfehler sicher abgelegt.
                     kern.ereignis("fehler", f"Entwurf zur Rechnungsprüfung nicht angelegt: {fehler}")
             # Ohne eingeschaltete Rechnungsprüfung bleibt die bisherige
@@ -341,7 +354,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
-                          grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt)
+                          grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt,
+                          pruefung_neu=anbieter_neu)
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

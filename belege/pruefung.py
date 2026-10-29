@@ -48,12 +48,50 @@ def _unlesbar(text: str) -> bool:
         texterkennung.fehlerquote(text) > .10 and bool(re.search(r"/g[0-9a-f]+|�", text, re.I)))
 
 
+def _titelzeilen(text: str, anzahl: int = 5) -> list[str]:
+    return [zeile.strip() for zeile in text.splitlines() if zeile.strip()][:anzahl]
+
+
 def _kein_rechnungsdokument(text: str) -> bool:
     zeilen = [zeile.strip() for zeile in text.splitlines() if zeile.strip()]
     kopf = "\n".join(zeilen[:15])
     if re.search(r"\b(?:das\s+ist\s+keine\s+rechnung|this\s+is\s+not\s+an\s+invoice)\b", text, re.I):
         return True
-    if re.search(r"\b(?:gutschrift|credit note|erstattung|refund|zahlungserinnerung|mahnung|"
+    # Mahnungen sind oft mehrseitig; ein beiläufiges "Erinnerung" in einer
+    # Rechnung dagegen nie. Deshalb nur ein Titel/eine eigene Zeile.
+    # Eine echte Rechnung mit einer Position "Mahnung" hat einen eigenen Rechnungstitel.
+    titel_nr = next((nr for nr, z in enumerate(zeilen)
+                     if re.fullmatch(r"(?:rechnung|invoice|rechnung\s+nr\.?.*|invoice\s+(?:no|number).*)", z, re.I)), None)
+    for nr, zeile in enumerate(zeilen):
+        if titel_nr is not None and nr > titel_nr and not re.search(r"zahlungserinnerung", zeile, re.I):
+            continue
+        if re.fullmatch(r"(?:zahlungserinnerung|erinnerung|mahnung|zahlungsaufforderung)[:.! ]*", zeile, re.I):
+            return True
+        if re.match(r"^(?:ZAHLUNGSERINNERUNG|ERINNERUNG|MAHNUNG|ZAHLUNGSAUFFORDERUNG)\b", zeile):
+            return True
+        if re.fullmatch(r"zahlungsbeleg[:.! ]*", zeile, re.I) and re.search(r"\brechnung\b", text, re.I):
+            return True
+    if re.search(r"\b(?:veräußerungs|verkaufs)katalog\b|attraktive\s+veräußerungsmöglichkeit|"
+                 r"\bstarug\b.{0,80}\b(?:katalog|angebot)\b", text, re.I):
+        return True
+    if re.search(r"\b(?:leergut-?(?:\s*&\s*transportmittel)?-?\s*abrechnung|pfand(?:abrechnung|gutschrift))\b", text, re.I):
+        return True
+    if (re.search(r"\banlage\s+rechnungskonten\b", kopf, re.I)
+            or (re.search(r"\banlage\s+zur\s+rechnung\b", kopf, re.I) and not _rechnungsnummer_vorhanden(text, None))):
+        return True
+    if (re.search(r"\b(?:for\s+ach\s+delivery|wire\s+transfer\s+instructions|remittance\s+details)\b", text, re.I)
+            and not re.search(r"\b(?:gesamt|total|amount due|invoice total)\b.{0,30}\d", text, re.I)):
+        return True
+    titel = "\n".join(_titelzeilen(text, 8))
+    quittung = bool(re.search(r"^(?:quittung|receipt|zahlungsbeleg)\b|\brcpt-\d", titel, re.I | re.M))
+    # Nur eine Quittung, die auf eine eigene Rechnungsnummer verweist; eine Quittung
+    # ohne solchen Verweis kann die einzige Rechnung sein und bleibt prüfbar.
+    verweis = re.search(r"\b(?:invoice\s+(?:number|no\.?|#)|rechnungs?\s*(?:nr\.?|nummer)|zu\s+rechnung)[\s:#]*"
+                        r"((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{2,})", text, re.I)
+    eigene = re.search(r"\b(?:receipt\s+(?:number|no\.?|#)|quittungs?\s*(?:nr\.?|nummer))[\s:#]*([A-Z0-9-]{3,})", text, re.I)
+    if quittung and verweis and not (eigene and eigene.group(1).casefold() == verweis.group(1).casefold()):
+        return True
+    if re.search(r"\b(?:gutschrift|credit note|erstattung|refund|"
                  r"auftragsbestätigung|order confirmation|pro[ -]?forma|angebot|kontoauszug|"
                  r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|zahlungsbeleg|"
                  r"lohnabrechnung|berechnung der umsatzsteuer)\b|\w*(?:vertrag|bescheid)\w*|"
@@ -115,13 +153,20 @@ def _drittland(text: str, xml: dict | None, firma: dict | None) -> bool:
     rohzeilen = text.splitlines()
     zeilen = [zeile.strip() for zeile in rohzeilen if zeile.strip()]
     kopf_und_fuss = "\n".join(zeilen[:15] + zeilen[-10:])
-    if _lieferanten_ust(text, xml, firma) or not re.search(rf"{land}|{waehrung}", kopf_und_fuss, re.I):
+    # Eine Rechtsform/Kennziffer direkt beim Land ist ebenfalls Lieferantenkontext,
+    # auch wenn OCR die Zeile in die Mitte geschoben hat.
+    markiert = any(re.search(r"\b(?:pty\s+ltd|inc\.?|llc|abn)\b", " ".join(zeilen[max(0, nr - 1):nr + 2]), re.I)
+                   and re.search(land, " ".join(zeilen[max(0, nr - 1):nr + 2]), re.I)
+                   for nr in range(len(zeilen)))
+    if _lieferanten_ust(text, xml, firma) or not (re.search(rf"{land}|{waehrung}", kopf_und_fuss, re.I) or markiert):
         return False
     empfaengerblock = _empfaengerblock_zeilen(text, firma)
     deutsche_steuernummer = re.compile(r"\b\d{2,3}/\d{3,4}/\d{4,5}\b")
     if any(deutsche_steuernummer.search(zeile) for nr, zeile in enumerate(text.splitlines())
            if nr not in empfaengerblock):
         return False
+    if markiert:
+        return True
     lieferantenkopf = [zeile.strip() for nr, zeile in enumerate(rohzeilen)
                        if zeile.strip() and nr not in empfaengerblock][:8]
     return not _deutsche_lieferantenanschrift(lieferantenkopf)
@@ -165,7 +210,12 @@ def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
         return None
     # Wie in 1.12.0: Der Empfänger darf irgendwo oben stehen, sonst gäbe es neue Fehlbefunde.
     oben = "\n".join(text.splitlines()[:55])
-    if any(_normal(name) and _normal(name) in _normal(oben) for name in namen):
+    def passt(name: str, gefunden: str) -> bool:
+        if _normal(name) and _normal(name) in _normal(gefunden):
+            return True
+        teile = re.findall(r"[\wäöüß-]+", name, re.I)
+        return len(teile) == 2 and _normal(" ".join(reversed(teile))) in _normal(gefunden)
+    if any(passt(name, oben) for name in namen):
         return None
     if not gefunden:
         zeilen = oben.splitlines()
@@ -323,12 +373,15 @@ _UST_ID_FORMATS = {
     "SI": r"\d{8}", "SK": r"\d{10}", "XI": r"(?:\d{9}|\d{12})",
 }
 _UST_ID_KENNZEICHEN = re.compile(
-    r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|"
+    r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|steuer\s*-?\s*id\b|"
     r"vat(?:\s*(?:id|number|no\.?)?)?|tva|iva|btw|nif)", re.I)
 _EMPFÄNGERZEILE = re.compile(r"(?:rechnungsempf|rechnung\s+an|\bempf[aä]nger\b|\bkund[ei]\b|\ban\s*:)", re.I)
 _EMPFÄNGER_UST_KENNZEICHEN = re.compile(
     r"(?:ihre\s+ust\s*-?id\s*(?:nr\.?)?|kunden\s*-?ust\s*-?id|"
     r"ust\s*-?id\s+des\s+leistungsempfängers|your\s+vat|customer\s+vat)", re.I)
+
+
+EU_OHNE_SATZ = "EU-Rechnung ohne Hinweis ‚Steuerschuldnerschaft des Leistungsempfängers‘; Reverse Charge gilt trotzdem, bitte so buchen"
 
 
 def _ust_id(nummer: str) -> str | None:
@@ -426,6 +479,14 @@ def _keine_umsatzsteuer_berechnet(text: str) -> bool:
     return bool(nullsatz.search(text) or nullbetrag.search(text)) and not bool(positiv.search(text))
 
 
+def _eu_reverse_charge_ohne_satz(text: str, xml: dict | None, firma: dict | None) -> bool:
+    ust = _lieferanten_ust(text, xml, firma) or ""
+    eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
+    eigene_drauf = bool(eigene) and eigene in re.sub(r"[\s.-]", "", text).upper()
+    return bool(ust and eigene and ust[:2] != eigene[:2] and eigene_drauf
+                and (_keine_umsatzsteuer_berechnet(text) or not _hat_steuer(text, xml)))
+
+
 def _deutsche_steuernummer_ausserhalb_empfaengerblock(text: str) -> bool:
     zeilen = text.splitlines()
     im_empfaengerblock = False
@@ -448,10 +509,17 @@ def _hat_steuer(text: str, xml: dict | None) -> bool:
     steuerwort = r"(?:steuersatz|mwst|ust|umsatzsteuer|vat|steuer)"
     prozent = r"(?:\d{1,2}(?:[,.]\d{1,2})?)\s*%"
     return bool(re.search(rf"{steuerwort}.{{0,45}}\b{prozent}|\b{prozent}.{{0,45}}{steuerwort}", text, re.I)
-                or re.search(rf"{steuerwort}[^\n]{{0,45}}\n[^\n]*\b{prozent}", text, re.I))
+                or re.search(rf"{steuerwort}(?:[^\n]*\n){{0,3}}[^\n]*\b{prozent}|\b{prozent}(?:[^\n]*\n){{0,3}}[^\n]*{steuerwort}", text, re.I))
 
 
-def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
+def _nie_beleg(text: str, absender: str | None) -> bool:
+    eintraege = kern.konfig("belege").get("pruefung", {}).get("nie_beleg", []) or []
+    titel = "\n".join(_titelzeilen(text))
+    return any(str(wert).casefold() in (absender or "").casefold() or str(wert).casefold() in titel.casefold()
+               for wert in eintraege if str(wert).strip())
+
+
+def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None, absender: str | None = None) -> list[str]:
     """Gibt nur klare fehlende oder unklare Pflichtangaben zurück, ohne zu raten."""
     cfg = kern.konfig("belege").get("pruefung", {})
     regeln = list(cfg.get("regeln", STANDARD))
@@ -459,7 +527,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     if firma and firma.get("pruefung") is False:
         return []
     inhalt = _inhalt(text.text)
-    if _unlesbar(inhalt) or _kein_rechnungsdokument(inhalt) or _behoerde_im_kopf(inhalt):
+    if _unlesbar(inhalt) or _kein_rechnungsdokument(inhalt) or _behoerde_im_kopf(inhalt) or _nie_beleg(inhalt, absender):
         return []
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
     drittland = _drittland(inhalt, xml, firma)
@@ -492,10 +560,14 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
         befund.append("Rechnungsdatum fehlt")
     leistung_muster = (r"(?:leistung(?:sdatum|szeitraum)?|leistungsdatum\s+entspricht\s+rechnungsdatum|"
                        r"bezeichnung|beschreibung|artikel|position|pos\.?|description|item|menge|"
-                       r"leistungszeitraum|service)\D{0,80}\S")
+                       r"leistungszeitraum|service|abonnement|subscription|plan|\babo\b|\(monatlich\)|\(jährlich\))\D{0,80}\S|"
+                       r"(?:^|\n)[^\n]*[A-Za-zÄÖÜäöü][^\n]*\s+\d+(?:[,.]\d+)?\s+(?:[€$]\s*)?\d+[,.]\d{2}\b|"
+                       # Positionszeile "8x Kunstblumen …" ohne Spaltenkopf
+                       r"(?:^|\n)\s*\d+\s*(?:x|×|stk\.?|stück)\s+[A-Za-zÄÖÜäöü]{3}")
     if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(leistung_muster, inhalt, re.I)):
         befund.append(NAMEN["leistung"] + " fehlt")
-    steuer_ok = _hat_steuer(inhalt, xml) or (kleinbetrag and bool(re.search(r"\b\d{1,2}\s*%", inhalt)))
+    steuer_ok = (_hat_steuer(inhalt, xml) or _eu_reverse_charge_ohne_satz(inhalt, xml, firma)
+                 or (kleinbetrag and bool(re.search(r"\b\d{1,2}\s*%", inhalt))))
     if "steuer" in regeln and not drittland and not steuer_ok:
         befund.append(NAMEN["steuer"] + " fehlt")
     if kleinbetrag:
@@ -518,7 +590,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     return befund
 
 
-def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
+def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None, absender: str | None = None) -> list[str]:
     """Gibt Buchhaltungshinweise zurück; sie sind ausdrücklich keine Befunde."""
     cfg = kern.konfig("belege").get("pruefung", {})
     if not (cfg.get("an", False) and e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb" and e.firma != "unklar"):
@@ -527,11 +599,14 @@ def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]
     if firma and firma.get("pruefung") is False:
         return []
     inhalt = _inhalt(text.text)
-    if _unlesbar(inhalt):
+    klar_ausgeschlossen = r"zahlungserinnerung|\berinnerung\b|\bmahnung\b|zahlungsaufforderung|(?:veräußerungs|verkaufs)katalog|leergut|pfand|anlage\s+rechnungskonten|for\s+ach\s+delivery|wire\s+transfer"
+    if _unlesbar(inhalt) or _nie_beleg(inhalt, absender) or (_kein_rechnungsdokument(inhalt) and re.search(klar_ausgeschlossen, inhalt, re.I)):
         return []
     ust = _lieferanten_ust(inhalt, xml, firma) or ""
     reverse = _reverse_charge_hinweis(inhalt) or bool(ust and not ust.startswith("DE") and _keine_umsatzsteuer_berechnet(inhalt))
     ergebnis = ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"] if reverse else []
+    if _eu_reverse_charge_ohne_satz(inhalt, xml, firma) and not _reverse_charge_hinweis(inhalt):
+        ergebnis.append(EU_OHNE_SATZ)
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
     deutsch = ust.startswith("DE") or _deutsche_steuernummer_ausserhalb_empfaengerblock(inhalt)
     if deutsch and not kleinbetrag and xml is None:
@@ -545,6 +620,18 @@ def befehl(args) -> int:
     from .einordnen import _aus_xml, einordnen
     from .text import auslesen
     from .typen import Fund
+    if args.ziel and args.ziel[0] == "aufraeumen":
+        from .aufraeumen import befehl as aufraeumen
+        return aufraeumen(args)
+    if args.ziel and args.ziel[0] == "anbieter":
+        from .aufraeumen import anbieter_befehl
+        name, status = (args.ziel[1], args.ziel[2]) if len(args.ziel) == 3 else ("", "")
+        if status and status not in {"offen", "erledigt", "ignorieren"}:
+            print("Status muss offen, erledigt oder ignorieren sein.")
+            return 2
+        for eintrag in anbieter_befehl(name, status):
+            print(f"{eintrag['name']}: {eintrag['status']}")
+        return 0
     if len(args.ziel) != 1:
         print("Bitte nenne genau eine Datei, zum Beispiel: belege pruefung Rechnung.pdf")
         return 2

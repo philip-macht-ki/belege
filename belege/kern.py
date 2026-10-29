@@ -320,8 +320,13 @@ def stammdaten_datei() -> Path:
     return ROOT / "konfig" / "stammdaten.toml"
 
 
-def stammdaten_firmen() -> list[dict]:
-    """Liest Stammdaten, ohne eine fehlende optionale Datei zu erzeugen."""
+# Werte aus vorlagen/stammdaten.beispiel.toml. 1.13.0 hat die Vorlage beim Update
+# als echtes Blatt nach konfig/ kopiert; ein solches Blatt gilt als nicht vorhanden.
+_BEISPIEL_NAMEN = {"beispiel & partner gmbh"}
+_BEISPIEL_UST = {"DE123456789"}
+
+
+def _stammdaten_roh() -> list[dict]:
     datei = stammdaten_datei()
     if not datei.exists():
         return []
@@ -330,8 +335,26 @@ def stammdaten_firmen() -> list[dict]:
     return [dict(firma) for firma in daten.get("firma", [])]
 
 
+def stammdaten_beispiel() -> bool:
+    """Wahr, wenn konfig/stammdaten.toml noch die unveränderte Beispielfirma enthält."""
+    try:
+        roh = _stammdaten_roh()
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return any(str(f.get("name", "")).strip().casefold() in _BEISPIEL_NAMEN
+               or re.sub(r"\s", "", str(f.get("ust_id", ""))).upper() in _BEISPIEL_UST
+               for f in roh)
+
+
+def stammdaten_firmen() -> list[dict]:
+    """Liest Stammdaten, ohne eine fehlende optionale Datei zu erzeugen."""
+    if stammdaten_beispiel():
+        return []
+    return _stammdaten_roh()
+
+
 def hat_stammdatenblatt() -> bool:
-    return stammdaten_datei().exists()
+    return stammdaten_datei().exists() and not stammdaten_beispiel()
 
 
 def _firmen_aus_belege(cfg: dict) -> list[dict]:

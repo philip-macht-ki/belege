@@ -104,6 +104,8 @@ ordner = "Manuell prüfen"
 regeln = ["empfaenger", "anschrift", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
 kleinbetrag = 250.0
 entwurf_an_absender = true
+# Absender oder Titel, die nie Rechnungen sind (Teilstrings, Groß-/Kleinschreibung egal).
+# nie_beleg = ["SEO-Wochenreport", "report@meine-firma.de"]
 # EU-USt-IdNr. des Lieferanten zusätzlich über VIES prüfen (30 Tage lokal gecacht).
 ust_id_amtlich = false
 

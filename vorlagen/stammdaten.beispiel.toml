@@ -1,4 +1,5 @@
-# Claude füllt dieses Stammdatenblatt bei der Einrichtung gemeinsam mit dir aus.
+# Muster für konfig/stammdaten.toml. Diese Datei wird nie automatisch übernommen:
+# Claude legt das echte Blatt bei der Einrichtung gemeinsam mit dir an.
 # Alle eigenen Firmen stehen hier, auch wenn es nur eine ist. Die Daten sind Beispiele.
 
 [[firma]]
