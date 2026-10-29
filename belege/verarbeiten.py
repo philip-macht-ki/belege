@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -235,7 +236,33 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         from .ablegen import ablegen
 
-        ergebnis = ablegen(fund, einordnung, text, echt)
+        pruefung = kern.konfig("belege").get("pruefung", {})
+        pruefbar = (
+            pruefung.get("an", False)
+            and einordnung.ist_beleg
+            and einordnung.art == "eingang"
+            and einordnung.bereich == "betrieb"
+            and einordnung.datum is not None
+            and not re.search(r"\b(dauerbeleg|bescheid|steuerbescheid|gebührenbescheid)\b", text.text, re.I)
+        )
+        befund = []
+        if pruefbar:
+            from .pruefung import pruefe
+            xml_daten = None
+            if fund.datei.suffix.lower() == ".xml":
+                try:
+                    from .xrechnung import lesen
+                    xml_daten = lesen(fund.datei)
+                except (OSError, ValueError):
+                    xml_daten = None
+            befund = pruefe(einordnung, text, xml=xml_daten)
+            if befund:
+                from .ablegen import ablegen_befund
+                ergebnis = ablegen_befund(fund, einordnung, befund, echt)
+            else:
+                ergebnis = ablegen(fund, einordnung, text, echt)
+        else:
+            ergebnis = ablegen(fund, einordnung, text, echt)
         if not echt:
             ziel = Path(ergebnis.daten.get("pfad", ""))
             try:
@@ -268,15 +295,31 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             "xml": xml,
             "vertraulich": bool(geheim and geheim.vertraulich),
         }
+        if pruefbar:
+            daten["pruefung"] = {"status": "ok" if not befund else "befund", "punkte": befund}
         index[fingerabdruck] = daten
         _speichere_index(index)
         _original_erledigt(fund)
         if echt:
-            art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
+            entwurf_angelegt = False
+            if befund and pruefung.get("entwurf_an_absender", True) and fund.mail and fund.mail.get("von") and not any("unklar" in punkt.casefold() for punkt in befund):
+                from .senden import entwurf
+                firma_eintrag = kern.firma(einordnung.firma) or {}
+                betreff = "Bitte um korrigierte Rechnung"
+                mailtext = ("Guten Tag,\n\nbitte sende uns eine korrigierte Rechnung. "
+                            "Bei der Prüfung fehlen oder weichen folgende Angaben ab:\n- " + "\n- ".join(befund)
+                            + f"\n\nZur Zuordnung: Rechnungsnummer: nicht erkennbar, Datum: {einordnung.datum:%d.%m.%Y}, Betrag: {einordnung.betrag or 'nicht erkennbar'} EUR."
+                            + f"\n\nKorrekte Empfängerdaten: {firma_eintrag.get('name', '')}, USt-IdNr.: {firma_eintrag.get('ust_id', '')}.\n\nVielen Dank.")
+                try:
+                    entwurf(str(fund.mail["von"]), betreff, mailtext, [], True, fund.mail.get("konto"))
+                    entwurf_angelegt = True
+                except Exception as fehler:  # Der Beleg bleibt trotz Postfachfehler sicher abgelegt.
+                    kern.ereignis("fehler", f"Entwurf zur Rechnungsprüfung nicht angelegt: {fehler}")
+            art = "abgelegt" if daten["status"] == "abgelegt" else "zweifel"
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
-                          grund=daten.get("grund"))
+                          grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt)
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

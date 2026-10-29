@@ -124,3 +124,23 @@ def ablegen(fund: Fund, e: Einordnung, text: Text, echt: bool) -> Ergebnis:
     if status == "unsortiert":
         return Ergebnis("befund", f"Zur Prüfung unter {pfad} abgelegt.", daten)
     return Ergebnis("ok", f"Unter {pfad} abgelegt.", daten)
+
+
+def ablegen_befund(fund: Fund, e: Einordnung, punkte: list[str], echt: bool) -> Ergebnis:
+    """Legt eine beanstandete Rechnung getrennt samt lesbarem Befund ab."""
+    cfg = konfig("belege").get("pruefung", {})
+    firma_eintrag = firma(e.firma)
+    bereich = firma_eintrag["bereich"] if firma_eintrag and konfig("belege").get("firma") else konfig("belege").get("ablage", {}).get("bereich_betrieb", "Betrieb")
+    kandidat = ablage_ordner() / bereich / str(cfg.get("ordner", "Manuell prüfen")) / f"{e.datum:%Y}" / f"{e.datum:%m}" / dateiname(e, fund.datei.suffix)
+    pfad = _freier_pfad(kandidat)
+    befund_datei = pfad.with_name(pfad.name + ".befund.txt")
+    daten = {"pfad": str(pfad), "sha": _sha(fund.datei), "status": "befund", "befund": str(befund_datei)}
+    if not echt:
+        return Ergebnis("befund", f"Befund: würde unter {pfad} ablegen.", daten)
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    if fund.verschieben:
+        shutil.move(str(fund.datei), str(pfad))
+    else:
+        shutil.copy2(fund.datei, pfad)
+    befund_datei.write_text("Rechnungsprüfung – bitte korrigieren:\n\n" + "\n".join(f"- {punkt}" for punkt in punkte) + "\n", encoding="utf-8")
+    return Ergebnis("befund", f"Mit Befund unter {pfad} abgelegt.", daten)

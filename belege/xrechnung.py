@@ -90,6 +90,7 @@ def lesen(datei: Path) -> dict:
             "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                                if _lokal(e) == "GrandTotalAmount"), "EUR"),
             "positionen": positionen, "syntax": "cii",
+            "steuer": any(_lokal(e) in {"ApplicablePercent", "CalculatedAmount", "TaxTotalAmount"} for e in root.iter()),
         }
     if typ not in {"Invoice", "CreditNote"}:
         raise ValueError("Keine unterstützte E-Rechnung (CII oder UBL).")
@@ -109,6 +110,7 @@ def lesen(datei: Path) -> dict:
         "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                            if _lokal(e) in {"PayableAmount", "TaxInclusiveAmount"}), "EUR"),
         "positionen": positionen, "syntax": "ubl",
+        "steuer": any(_lokal(e) in {"Percent", "TaxAmount", "TaxTotal"} for e in root.iter()),
     }
 
 

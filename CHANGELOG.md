@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.12.0] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Belege kann Eingangsrechnungen vor dem Ablegen auf Pflichtangaben prüfen. Unvollständige Rechnungen liegen getrennt unter „Manuell prüfen“; bei bekannten Mail-Absendern entsteht auf Wunsch ein Entwurf für die Bitte um Korrektur.
+
+### Musst du etwas tun?
+
+Nein. Wenn du es möchtest, sag deinem Claude: „Richte mit mir die Rechnungsprüfung ein und prüfe erst fünf echte Rechnungen trocken.“
+
 ## [1.11.0] – 29.10.2026
 
 aktion: keine

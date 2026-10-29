@@ -370,6 +370,16 @@ Ablage wird nicht umsortiert: Die Trennung gilt nur für neue Belege. Ein
 Umsortieren macht Claude ausschließlich auf ausdrücklichen Wunsch, vorher immer
 als Trockenlauf.
 
+### Rechnungsprüfung
+
+Wenn die Person möchte, dass Eingangsrechnungen vor dem Ablegen auf Pflichtangaben
+geprüft werden, bespricht Claude zunächst die gewünschten Regeln. In
+`[pruefung]` bleibt `an = false`, bis fünf echte Rechnungen einzeln mit
+`uv run belege pruefung <datei>` trocken geprüft wurden. Gemeinsam werden die
+Befunde kontrolliert; erst danach setzt Claude `an = true`. Beanstandete
+Rechnungen liegen getrennt unter „Manuell prüfen“. Ist ein Mail-Absender bekannt,
+legt belege höchstens einen freundlichen Entwurf an, nie eine gesendete Mail.
+
 Für den Monatsabgleich fragt Claude zusätzlich nach den Konten jeder Firma und
 trägt sie im jeweiligen Block ein, zum Beispiel
 `konten = ["DE12 3456 7890 1234 5678 90"]`. Erlaubt sind IBANs oder die

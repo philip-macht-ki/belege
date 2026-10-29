@@ -56,10 +56,6 @@ smtp_server = ""
 # nur_posteingang = true
 belege = true
 waechter = true
-# Nach erfolgreicher echter Ablage: "aus" (Standard), "markieren" oder "verschieben".
-# IMAP verschiebt nur, wenn der Server MOVE kann; sonst bleibt die Mail markiert.
-nach_ablage = "aus"
-nach_ablage_ordner = "Belege erledigt"
 
 [postfach]
 erste_tage = 30
@@ -92,6 +88,14 @@ claude = true
 # Nur an diese Adressen darf automatisch gesendet werden. An alle anderen
 # entsteht ein Entwurf, den du selbst abschickst.
 erlaubt = []
+
+[pruefung]
+# Erst mit fünf echten Rechnungen trocken testen: `belege pruefung Rechnung.pdf`.
+an = false
+ordner = "Manuell prüfen"
+regeln = ["empfaenger", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
+kleinbetrag = 250.0
+entwurf_an_absender = true
 
 [bericht]
 # Leer = die Adresse des ersten Postfachs.
