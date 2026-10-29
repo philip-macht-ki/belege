@@ -60,6 +60,11 @@ def _kein_rechnungsdokument(text: str) -> bool:
 def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
     if str((xml or {}).get("nummer", "")).strip():
         return True
+    # Das Muster aus 1.12.0 gilt weiter, damit kurze Nummern wie "RE-22" nicht neu auffallen.
+    if re.search(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|belegnummer|"
+                 r"invoice\s*(?:no\.?|number|nr\.?)|(?:rechnung|invoice)\s*\n\s*(?:nr\.?|no\.?|number))"
+                 r"\s*[:#.]?\s*[A-Z0-9][A-Z0-9./-]{2,}", text, re.I):
+        return True
     zeilen = text.splitlines()
     etikett = re.compile(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|"
                          r"beleg(?:nummer|\s*-?nr\.?)|invoice|receipt|credit note number|"

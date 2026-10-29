@@ -25,9 +25,10 @@ def test_anschrift_normalisiert_und_ignoriert_lieferantenfusszeile(repo):
     _konfig(repo)
     passend = Text("Lieferant\nRechnung an: Eigene GmbH\nMuster Str. Nr. 12\n12345 BERLIN", "klartext", 1)
     assert pruefe(_einordnung(), passend) == []
-    # Eine Lieferantenadresse außerhalb des Empfängerblocks darf nicht als eigene zählen.
+    # Seit dem Echtlauf (1.13.0): Steht die eigene Anschrift irgendwo im Kopf, bleibt die
+    # Prüfung still, auch außerhalb des Empfängerblocks (Mehrspalten- und OCR-Köpfe).
     fusszeile = Text("Rechnung an: Eigene GmbH\nRechnungsnummer RE-1\n\nLieferant GmbH\nMusterstraße 12\n12345 Berlin", "klartext", 1)
-    assert pruefe(_einordnung(), fusszeile) == ["Anschrift fehlt"]
+    assert pruefe(_einordnung(), fusszeile) == []
 
 
 def test_anschrift_abweichend_und_kleinbetrag(repo):
@@ -48,7 +49,7 @@ def test_anschrift_fensterkuvert_und_obere_zeilen(repo):
     oben = Text("Muster Str. 12 a\n12345 Berlin\nEigene GmbH\nc/o Buchhaltung", "klartext", 1)
     assert pruefe(_einordnung(), oben) == []
     ausserhalb = Text("Musterstraße 12\n12345 Berlin\n\nEigene GmbH\nRechnung", "klartext", 1)
-    assert pruefe(_einordnung(), ausserhalb) == ["Anschrift fehlt"]
+    assert pruefe(_einordnung(), ausserhalb) == []
     nur_plz = Text("12345 Berlin\n\nEigene GmbH\nRechnung", "klartext", 1)
     assert pruefe(_einordnung(), nur_plz) == ["Anschrift fehlt"]
     fehlt = Text("Eigene GmbH\nRechnung\nLeistung", "klartext", 1)
