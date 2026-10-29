@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -46,7 +47,7 @@ def _aus_xml(daten: dict, fund: Fund) -> Einordnung:
     return einordnung
 
 
-def _zugferd(fund: Fund) -> tuple[Einordnung, Text] | None:
+def _zugferd(fund: Fund) -> tuple[Einordnung, Text, dict] | None:
     """Liest eine eingebettete ZUGFeRD-XML, ohne das PDF selbst zu verändern."""
     from facturx import get_xml_from_pdf
     from .xrechnung import zugferd_in
@@ -66,7 +67,7 @@ def _zugferd(fund: Fund) -> tuple[Einordnung, Text] | None:
     daten = lesen(xml_datei)
     daten["xml_datei"] = xml_datei
     einordnung = _aus_xml(daten, fund)
-    return einordnung, Text(sichttext(daten), "xml", 1)
+    return einordnung, Text(sichttext(daten), "xml", 1), daten
 
 
 def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung, Path] | None:
@@ -180,11 +181,13 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 kern.ereignis("zweifel", f"{fund.name}: Datei beschädigt oder unvollständig heruntergeladen. Bitte ansehen.", quelle=fund.quelle)
             return ergebnis
         zugferd = _zugferd(fund)
+        xml_daten = None
         if zugferd:
             # E-Rechnung: eingeordnet ohne Modell, aber der Merker zählt für die MCP-Suche.
             from .vertraulich import pruefen
 
-            einordnung, text = zugferd
+            einordnung, text, *zugferd_xml = zugferd
+            xml_daten = zugferd_xml[0] if zugferd_xml else None
             geheim = pruefen(f"{einordnung.lieferant} {einordnung.beschreibung} {text.text}", fund.name, fund.mail,
                              modell=False)
         else:
@@ -235,7 +238,36 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         from .ablegen import ablegen
 
-        ergebnis = ablegen(fund, einordnung, text, echt)
+        pruefung = kern.konfig("belege").get("pruefung", {})
+        firma_eindeutig = (
+            einordnung.firma not in {"", "unklar"}
+            and kern.firma(einordnung.firma) is not None
+        )
+        pruefbar = (
+            pruefung.get("an", False)
+            and einordnung.ist_beleg
+            and einordnung.art == "eingang"
+            and einordnung.bereich == "betrieb"
+            and firma_eindeutig
+            and not re.search(r"\b(dauerbeleg|bescheid|steuerbescheid|gebührenbescheid)\b", text.text, re.I)
+        )
+        befund = []
+        if pruefbar:
+            from .pruefung import pruefe
+            if fund.datei.suffix.lower() == ".xml":
+                try:
+                    from .xrechnung import lesen
+                    xml_daten = lesen(fund.datei)
+                except (OSError, ValueError):
+                    xml_daten = None
+            befund = pruefe(einordnung, text, xml=xml_daten)
+            if befund:
+                from .ablegen import ablegen_befund
+                ergebnis = ablegen_befund(fund, einordnung, befund, echt)
+            else:
+                ergebnis = ablegen(fund, einordnung, text, echt)
+        else:
+            ergebnis = ablegen(fund, einordnung, text, echt)
         if not echt:
             ziel = Path(ergebnis.daten.get("pfad", ""))
             try:
@@ -268,15 +300,45 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             "xml": xml,
             "vertraulich": bool(geheim and geheim.vertraulich),
         }
+        if pruefbar:
+            daten["pruefung"] = {"status": "ok" if not befund else "befund", "punkte": befund}
+        if ergebnis.daten.get("befund"):
+            befund_pfad = Path(ergebnis.daten["befund"])
+            daten["befund"] = str(befund_pfad.relative_to(kern.ablage_ordner()))
         index[fingerabdruck] = daten
         _speichere_index(index)
         _original_erledigt(fund)
         if echt:
-            art = "abgelegt" if daten["status"] == "abgelegt" else "unsortiert"
+            entwurf_angelegt = False
+            firma_eintrag = kern.firma(einordnung.firma) or {}
+            eigene_empfaengerdaten = all(
+                str(firma_eintrag.get(feld, "")).strip()
+                for feld in ("name", "ust_id")
+            )
+            if (befund and firma_eindeutig and eigene_empfaengerdaten
+                    and pruefung.get("entwurf_an_absender", True)
+                    and fund.mail and fund.mail.get("von")
+                    and not any("unklar" in punkt.casefold() for punkt in befund)):
+                from .senden import entwurf
+                betreff = "Bitte um korrigierte Rechnung"
+                datum_text = einordnung.datum.strftime("%d.%m.%Y") if einordnung.datum else "nicht erkennbar"
+                mailtext = ("Guten Tag,\n\nbitte sende uns eine korrigierte Rechnung. "
+                            "Bei der Prüfung fehlen oder weichen folgende Angaben ab:\n- " + "\n- ".join(befund)
+                            + f"\n\nZur Zuordnung: Rechnungsnummer: nicht erkennbar, Datum: {datum_text}, Betrag: {einordnung.betrag or 'nicht erkennbar'} EUR."
+                            + f"\n\nKorrekte Empfängerdaten: {firma_eintrag.get('name', '')}, USt-IdNr.: {firma_eintrag.get('ust_id', '')}.\n\nVielen Dank.")
+                try:
+                    entwurf(str(fund.mail["von"]), betreff, mailtext, [], True, fund.mail.get("konto"))
+                    entwurf_angelegt = True
+                except Exception as fehler:  # Der Beleg bleibt trotz Postfachfehler sicher abgelegt.
+                    kern.ereignis("fehler", f"Entwurf zur Rechnungsprüfung nicht angelegt: {fehler}")
+            # Ohne eingeschaltete Rechnungsprüfung bleibt die bisherige
+            # Ereignisart unverändert; nur ein tatsächlicher Prüfungsbefund
+            # ist ein Zweifel.
+            art = "zweifel" if befund else ("abgelegt" if daten["status"] == "abgelegt" else "unsortiert")
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
-                          grund=daten.get("grund"))
+                          grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt)
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

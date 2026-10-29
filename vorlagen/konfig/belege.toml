@@ -93,6 +93,14 @@ claude = true
 # entsteht ein Entwurf, den du selbst abschickst.
 erlaubt = []
 
+[pruefung]
+# Erst mit fünf echten Rechnungen trocken testen: `belege pruefung Rechnung.pdf`.
+an = false
+ordner = "Manuell prüfen"
+regeln = ["empfaenger", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
+kleinbetrag = 250.0
+entwurf_an_absender = true
+
 [bericht]
 # Leer = die Adresse des ersten Postfachs.
 an = ""
@@ -101,10 +109,10 @@ leer_senden = false
 [uebergabe]
 # "mail" an eine Adresse (Steuerberater, DATEV Upload Mail, Lexware Office,
 # sevDesk) oder "ordner" (ein freigegebener Ordner).
-weg = "mail"
-adresse = ""
 # Für DATEV/Steuerberater je Belegart getrennt (fehlende Art fällt auf adresse zurück):
 # adressen = { eingang = "eingang@datev.example", ausgang = "ausgang@datev.example", sonstige = "" }
+weg = "mail"
+adresse = ""
 ordner = ""
 tag = 3
 nur_pdf_tif = false

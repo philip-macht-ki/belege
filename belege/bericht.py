@@ -94,6 +94,18 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         absaetze.append(f"Dokumente abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
 
     ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
+    befund = [e for e in gruppen["zweifel"] if e.get("daten", {}).get("pruefung", {}).get("status") == "befund"]
+    if befund:
+        zeilen = []
+        for e in befund:
+            d = e.get("daten", {})
+            if not d.get("lieferant"):  # reines Entwurfsereignis nicht doppelt nennen
+                continue
+            betrag = f" {float(d['betrag']):.2f} €".replace(".", ",") if d.get("betrag") is not None else ""
+            punkte = ", ".join(d.get("pruefung", {}).get("punkte", []))
+            zeilen.append(f"- {d.get('lieferant', 'Unbekannt')}{betrag}: {punkte} (Entwurf: {'ja' if d.get('entwurf') else 'nein'})")
+        if zeilen:
+            absaetze.append("Rechnungen mit Befund\n" + "\n".join(zeilen))
     if ansehen:
         zeilen = ["- Firma unklar: " + e.get("text", "") if e.get("daten", {}).get("grund") == "Firma unklar" else "- " + e.get("text", "") for e in ansehen]
         absaetze.append("Bitte ansehen\n" + "\n".join(zeilen))
