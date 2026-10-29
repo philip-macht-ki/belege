@@ -8,7 +8,9 @@ aktion: keine
 
 ### Was ist neu für dich
 
-- Belege kann Eingangsrechnungen vor dem Ablegen auf Pflichtangaben prüfen. Unvollständige Rechnungen liegen getrennt unter „Manuell prüfen“; bei bekannten Mail-Absendern entsteht auf Wunsch ein Entwurf für die Bitte um Korrektur.
+- Belege kann Eingangsrechnungen vor dem Ablegen auf Pflichtangaben prüfen: Steht dein Firmenname richtig drauf, hat der Lieferant eine USt-IdNr. oder Steuernummer angegeben, gibt es Rechnungsnummer, Datum, Leistung und Steuer? Kleinbetragsrechnungen bis 250 € brauchen weniger.
+- Fehlt etwas, liegt die Rechnung unter „Manuell prüfen“, mit einer kurzen Notiz, was fehlt. Auf Wunsch entsteht ein Entwurf an den Lieferanten mit der Bitte um eine korrigierte Rechnung. Abgeschickt wird nichts von allein.
+- Ohne Einschalten ändert sich nichts.
 
 ### Musst du etwas tun?
 
