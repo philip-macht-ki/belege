@@ -1,21 +1,41 @@
 """Gemeinsame Test-Umgebung: ein Repo im tmp-Ordner, ohne Modell, Netz und Konten."""
 from __future__ import annotations
 
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from belege import kern
-
 ECHT = Path(__file__).resolve().parents[1]
+
+# Schon beim Import der Testmodule (etwa `kern.zone()` auf Modulebene) darf nichts die
+# echte Einrichtung lesen oder anlegen: Wurzel vor dem ersten Import von belege umbiegen.
+_IMPORT_WURZEL = Path(tempfile.mkdtemp(prefix="belege-tests-"))
+shutil.copytree(ECHT / "vorlagen", _IMPORT_WURZEL / "vorlagen")
+os.environ["BELEGE_ROOT"] = str(_IMPORT_WURZEL)
+
+from belege import kern  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def abgeschirmt(tmp_path_factory, monkeypatch):
+    """Jeder Test läuft gegen einen leeren Wurzelordner, nie gegen das echte Repo:
+    keine echte konfig/, keine .env mit Zugangsdaten, nichts landet in arbeit/."""
+    wurzel = tmp_path_factory.mktemp("abgeschirmt")
+    shutil.copytree(ECHT / "vorlagen", wurzel / "vorlagen")
+    monkeypatch.setattr(kern, "ROOT", wurzel)
+    monkeypatch.setenv("BELEGE_ROOT", str(wurzel))
+    yield wurzel
 
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    shutil.copytree(ECHT / "konfig", tmp_path / "konfig")
-    if (ECHT / "vorlagen").exists():
-        shutil.copytree(ECHT / "vorlagen", tmp_path / "vorlagen")
+    # Immer die Werksvorlage, nie die echte konfig/ einer fertigen Einrichtung: sonst
+    # greifen eigene Regeln und echte Postfächer in die Tests ein.
+    shutil.copytree(ECHT / "vorlagen" / "konfig", tmp_path / "konfig")
+    shutil.copytree(ECHT / "vorlagen", tmp_path / "vorlagen")
     for ordner in ("arbeit", "ablage", "handy", "downloads", "auszuege", "beispiel/erzeugt/postfach"):
         (tmp_path / ordner).mkdir(parents=True, exist_ok=True)
     toml = tmp_path / "konfig" / "belege.toml"

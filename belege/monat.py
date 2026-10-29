@@ -665,17 +665,32 @@ def _buchungen_fuer_firma(buchungen: list[dict], firma: dict, alle_firmen: list[
     return []
 
 
+# Text je Fund-Datei, damit die Nachsuche jede Datei nur einmal liest und nicht
+# einmal je fehlender Buchung (Scans brauchen je Lesen bis zu einer Minute).
+_FUND_TEXTE: dict[str, str | None] = {}
+
+
+def _fund_text(datei: Path, mail: dict | None) -> str | None:
+    schluessel = str(datei)
+    if schluessel not in _FUND_TEXTE:
+        try:
+            from .text import auslesen
+            erkannt = auslesen(datei, mail=mail).text
+            text = erkannt + " " + datei.name
+            # Alte, beschädigte Pseudo-PDFs bleiben für die Nachsuche lesbar; echte
+            # PDFs gehen stets durch die Text-Kaskade (auch bei Flate-Kompression).
+            if not erkannt.strip() and datei.suffix.lower() == ".pdf":
+                text = datei.read_text(encoding="utf-8", errors="ignore") + " " + datei.name
+        except (OSError, ValueError):
+            text = None
+        _FUND_TEXTE[schluessel] = text
+    return _FUND_TEXTE[schluessel]
+
+
 def _fund_passt(datei: Path, buchung: dict, mail: dict | None = None) -> bool:
     """Prüft Nachsuche konservativ über Betrag und Lieferantenbezug im Fund."""
-    try:
-        from .text import auslesen
-        erkannt = auslesen(datei, mail=mail).text
-        text = erkannt + " " + datei.name
-        # Alte, beschädigte Pseudo-PDFs bleiben für die Nachsuche lesbar; echte
-        # PDFs gehen stets durch die Text-Kaskade (auch bei Flate-Kompression).
-        if not erkannt.strip() and datei.suffix.lower() == ".pdf":
-            text = datei.read_text(encoding="utf-8", errors="ignore") + " " + datei.name
-    except (OSError, ValueError):
+    text = _fund_text(datei, mail)
+    if text is None:
         return False
     # Der Buchungsname muss im Fund auftauchen. Ohne sichere Lieferantenangabe
     # wird ein gleich hoher Betrag nie als Fund gemeldet.
@@ -692,6 +707,7 @@ def _nachsuche(daten: list[dict], args) -> None:
     Ein einzelner Fund darf mit --echt durch den normalen Ablageweg laufen.
     """
     from . import quellen
+    _FUND_TEXTE.clear()  # je Lauf frisch lesen; innerhalb des Laufs jede Datei nur einmal
     cfg = kern.konfig("belege")
     funde = list(quellen.downloads_funde() or []) + list(quellen.handy_funde() or []) + list(quellen.scan_funde() or [])
     eingang_wert = str(cfg.get("dokumente", {}).get("eingang", "")).strip()

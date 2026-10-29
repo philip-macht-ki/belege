@@ -18,7 +18,9 @@ def _run(*cmd, cwd):
 
 def _git_repo(tmp_path, monkeypatch):
     quelle, bare, kunde = tmp_path / "quelle", tmp_path / "origin.git", tmp_path / "kunde"
-    shutil.copytree(ECHT, quelle, ignore=shutil.ignore_patterns(".git", ".venv", "arbeit", ".pytest_cache", ".vorlage"))
+    # Nie die echte konfig/ einer Einrichtung mitkopieren; der "Kunde" bekommt die Werksvorlage.
+    shutil.copytree(ECHT, quelle, ignore=shutil.ignore_patterns(".git", ".venv", "arbeit", "konfig", ".env", ".pytest_cache", ".vorlage"))
+    shutil.copytree(ECHT / "vorlagen" / "konfig", quelle / "konfig")
     _run("git", "init", "-b", "main", cwd=quelle)
     _run("git", "config", "user.email", "test@example.invalid", cwd=quelle)
     _run("git", "config", "user.name", "Test", cwd=quelle)

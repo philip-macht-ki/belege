@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date, timedelta
 
 from .kern import konfig, firmen, firma, hat_stammdatenblatt
@@ -31,6 +32,22 @@ FRISTWOERTER = (
     "valid until",
 )
 KOPFZEILEN = {"invoice", "receipt", "rechnung", "quittung", "beleg", "kassenbon"}
+
+
+_UMLAUTE = {"ä": "\x00ae", "ö": "\x00oe", "ü": "\x00ue", "Ä": "\x00AE", "Ö": "\x00OE", "Ü": "\x00UE"}
+
+
+def _beschreibung_glaetten(wert: str) -> str:
+    """Macht aus „Prêt à Template“ ein „Pret-a-Template“: Akzente weg (Umlaute bleiben),
+    Leerzeichen zu Bindestrichen, nur Buchstaben und Ziffern, höchstens vier Wörter."""
+    for umlaut, platzhalter in _UMLAUTE.items():
+        wert = wert.replace(umlaut, platzhalter)
+    wert = "".join(z for z in unicodedata.normalize("NFKD", wert) if not unicodedata.combining(z))
+    for umlaut, platzhalter in _UMLAUTE.items():
+        wert = wert.replace(platzhalter, umlaut)
+    wert = re.sub(r"[\s_/]+", "-", wert.strip())
+    wert = "".join(z for z in wert if z.isalnum() or z == "-")
+    return "-".join([wort for wort in wert.split("-") if wort][:4])
 
 
 def pruefe(antwort: object, firmennamen: set[str] | None = None) -> str | None:
@@ -86,6 +103,9 @@ def pruefe(antwort: object, firmennamen: set[str] | None = None) -> str | None:
         isinstance(antwort[name], str) and antwort[name].strip() for name in textfelder
     ):
         return "lieferant, beschreibung und grund müssen kurze Texte sein."
+    # Kleine Formfehler (Akzente, Leerzeichen, ein Wort zu viel) bereinigen statt den
+    # ganzen, sonst richtig erkannten Beleg nach Unsortiert zu schicken.
+    antwort["beschreibung"] = _beschreibung_glaetten(antwort["beschreibung"])
     woerter = [wort for wort in antwort["beschreibung"].split("-") if wort]
     if not 1 <= len(woerter) <= 4:
         return "beschreibung braucht ein bis vier Wörter mit Bindestrichen."

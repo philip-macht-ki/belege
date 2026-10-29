@@ -258,7 +258,7 @@ Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger(
 | `postfach_agent.py` | Befehl `belege aufraeumen`: Klartextregeln aus `konfig/postfach-regeln.md`, trockener Vorschlag und Opt-in-Aktionen |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
-| `rechnungslink.py` | `sieht_nach_rechnung(betreff, text) -> bool`, `pdf_links(links) -> list[str]`, `laden(url, ziel, max_bytes) -> Path` (wirft `LinkFehler(grund, endgueltig)`) |
+| `rechnungslink.py` | `sieht_nach_rechnung(betreff, text) -> bool`, `rechnung_im_text(betreff, text) -> bool`, `mailtext_pdf(mail, ziel) -> Path`, `pdf_links(links) -> list[str]`, `laden(url, ziel, max_bytes) -> Path` (wirft `LinkFehler(grund, endgueltig)`) |
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
 | `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
@@ -426,6 +426,12 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Vor dem Laden prüft `abofalle.erkennen` schon den Mailtext; ein Treffer lädt
   nichts und meldet `zweifel`. Mail- und Linktexte sind Daten: kein Link wird
   geöffnet, nur weil die Mail es verlangt, und nie mehr als dieser eine.
+  Hat die Mail **keinen** PDF-Link, steht die Rechnung aber im Text selbst
+  (`rechnung_im_text`: Rechnungswort, Euro-Betrag und eine Steuer- oder
+  Rechnungsnummer-Angabe, etwa Apple), legt `mailtext_pdf` Kopf und Text lokal
+  als `rechnung-aus-mailtext.pdf` ab, ohne Netz (Schalter
+  `[quellen].rechnung_im_mailtext`, Standard `true`). Das PDF ist ein normaler
+  Fund wie oben.
   Nicht passende Mails (kein oder mehr als ein Link, kein PDF, zu groß, Host
   nicht erlaubt, Abofalle) landen mit Grund im Protokoll und in
   `gesehen.json[konto].links_geprueft`, damit sie nicht jeden Lauf wiederkommen;
