@@ -343,6 +343,14 @@ ausdrücklichen Ja mit `--echt`.
    `mahnungen.md`. Fehlende Belege sucht `monat` selbst in Postfach, Downloads,
    Eingängen und Scan-Ordner. Die Klärungsliste geht Claude Zeile für Zeile mit
    der Person durch und trägt ihre Antworten ein.
+   **Zahlt die Person über PayPal**, fragt Claude das früh: Viele Anbieter
+   (Canva, Dropbox, Google, Patreon, HP …) schicken dann keine eigene Rechnung,
+   im Postfach landet nur „Beleg für Ihre Zahlung an …“ von PayPal. Die
+   Anbieterrechnung holt die Person im Kundenkonto des Anbieters. PayPal-
+   Aufladungen („Bank Account“, „Credit Card“, „Currency Conversion“) und die
+   Gegenbuchung auf Bank oder Karte sind nur Geldbewegungen: Claude trägt sie
+   mit der Person in `[monat].ohne_beleg` ein, sonst steht jede PayPal-Zahlung
+   doppelt oder dreifach auf „fehlt noch“.
 3. **Übergabeweg.** Claude fragt, wohin die Belege gehen, und trägt `[uebergabe]`
    ein: `weg = "mail"` mit `adresse` (Steuerberater, DATEV Upload Mail, Lexware
    Office, sevDesk `autobox@sevdesk.email`) oder `weg = "ordner"` mit `ordner`

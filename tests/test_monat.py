@@ -352,3 +352,28 @@ def test_monat_rundfunk_nummernvarianten_und_grenzen(repo):
     daten = monat.abgleichen(buchungen, {})
     assert [x["status"] for x in daten[:2]] == ["zugeordnet (Dauerbeleg)"] * 2
     assert daten[2]["status"] == "fehlt", "Teil einer längeren Zahl zählt nicht"
+
+
+def test_nachsuche_liest_jede_datei_nur_einmal_je_lauf(repo, monkeypatch):
+    """Viele fehlende Buchungen dürfen einen Scan nicht viele Male neu lesen (Meldung Nina, 29.10.2026)."""
+    from belege import text
+
+    alt = kern.jetzt().timestamp() - 700
+    for name in ("scan-1.pdf", "scan-2.pdf"):
+        datei = repo / "downloads" / name
+        datei.write_text("Anderer Dienst Rechnung 99,00", encoding="utf-8")
+        os.utime(datei, (alt, alt))
+    gelesen: list[str] = []
+    echt = text.auslesen
+
+    def zaehlen(datei, *a, **k):
+        gelesen.append(datei.name)
+        return echt(datei, *a, **k)
+
+    monkeypatch.setattr(text, "auslesen", zaehlen)
+    heute = kern.jetzt().date().isoformat()
+    daten = [{"datum": heute, "betrag": -i, "name": f"Lieferant {i}", "zweck": "", "status": "fehlt"} for i in range(1, 9)]
+    monat._nachsuche(daten, _args())
+    assert sorted(gelesen) == ["scan-1.pdf", "scan-2.pdf"]
+    monat._nachsuche(daten, _args())
+    assert len(gelesen) == 4  # ein neuer Lauf liest frisch

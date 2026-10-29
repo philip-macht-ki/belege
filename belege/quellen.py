@@ -134,6 +134,7 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
     from .abofalle import erkennen
 
     max_mb = float(kern.konfig("belege").get("quellen", {}).get("rechnungslink_max_mb", 15))
+    mailtext_an = bool(kern.konfig("belege").get("quellen", {}).get("rechnung_im_mailtext", True))
     bekannte = set(stand.get("mails", [])) | set(stand.get("links_geprueft", [])) | schon
     kandidaten: dict = {}
     for wort in rechnungslink.SUCHWOERTER:
@@ -170,6 +171,15 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
                                   "Nicht unterschreiben, nicht zahlen.", konto=konto, id=mail_id, grund=merkmale)
             else:
                 links = rechnungslink.pdf_links(list(voll.get("links") or []))
+                if not links and mailtext_an and rechnungslink.rechnung_im_text(
+                        str(voll.get("betreff", "")), str(voll.get("text", ""))):
+                    # Die Mail selbst ist die Rechnung (etwa Apple): Mailtext als PDF ablegen.
+                    datei = rechnungslink.mailtext_pdf({**mail, **voll}, _mail_tmp(konto, str(mail_id)))
+                    kopf = dict(mail)
+                    kopf["konto"] = konto
+                    kern.log(f"Rechnung im Mailtext {konto}:{mail_id} als PDF abgelegt")
+                    yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
+                    continue
                 if len(links) != 1:
                     grund = f"{len(links)} plausible PDF-Links statt genau einem"
         if grund is None:

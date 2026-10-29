@@ -297,3 +297,26 @@ def test_restfrist_gilt_auch_fuer_jedes_lesestueck(repo, monkeypatch):
     antwort.belege_sock = Sock()
     assert rechnungslink._lesen(antwort, 10_000, 20) == PDF
     assert Sock.zeiten == [20, 7]
+
+
+def test_rechnung_nur_im_mailtext_wird_als_pdf_abgelegt(repo, monkeypatch):
+    """Apple schickt die Rechnung als HTML-Mail ohne PDF und ohne Link (Meldung Nina, 29.10.2026)."""
+    _mail(repo, "apple.eml", "Deine Rechnung von Apple",
+          "<p>Rechnungsdatum: 20.10.2026</p><p>Prêt à Template, Monatsabo</p>"
+          "<p>Zwischensumme 8,39 €</p><p>USt. 19 % 1,60 €</p><p>Gesamt 9,99 €</p>"
+          "<p>USt-IdNr. IE9700053D</p>")
+    _mail(repo, "werbung.eml", "Deine Rechnung wird bald günstiger", "<p>Jetzt 20 % sparen!</p>")
+    geladen = _server(monkeypatch, {})
+    funde = list(quellen.postfach_funde("geschaeft", 3))
+    assert geladen == []
+    assert [f.mail["id"] for f in funde] == ["apple.eml"]
+    pdf = funde[0].datei
+    assert pdf.suffix == ".pdf" and pdf.read_bytes().startswith(b"%PDF")
+    from belege.text import auslesen
+
+    inhalt = auslesen(pdf).text
+    assert "Gesamt 9,99" in inhalt and "Deine Rechnung von Apple" in inhalt
+
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text().replace("rechnung_im_mailtext = true", "rechnung_im_mailtext = false"), encoding="utf-8")
+    assert list(quellen.postfach_funde("geschaeft", 3)) == []

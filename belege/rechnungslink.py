@@ -42,6 +42,54 @@ def sieht_nach_rechnung(betreff: str, text: str) -> bool:
     return any(wort in raum for wort in RECHNUNG)
 
 
+_BETRAG = re.compile(r"(\d[\d.,]*[.,]\d{2}\s?(€|eur\b))|((€|eur)\s?\d[\d.,]*[.,]\d{2})", re.IGNORECASE)
+_RECHNUNGSANGABE = ("ust", "mwst", "vat", "umsatzsteuer", "tax", "rechnungsnummer", "rechnungsnr",
+                    "invoice no", "invoice number", "order id", "bestellnummer", "dokumentnummer")
+
+
+def rechnung_im_text(betreff: str, text: str) -> bool:
+    """Wahr, wenn die Mail selbst die Rechnung ist (etwa Apple, ohne PDF und ohne Link):
+    Rechnungswort, ein Euro-Betrag und eine Steuer- oder Rechnungsnummer-Angabe im Text."""
+    raum = f"{betreff}\n{text}".lower()
+    return (sieht_nach_rechnung(betreff, text) and bool(_BETRAG.search(text))
+            and any(wort in raum for wort in _RECHNUNGSANGABE))
+
+
+def mailtext_pdf(mail: dict, ziel: Path) -> Path:
+    """Legt eine Rechnung, die nur im Mailtext steht, als PDF ab. Lokal, ohne Netz."""
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.add_page()
+    arial = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
+    unicode_schrift = arial.exists()
+    if unicode_schrift:
+        pdf.add_font("Arial", "", str(arial))
+        pdf.set_font("Arial", size=10)
+    else:  # ohne Unicode-Schrift kann die eingebaute Helvetica kein € und keine Sonderzeichen
+        pdf.set_font("Helvetica", size=10)
+
+    def zeile(wert: str) -> str:
+        wert = wert if unicode_schrift else wert.replace("€", "EUR").encode("latin-1", "replace").decode("latin-1")
+        return wert or " "
+
+    kopf = [
+        "Rechnung aus dem Mailtext (die Mail hatte keinen Anhang).",
+        f"Von: {mail.get('von', '')}",
+        f"Betreff: {mail.get('betreff', '')}",
+        f"Datum: {mail.get('datum', '')}",
+    ]
+    for wert in kopf:
+        pdf.multi_cell(0, 5, zeile(str(wert)), new_x="LMARGIN", new_y="NEXT", wrapmode="CHAR")
+    pdf.ln(4)
+    for wert in str(mail.get("text", "")).splitlines():
+        pdf.multi_cell(0, 5, zeile(wert.strip()), new_x="LMARGIN", new_y="NEXT", wrapmode="CHAR")
+    ziel.mkdir(parents=True, exist_ok=True)
+    datei = ziel / "rechnung-aus-mailtext.pdf"
+    pdf.output(str(datei))
+    return datei
+
+
 def pdf_links(links: list[str]) -> list[str]:
     """Filtert die Links, die plausibel direkt auf eine Rechnung als PDF zeigen."""
     treffer = []

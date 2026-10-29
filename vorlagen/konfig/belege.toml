@@ -108,6 +108,10 @@ downloads_an = false
 # Nur öffentliche https-Links, nur echte PDFs. false = ausschalten.
 rechnungslinks = true
 rechnungslink_max_mb = 15
+# Rechnungen, die nur im Mailtext stehen (etwa Apple, ohne PDF und ohne Link):
+# belege legt den Mailtext lokal als PDF ab, wenn Betrag und Steuer- oder
+# Rechnungsnummer-Angabe drinstehen. Lädt nichts aus dem Netz. false = aus.
+rechnung_im_mailtext = true
 
 [texterkennung]
 claude = true

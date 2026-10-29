@@ -88,3 +88,20 @@ def test_pruefe_lehnt_kaputtes_json_ab(monkeypatch, repo):
         _fund(repo), _text("Rechnung\nDatum: 10.09.2026\nSumme 4,00 EUR")
     )
     assert ergebnis.quelle == "rueckfall"
+
+
+def test_beschreibung_mit_akzenten_wird_bereinigt_statt_verworfen():
+    """„Prêt à Template“ landete zweimal unter Unsortiert (Meldung Nina, 29.10.2026)."""
+    from belege.einordnen import pruefe
+
+    antwort = {
+        "ist_beleg": True, "art": "eingang", "bereich": "betrieb", "datum": "2026-10-20",
+        "lieferant": "Apple", "beschreibung": "App-Abo für Prêt à Template", "betrag": 9.99,
+        "waehrung": "EUR", "sicherheit": "hoch", "grund": "Rechnung von Apple",
+    }
+    assert pruefe(antwort) is None
+    assert antwort["beschreibung"] == "App-Abo-für-Pret"
+    antwort["beschreibung"] = "Büro Möbel"
+    assert pruefe(antwort) is None and antwort["beschreibung"] == "Büro-Möbel"
+    antwort["beschreibung"] = "  ---  "
+    assert pruefe(antwort) is not None

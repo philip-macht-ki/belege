@@ -2,6 +2,24 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.14.1] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Der Monatsabgleich ist deutlich schneller: Die Nachsuche liest jede Datei nur noch einmal, nicht einmal je fehlender Buchung. Mit vielen Scans dauerte der erste Abgleich über eine Stunde, jetzt sind es Minuten.
+- Rechnungen, die nur im Mailtext stehen (etwa von Apple, ohne PDF und ohne Link), legt belege jetzt selbst als PDF ab. Das passiert auf deinem Mac, ohne etwas aus dem Netz zu laden.
+- Ein richtig erkannter Beleg landet nicht mehr unter „Unsortiert“, nur weil die Beschreibung Akzente oder ein Wort zu viel hatte („Prêt à Template“). Die Beschreibung wird jetzt bereinigt.
+- Die Tests fassen deine echte Einrichtung nicht mehr an: keine echten Postfächer, keine eigenen Regeln, nichts in `arbeit/`. `uv run pytest -q` läuft in rund einer Minute, auch bei fertiger Einrichtung.
+- Die Anleitung für Teil 2 erklärt jetzt, was bei Zahlungen über PayPal zu tun ist.
+
+Danke an Nina für die genaue Meldung und den Patch zur Nachsuche.
+
+### Musst du etwas tun?
+
+Nein. Wer Rechnungen im Mailtext nicht als PDF haben möchte, setzt in `konfig/belege.toml` unter `[quellen]` `rechnung_im_mailtext = false`.
+
 ## [1.14.0] – 29.10.2026
 
 aktion: keine

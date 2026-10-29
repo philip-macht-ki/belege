@@ -188,7 +188,7 @@ def test_zeitplan_nimmt_moneymoney_nur_wenn_an(repo):
 def test_vorlage_im_repo_ist_aus_und_ohne_konto():
     import tomllib
 
-    cfg = tomllib.loads((ECHT / "konfig" / "moneymoney.toml").read_text(encoding="utf-8"))
+    cfg = tomllib.loads((ECHT / "vorlagen" / "konfig" / "moneymoney.toml").read_text(encoding="utf-8"))
     assert cfg["an"] is False and "konto" not in cfg
 
 
