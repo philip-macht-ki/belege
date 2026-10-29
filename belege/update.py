@@ -248,7 +248,11 @@ def befehl(args) -> int:
     if not getattr(args, "echt", False):
         _zeige(alt, neu, neue)
         return 0
-    nur_sicherheit = bool(neue) and all(a == "sicherheit" for _, a, _ in neue)
+    # Eine Sicherheitsaktualisierung darf nicht an einer vorherigen, rein
+    # automatischen Änderung hängenbleiben. Ein Schritt für die Person bleibt
+    # dagegen weiterhin ein Stoppsignal.
+    nur_sicherheit = bool(neue) and any(a == "sicherheit" for _, a, _ in neue) \
+        and all(a in OHNE_SCHRITT for _, a, _ in neue)
     if getattr(args, "automatisch", False) and not nur_sicherheit \
             and not _automatik_frei():
         hinweis = pausiert_hinweis()

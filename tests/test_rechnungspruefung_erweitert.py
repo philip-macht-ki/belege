@@ -37,6 +37,12 @@ def test_anschrift_abweichend_und_kleinbetrag(repo):
     assert pruefe(_einordnung(20), alt) == []
 
 
+def test_anschrift_abweichend_bei_alter_eigener_adresse(repo):
+    _konfig(repo)
+    alt = Text("Eigene GmbH\nAlte Straße 3\n54321 Bonn", "klartext", 1)
+    assert any("Anschrift abweichend" in x for x in pruefe(_einordnung(), alt))
+
+
 def test_vies_ungueltig_cache_und_netzfehler(repo, monkeypatch):
     _konfig(repo, "ust_id_amtlich = true\n")
     text = Text("Lieferant\nUSt-IdNr. FR12345678901", "klartext", 1)
@@ -62,6 +68,20 @@ def test_hinweise_reverse_charge_und_pdf_erechnung_und_kleinbetrag(repo):
     assert "keine E-Rechnung" in hinweise(_einordnung(), deutsch)[0]
     assert hinweise(_einordnung(), deutsch, xml={"verkaeufer_ust": "DE123456789"}) == []
     assert hinweise(_einordnung(20), deutsch) == []
+
+
+def test_hinweise_ust_id_nur_eu_gekennzeichnet_und_nicht_beim_empfaenger(repo):
+    _konfig(repo)
+    assert hinweise(_einordnung(), Text("Rechnungsnummer RE20261029", "klartext", 1)) == []
+    assert hinweise(_einordnung(), Text("VAT number: IE6388047V", "klartext", 1)) == [
+        "Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]
+    assert hinweise(_einordnung(), Text("BTW: NL123456789B01", "klartext", 1)) == [
+        "Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]
+    assert hinweise(_einordnung(), Text("VAT number: CHE123456789", "klartext", 1)) == []
+    assert hinweise(_einordnung(), Text("Rechnung an: Eigene GmbH, VAT number: NL123456789B01", "klartext", 1)) == []
+    konfig = repo / "konfig" / "belege.toml"
+    konfig.write_text(konfig.read_text(encoding="utf-8").replace("DE111111111", "IE6388047V"), encoding="utf-8")
+    assert hinweise(_einordnung(), Text("VAT number: IE6388047V", "klartext", 1)) == []
 
 
 def test_hinweise_stehen_in_der_monatlichen_uebergabe(repo):

@@ -4,11 +4,11 @@ Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1
 
 ## [1.13.0] – 29.10.2026
 
-aktion: konfig
+aktion: keine
 
 ### Was ist neu für dich
 
-- Bei mehreren Firmen kann belege jetzt auch deine Anschrift auf Rechnungen prüfen.
+- Belege kann jetzt auch deine Anschrift auf Rechnungen prüfen.
 - Auf Wunsch fragt belege Lieferanten-USt-IdNrn. bei der EU ab; Störungen dort erzeugen keinen Fehlalarm.
 - Reverse Charge und fehlende E-Rechnungen erscheinen als Hinweise für die Buchhaltung, nicht als Befund.
 

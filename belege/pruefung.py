@@ -117,16 +117,55 @@ def _hat_lieferantensteuer(text: str, xml: dict | None) -> bool:
                 re.search(rf"\b{kennzeichen}\s*[:#.]?\s*[A-Z0-9][A-Z0-9 ./-]{{4,}}", text, re.I))
 
 
+_UST_ID_FORMATS = {
+    "AT": r"U\d{8}", "BE": r"\d{10}", "BG": r"\d{9,10}", "CY": r"\d{8}[A-Z]",
+    "CZ": r"\d{8,10}", "DE": r"\d{9}", "DK": r"\d{8}", "EE": r"\d{9}",
+    "EL": r"\d{9}", "ES": r"[A-Z0-9]\d{7}[A-Z0-9]", "FI": r"\d{8}",
+    "FR": r"[A-Z0-9]{2}\d{9}", "HR": r"\d{11}", "HU": r"\d{8}",
+    "IE": r"[A-Z0-9]\d{6,7}[A-Z]{1,2}", "IT": r"\d{11}", "LT": r"\d{9}(?:\d{3})?",
+    "LU": r"\d{8}", "LV": r"\d{11}", "MT": r"\d{8}", "NL": r"\d{9}B\d{2}",
+    "PL": r"\d{10}", "PT": r"\d{9}", "RO": r"\d{2,10}", "SE": r"\d{12}",
+    "SI": r"\d{8}", "SK": r"\d{10}", "XI": r"(?:\d{9}|\d{12})",
+}
+_UST_ID_KENNZEICHEN = re.compile(
+    r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|"
+    r"vat(?:\s*(?:id|number|no\.?)?)?|tva|iva|btw|nif)", re.I)
+_EMPFÄNGERZEILE = re.compile(r"(?:rechnungsempf|rechnung\s+an|\bempf[aä]nger\b|\bkund[ei]\b|\ban\s*:)", re.I)
+
+
+def _ust_id(nummer: str) -> str | None:
+    """Normalisiert nur USt-IdNrn. aus EU-Mitgliedstaaten und Nordirland."""
+    nummer = re.sub(r"[\s.-]", "", nummer.upper())
+    land, wert = nummer[:2], nummer[2:]
+    if land in _UST_ID_FORMATS and re.fullmatch(_UST_ID_FORMATS[land], wert):
+        return nummer
+    return None
+
+
+def _ust_id_aus_text(text: str, eigene: str) -> str | None:
+    """Liest eine gekennzeichnete Lieferanten-USt-IdNr., nicht Rechnungsnummern."""
+    for nr, zeile in enumerate(text.splitlines()):
+        if _EMPFÄNGERZEILE.search(zeile):
+            continue
+        hat_kennzeichen = bool(_UST_ID_KENNZEICHEN.search(zeile))
+        if not hat_kennzeichen and nr:
+            hat_kennzeichen = bool(_UST_ID_KENNZEICHEN.search(text.splitlines()[nr - 1]))
+        if not hat_kennzeichen:
+            continue
+        for kandidat in re.findall(r"\b[A-Z]{2}[A-Z0-9 .-]{6,14}\b", zeile, re.I):
+            nummer = _ust_id(kandidat)
+            if nummer and nummer != eigene:
+                return nummer
+    return None
+
+
 def _lieferanten_ust(text: str, xml: dict | None, firma: dict | None) -> str | None:
     """Nimmt nur eine EU-USt-IdNr. des Lieferanten, nie die eigene."""
     eigene = re.sub(r"\s+", "", str((firma or {}).get("ust_id", "")).upper())
-    kandidaten = [str((xml or {}).get("verkaeufer_ust", ""))]
-    kandidaten.extend(re.findall(r"\b(?:DE\s?\d{9}|ATU\s?\d{8}|[A-Z]{2}\s?(?=[A-Z0-9]{7,14}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{7,14})\b", text, re.I))
-    for kandidat in kandidaten:
-        nummer = re.sub(r"[\s.-]", "", kandidat.upper())
-        if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{7,14}", nummer) and nummer != eigene:
-            return nummer
-    return None
+    xml_nummer = _ust_id(str((xml or {}).get("verkaeufer_ust", "")))
+    if xml_nummer and xml_nummer != eigene:
+        return xml_nummer
+    return _ust_id_aus_text(text, eigene)
 
 
 def _vies_pruefen(nummer: str) -> bool | None:
