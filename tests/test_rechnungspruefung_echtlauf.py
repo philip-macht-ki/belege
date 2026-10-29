@@ -110,6 +110,19 @@ def test_ohne_rechnungsnummer_bleibt_befund(repo):
     assert "Rechnungsnummer fehlt" in pruefe(_e(), _voll("Leistung vorhanden", nummer=""))
 
 
+@pytest.mark.parametrize("nummer", ["Rechnung 2026", "Rechnung\n2026"])
+def test_rechnungsjahr_allein_ist_keine_rechnungsnummer(repo, nummer):
+    assert "Rechnungsnummer fehlt" in pruefe(_e(), _voll(nummer=nummer))
+
+
+def test_deutsche_rechnung_mit_schweizer_lieferadresse_bleibt_nicht_drittland(repo):
+    text = Text("Lieferant GmbH\nMusterweg 1\n12345 Berlin\nRechnung an: Studio Beispiel\n"
+                "Musterstraße 1\n12345 Musterstadt\nLieferadresse: Musterweg 1, 8000 Zürich, Schweiz\n"
+                "Rechnung 202610069\n29.10.2026\nLeistung: Beratung\nGesamt 300,00 CHF", "klartext", 1)
+    befund = pruefe(_e(), text)
+    assert "Steuersatz und Steuerbetrag oder Steuerhinweis fehlt" in befund
+
+
 def test_artikel_196_trotz_ocr_verlust_ist_steuer_und_reverse_charge_hinweis(repo):
     text = _voll("Gema Artikel 196, EC Direktive 2006/112/EC obliegt die Umsatzsteuer dem Leistungsempfanger", steuer="")
     assert "Steuersatz und Steuerbetrag oder Steuerhinweis fehlt" not in pruefe(_e(), text)

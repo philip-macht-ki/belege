@@ -62,6 +62,13 @@ def test_ust_id_steuernummer_anschrift_und_rangfolge(tmp_path, monkeypatch):
     assert _firma_aus_text("Rechnung an:\nBeta GmbH\nDE344935206") == "Alpha GmbH"
 
 
+def test_eigene_nummern_haben_token_grenzen(tmp_path, monkeypatch):
+    _einrichtung(tmp_path, monkeypatch, _firmen().replace("32/670/10144", "32/670/10162"))
+    assert _firma_aus_text("Rechnung an:\nUnbekannt\nDE 344 935 206") == "Alpha GmbH"
+    assert _firma_aus_text("Rechnung an:\nUnbekannt\n32 670 10162") == "Alpha GmbH"
+    assert _firma_aus_text("Rechnung RE-9932670101620") is None
+
+
 def test_lieferanten_ust_im_fuss_zaehlt_nicht(tmp_path, monkeypatch):
     _einrichtung(tmp_path, monkeypatch, _firmen())
     text = "Lieferant GmbH\nRechnung\nPositionen\n\nImpressum\nUSt-IdNr. DE344935206"

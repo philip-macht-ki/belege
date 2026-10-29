@@ -82,7 +82,8 @@ def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
                        r"\d{4}[./-]\d{1,2}[./-]\d{1,2})$")
     for treffer in titel_nummer.finditer(text):
         kandidat = treffer.group(1).strip(".,:;#")
-        if len(re.sub(r"\D", "", kandidat)) >= 4 and not datum.fullmatch(kandidat):
+        ist_jahr = bool(re.fullmatch(r"(?:19|20)\d{2}", kandidat))
+        if len(re.sub(r"\D", "", kandidat)) >= 4 and not datum.fullmatch(kandidat) and not ist_jahr:
             return True
     # Das Muster aus 1.12.0 gilt weiter, damit kurze Nummern wie "RE-22" nicht neu auffallen.
     if re.search(r"(?:rechnungs?(?:nummer|\s*-?nr\.?)|rg\.?\s*-?nr\.?|re\.?\s*-?nr\.?|belegnummer|"
@@ -111,7 +112,19 @@ def _drittland(text: str, xml: dict | None, firma: dict | None) -> bool:
             r"canada|united kingdom|\buk\b|großbritannien|switzerland|schweiz|norway|norwegen|"
             r"israel|india|indien|japan|china|hong kong)\b|\bABN\s*\d")
     waehrung = r"(?:\$\s*\d|\b(?:USD|AUD|SGD|CAD|GBP|CHF)\b)"
-    return not _lieferanten_ust(text, xml, firma) and bool(re.search(land, text, re.I) or re.search(waehrung, text, re.I))
+    rohzeilen = text.splitlines()
+    zeilen = [zeile.strip() for zeile in rohzeilen if zeile.strip()]
+    kopf_und_fuss = "\n".join(zeilen[:15] + zeilen[-10:])
+    if _lieferanten_ust(text, xml, firma) or not re.search(rf"{land}|{waehrung}", kopf_und_fuss, re.I):
+        return False
+    empfaengerblock = _empfaengerblock_zeilen(text, firma)
+    deutsche_steuernummer = re.compile(r"\b\d{2,3}/\d{3,4}/\d{4,5}\b")
+    if any(deutsche_steuernummer.search(zeile) for nr, zeile in enumerate(text.splitlines())
+           if nr not in empfaengerblock):
+        return False
+    lieferantenkopf = [zeile.strip() for nr, zeile in enumerate(rohzeilen)
+                       if zeile.strip() and nr not in empfaengerblock][:8]
+    return not _deutsche_lieferantenanschrift(lieferantenkopf)
 
 
 _POSITION_ODER_SUMME = re.compile(r"(?:\bpos\.?\b|\bmenge\b|\bbeschreibung\b|\bnetto\b|\bsumme\b|\bgesamt\b|\btotal\b)", re.I)
@@ -216,6 +229,43 @@ def _empfaengerblock_ust_zeilen(firma: dict | None, text: str) -> set[int]:
                     break
             return block
     return set()
+
+
+def _empfaengerblock_zeilen(text: str, firma: dict | None) -> set[int]:
+    """Markiert den zusammenhängenden Empfängerblock im Rechnungskopf."""
+    namen = [str(name) for name in (firma or {}).get("namen", [])]
+    if firma:
+        namen.insert(0, str(firma.get("name", "")))
+    zeilen = text.splitlines()[:30]
+    for nr, zeile in enumerate(zeilen):
+        if _POSITION_ODER_SUMME.search(zeile):
+            break
+        ist_empfaenger = _EMPFÄNGERZEILE.search(zeile) or any(
+            _normal(name) and _normal(name) in _normal(zeile) for name in namen)
+        if not ist_empfaenger:
+            continue
+        block = {nr}
+        for ende in range(nr + 1, len(zeilen)):
+            if not zeilen[ende].strip() or _POSITION_ODER_SUMME.search(zeilen[ende]):
+                break
+            block.add(ende)
+        return block
+    return set()
+
+
+def _deutsche_lieferantenanschrift(zeilen: list[str]) -> bool:
+    """Erkennt eine deutsche PLZ im Lieferantenbriefkopf, nicht eine Lieferadresse."""
+    ausland = re.compile(
+        r"\b(?:united states|usa|u\.s\.a\.|australia|australien|singapore|singapur|"
+        r"canada|united kingdom|\buk\b|großbritannien|switzerland|schweiz|norway|norwegen|"
+        r"israel|india|indien|japan|china|hong kong)\b", re.I)
+    for nr, zeile in enumerate(zeilen):
+        if not re.search(r"\b\d{5}\b", zeile):
+            continue
+        umfeld = " ".join(zeilen[max(0, nr - 1):nr + 2])
+        if re.search(r"\b(?:deutschland|germany)\b", umfeld, re.I) or not ausland.search(umfeld):
+            return True
+    return False
 
 
 def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:

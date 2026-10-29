@@ -228,16 +228,27 @@ def _anschrift_treffer(zeilen: list[str]) -> set[str]:
     return treffer
 
 
+def _nummer_muster(wert: object) -> re.Pattern[str] | None:
+    """Baut eine eigene Nummer mit erlaubten Trennzeichen und Token-Grenzen."""
+    zeichen = re.findall(r"[A-Za-z0-9]", str(wert))
+    if not zeichen:
+        return None
+    # [^\W_] entspricht einem Unicode-Buchstaben oder einer Ziffer, aber keinem
+    # Unterstrich. So wird eine Nummer nie in Rechnungs- oder Kontonummern erkannt.
+    getrennt = r"[\s./-]*".join(map(re.escape, zeichen))
+    return re.compile(rf"(?<![^\W_]){getrennt}(?![^\W_])", re.I)
+
+
 def _merkmale(text: str, art: str | None = None) -> tuple[set[str], set[str], set[str]]:
     """Eigene Nummern, eindeutige Anschriften und Namen in ihrer Rangfolge."""
     zeilen = text.splitlines()[:45]
     oben = "\n".join(zeilen)
     nummernraum = text if art == "ausgang" else _empfaengerraum(zeilen)
-    nummern = _nummer_normal(nummernraum)
     nummer_treffer, namen_treffer = set(), set()
     for eintrag in firmen():
         ids = [eintrag.get("ust_id", ""), eintrag.get("steuernummer", "")]
-        if any((normal := _nummer_normal(wert)) and normal in nummern for wert in ids):
+        if any(muster and muster.search(nummernraum) for wert in ids
+               if (muster := _nummer_muster(wert))):
             nummer_treffer.add(eintrag["name"])
         namen = [eintrag["name"], *eintrag.get("namen", [])]
         if any(str(name).strip() and str(name).casefold() in oben.casefold() for name in namen):
