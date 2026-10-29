@@ -74,10 +74,10 @@ def _kein_rechnungsdokument(text: str) -> bool:
     if re.search(r"\b(?:veräußerungs|verkaufs)katalog\b|attraktive\s+veräußerungsmöglichkeit|"
                  r"\bstarug\b.{0,80}\b(?:katalog|angebot)\b", text, re.I):
         return True
-    if re.search(r"\b(?:leergut(?:\s*&\s*transportmittel)?-?abrechnung|pfand(?:abrechnung|gutschrift))\b", text, re.I):
+    if re.search(r"\b(?:leergut-?(?:\s*&\s*transportmittel)?-?\s*abrechnung|pfand(?:abrechnung|gutschrift))\b", text, re.I):
         return True
-    if (re.search(r"\banlage\s+(?:rechnungskonten|zur\s+rechnung)\b", text, re.I)
-            and not _rechnungsnummer_vorhanden(text, None)):
+    if (re.search(r"\banlage\s+rechnungskonten\b", kopf, re.I)
+            or (re.search(r"\banlage\s+zur\s+rechnung\b", kopf, re.I) and not _rechnungsnummer_vorhanden(text, None))):
         return True
     if (re.search(r"\b(?:for\s+ach\s+delivery|wire\s+transfer\s+instructions|remittance\s+details)\b", text, re.I)
             and not re.search(r"\b(?:gesamt|total|amount due|invoice total)\b.{0,30}\d", text, re.I)):
@@ -165,6 +165,8 @@ def _drittland(text: str, xml: dict | None, firma: dict | None) -> bool:
     if any(deutsche_steuernummer.search(zeile) for nr, zeile in enumerate(text.splitlines())
            if nr not in empfaengerblock):
         return False
+    if markiert:
+        return True
     lieferantenkopf = [zeile.strip() for nr, zeile in enumerate(rohzeilen)
                        if zeile.strip() and nr not in empfaengerblock][:8]
     return not _deutsche_lieferantenanschrift(lieferantenkopf)
@@ -371,7 +373,7 @@ _UST_ID_FORMATS = {
     "SI": r"\d{8}", "SK": r"\d{10}", "XI": r"(?:\d{9}|\d{12})",
 }
 _UST_ID_KENNZEICHEN = re.compile(
-    r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|"
+    r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|steuer\s*-?\s*id\b|"
     r"vat(?:\s*(?:id|number|no\.?)?)?|tva|iva|btw|nif)", re.I)
 _EMPFÄNGERZEILE = re.compile(r"(?:rechnungsempf|rechnung\s+an|\bempf[aä]nger\b|\bkund[ei]\b|\ban\s*:)", re.I)
 _EMPFÄNGER_UST_KENNZEICHEN = re.compile(

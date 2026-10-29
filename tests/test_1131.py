@@ -160,3 +160,20 @@ def test_aufraeumliste_merkt_sich_fehlversand_nicht(repo, monkeypatch):
     args = type("Args", (), {"monate": 3, "vorschau": None, "echt": True})()
     assert aufraeumen_befehl(args) == 1
     assert not zustand().get("erste_liste")
+
+
+def test_echtlauf_reste_leergut_anlage_canva_und_steuer_id(repo):
+    assert pruefe(_e(), Text("Leergut- & Transportmittel-Abrechnung      Getränke Muster GmbH\nBeleg-Nr. 1", "klartext", 1)) == []
+    assert pruefe(_e(), Text("\nAnlage Rechnungskonten     Details unter www.muster.de\nAufstellung Ihrer Rechnungskonten*\n5633472085",
+                             "klartext", 1)) == []
+    canva = Text("Muster Rechnung\nRechnung                  05018-44925970\nAusstellungsdatum 28.09.2026\nRechnungsadresse Germany\n"
+                 "Artikel Betrag\nMuster Pro (Jahresabonnement) 107,88 €\nGesamtbetrag 107,88 €\n\n"
+                 "Muster Pty Ltd, 1 Kippax St, NSW 2010, Australia · ABN 80 000 000 000", "klartext", 1)
+    assert pruefe(_e(107.88), canva) == []
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace('ust_id = ""', 'ust_id = "DE111111111"'), encoding="utf-8")
+    mistral = Text("Anzahlungsrechnung\nRechnungsnummer MS-1\nAusgabedatum 10. Sep. 2026\nVon An\nMuster SAS Studio Beispiel\n"
+                   "Musterweg 1\n12345 Musterstadt\n\n\n\n\nArtikel Menge Preis\nAPI Guthaben 1 €10,00\n\n\n"
+                   "Steuer ID: DE111111111\nSteuer ID: FR12000000000\n€10,00",
+                   "klartext", 1)
+    assert pruefe(_e(), mistral) == []
