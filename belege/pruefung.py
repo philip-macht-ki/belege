@@ -33,6 +33,24 @@ def _firma(e: Einordnung) -> dict | None:
     return kern.firma(e.firma) or (kern.firmen()[0] if len(kern.firmen()) == 1 else None)
 
 
+_POSITION_ODER_SUMME = re.compile(r"(?:\bpos\.?\b|\bmenge\b|\bbeschreibung\b|\bnetto\b|\bsumme\b|\bgesamt\b|\btotal\b)", re.I)
+_FUSSZEILE = re.compile(
+    r"(?:\bhrb\b|\bamtsgericht\b|\bgeschäftsführer\b|\biban\b|\bbic\b|\bbankverbindung\b|"
+    r"\btel\.?(?:efon)?\b|\bfax\b|\be[ -]?mail\b|\bwww\.|\bsitz der gesellschaft\b|\bust\s*-?id\s*(?:nr\.?)?\b)",
+    re.I,
+)
+
+
+def _kopfzeilen(text: str) -> list[str]:
+    """Gibt nur den sicheren Rechnungskopf vor Positionen oder Fußzeile zurück."""
+    kopf: list[str] = []
+    for zeile in text.splitlines()[:30]:
+        if _POSITION_ODER_SUMME.search(zeile) or _FUSSZEILE.search(zeile):
+            break
+        kopf.append(zeile)
+    return kopf
+
+
 def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
     if not firma:
         return "Empfängerfirma unklar"
@@ -40,7 +58,7 @@ def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
     gefunden = str((xml or {}).get("kaeufer", ""))
     if gefunden and any(_normal(name) == _normal(gefunden) for name in namen):
         return None
-    oben = "\n".join(text.splitlines()[:55])
+    oben = "\n".join(_kopfzeilen(text))
     if any(_normal(name) and _normal(name) in _normal(oben) for name in namen):
         return None
     if not gefunden:
@@ -71,7 +89,7 @@ def _anschrift_normal(wert: str) -> str:
 def _anschrift_zeilen(firma: dict, text: str) -> tuple[list[str], bool]:
     """Liest den zusammenhängenden Fensterkuvert-Block um den Empfängernamen."""
     namen = [str(firma.get("name", "")), *map(str, firma.get("namen", []))]
-    zeilen = text.splitlines()[:55]
+    zeilen = _kopfzeilen(text)
     for nr, zeile in enumerate(zeilen):
         if any(_normal(name) and _normal(name) in _normal(zeile) for name in namen):
             anfang = nr
@@ -82,6 +100,27 @@ def _anschrift_zeilen(firma: dict, text: str) -> tuple[list[str], bool]:
                 ende += 1
             return [zeile.strip() for zeile in zeilen[max(anfang, nr - 5):min(ende, nr + 6)]], True
     return [], False
+
+
+def _empfaengerblock_ust_zeilen(firma: dict | None, text: str) -> set[int]:
+    """Markiert USt-Zeilen im Kopfblock des Empfängers, auch ohne eigene USt-Konfig."""
+    if not firma:
+        return set()
+    namen = [str(firma.get("name", "")), *map(str, firma.get("namen", []))]
+    zeilen = text.splitlines()[:30]
+    for nr, zeile in enumerate(zeilen):
+        if _POSITION_ODER_SUMME.search(zeile) or _FUSSZEILE.search(zeile):
+            return set()
+        if any(_normal(name) and _normal(name) in _normal(zeile) for name in namen):
+            block = {nr}
+            for ende in range(nr + 1, len(zeilen)):
+                if not zeilen[ende].strip() or _POSITION_ODER_SUMME.search(zeilen[ende]):
+                    break
+                block.add(ende)
+                if _FUSSZEILE.search(zeilen[ende]):
+                    break
+            return block
+    return set()
 
 
 def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
@@ -104,11 +143,7 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     if (_anschrift_normal(erwartet_strasse) in normal and erwartet_plz in normal
             and _anschrift_normal(erwartet_ort) in normal):
         return None
-    oben = "\n".join(text.splitlines()[:55])
-    oben_normal = _anschrift_normal(oben)
-    if (_anschrift_normal(erwartet_strasse) in oben_normal and erwartet_plz in oben_normal):
-        return None
-    if erwartet_plz in oben:
+    if erwartet_plz in gefunden:
         return None
     hat_adresse = bool(re.search(r"\b\d{5}\b", gefunden) and re.search(r"\d", gefunden)
                        and re.search(r"(?:str(?:\.|asse)|stra(?:ß|ss)e|weg\b|allee\b|platz\b|gasse\b|ufer\b|ring\b)", gefunden, re.I))
@@ -141,6 +176,9 @@ _UST_ID_KENNZEICHEN = re.compile(
     r"(?:ust\s*-?id\s*(?:nr\.?)?|ustidnr|umsatzsteuer\s*-?identifikationsnummer|"
     r"vat(?:\s*(?:id|number|no\.?)?)?|tva|iva|btw|nif)", re.I)
 _EMPFÄNGERZEILE = re.compile(r"(?:rechnungsempf|rechnung\s+an|\bempf[aä]nger\b|\bkund[ei]\b|\ban\s*:)", re.I)
+_EMPFÄNGER_UST_KENNZEICHEN = re.compile(
+    r"(?:ihre\s+ust\s*-?id\s*(?:nr\.?)?|kunden\s*-?ust\s*-?id|"
+    r"ust\s*-?id\s+des\s+leistungsempfängers|your\s+vat|customer\s+vat)", re.I)
 
 
 def _ust_id(nummer: str) -> str | None:
@@ -152,14 +190,20 @@ def _ust_id(nummer: str) -> str | None:
     return None
 
 
-def _ust_id_aus_text(text: str, eigene: str) -> str | None:
+def _ust_id_aus_text(text: str, eigene: str, firma: dict | None) -> str | None:
     """Liest eine gekennzeichnete Lieferanten-USt-IdNr., nicht Rechnungsnummern."""
-    for nr, zeile in enumerate(text.splitlines()):
+    zeilen = text.splitlines()
+    empfaengerblock = _empfaengerblock_ust_zeilen(firma, text)
+    for nr, zeile in enumerate(zeilen):
         if _EMPFÄNGERZEILE.search(zeile):
+            continue
+        vorherige = zeilen[nr - 1] if nr else ""
+        if (nr in empfaengerblock or _EMPFÄNGER_UST_KENNZEICHEN.search(zeile)
+                or _EMPFÄNGER_UST_KENNZEICHEN.search(vorherige)):
             continue
         hat_kennzeichen = bool(_UST_ID_KENNZEICHEN.search(zeile))
         if not hat_kennzeichen and nr:
-            hat_kennzeichen = bool(_UST_ID_KENNZEICHEN.search(text.splitlines()[nr - 1]))
+            hat_kennzeichen = bool(_UST_ID_KENNZEICHEN.search(vorherige))
         if not hat_kennzeichen:
             continue
         for kandidat in re.findall(r"\b[A-Z]{2}[A-Z0-9 .-]{6,14}\b", zeile, re.I):
@@ -175,7 +219,7 @@ def _lieferanten_ust(text: str, xml: dict | None, firma: dict | None) -> str | N
     xml_nummer = _ust_id(str((xml or {}).get("verkaeufer_ust", "")))
     if xml_nummer and xml_nummer != eigene:
         return xml_nummer
-    return _ust_id_aus_text(text, eigene)
+    return _ust_id_aus_text(text, eigene, firma)
 
 
 def _vies_pruefen(nummer: str) -> bool | None:
@@ -294,7 +338,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
             befund.append("Name und Anschrift des Lieferanten fehlt")
         if not (e.betrag or re.search(r"(?:brutto|gesamt|summe).{0,25}\d+[,.]\d{2}", inhalt, re.I)):
             befund.append("Bruttobetrag fehlt")
-    if (not befund and cfg.get("ust_id_amtlich", False) and not kleinbetrag):
+    if (not befund and cfg.get("an", False) and cfg.get("ust_id_amtlich", False) and not kleinbetrag):
         nummer = _lieferanten_ust(inhalt, xml, _firma(e))
         if nummer and _vies_pruefen(nummer) is False:
             befund.append(f"USt-IdNr. des Lieferanten laut EU-Abfrage ungültig ({nummer})")
