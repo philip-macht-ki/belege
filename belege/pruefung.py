@@ -42,12 +42,23 @@ _FUSSZEILE = re.compile(
 
 
 def _kopfzeilen(text: str) -> list[str]:
-    """Gibt nur den sicheren Rechnungskopf vor Positionen oder Fußzeile zurück."""
+    """Gibt den Rechnungskopf vor den Positionen zurück.
+
+    Stammdatenzeilen des Lieferanten (Tel., HRB, USt-IdNr. …) stehen oft auch im Kopf.
+    Ein Block mit solchen Zeilen gehört dem Lieferanten und wird ganz geleert, statt
+    den Kopf zu beenden; ein Empfängerblock dahinter bleibt so erhalten.
+    """
     kopf: list[str] = []
     for zeile in text.splitlines()[:30]:
-        if _POSITION_ODER_SUMME.search(zeile) or _FUSSZEILE.search(zeile):
+        if _POSITION_ODER_SUMME.search(zeile):
             break
         kopf.append(zeile)
+    anfang = 0
+    for nr in range(len(kopf) + 1):
+        if nr == len(kopf) or not kopf[nr].strip():
+            if any(_FUSSZEILE.search(zeile) for zeile in kopf[anfang:nr]):
+                kopf[anfang:nr] = [""] * (nr - anfang)
+            anfang = nr + 1
     return kopf
 
 
@@ -58,7 +69,8 @@ def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
     gefunden = str((xml or {}).get("kaeufer", ""))
     if gefunden and any(_normal(name) == _normal(gefunden) for name in namen):
         return None
-    oben = "\n".join(_kopfzeilen(text))
+    # Wie in 1.12.0: Der Empfänger darf irgendwo oben stehen, sonst gäbe es neue Fehlbefunde.
+    oben = "\n".join(text.splitlines()[:55])
     if any(_normal(name) and _normal(name) in _normal(oben) for name in namen):
         return None
     if not gefunden:
@@ -109,8 +121,10 @@ def _empfaengerblock_ust_zeilen(firma: dict | None, text: str) -> set[int]:
     namen = [str(firma.get("name", "")), *map(str, firma.get("namen", []))]
     zeilen = text.splitlines()[:30]
     for nr, zeile in enumerate(zeilen):
-        if _POSITION_ODER_SUMME.search(zeile) or _FUSSZEILE.search(zeile):
+        if _POSITION_ODER_SUMME.search(zeile):
             return set()
+        if _FUSSZEILE.search(zeile):
+            continue
         if any(_normal(name) and _normal(name) in _normal(zeile) for name in namen):
             block = {nr}
             for ende in range(nr + 1, len(zeilen)):

@@ -166,3 +166,10 @@ def test_hinweise_stehen_in_der_monatlichen_uebergabe(repo):
     })
     assert "Hinweise für die Buchhaltung" in text
     assert "rechnung.pdf: Reverse Charge" in text
+
+
+def test_lieferanten_ustid_im_kopf_beendet_empfaengersuche_nicht():
+    from belege import pruefung
+    text = "Lieferant AG\nTel. 0221 12345\nUSt-IdNr. DE123456789\n\nMuster GmbH\nHauptstraße 1\n12345 Musterstadt\n\nPos. Beschreibung Netto"
+    assert "Muster GmbH" in "\n".join(pruefung._kopfzeilen(text))
+    assert pruefung._empfaenger(text, {"name": "Muster GmbH"}, None) is None
