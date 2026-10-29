@@ -148,7 +148,8 @@ class Einordnung:
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>",
   "befund": "<relativer Pfad zur .befund.txt oder null>",
-  "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]}}}
+  "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]},
+  "hinweise": ["Buchhaltungshinweis …"]}}
 ```
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
@@ -177,7 +178,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `einordnen.py` | `einordnen(fund: Fund, text: Text) -> Einordnung` (Regeln → Urteil → Rückfall) |
 | `ablegen.py` | `sauber(s)`, `dateiname(e, ext)`, `ziel(e, ext) -> Path`, `ablegen(fund, e, text, echt) -> Ergebnis` |
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
-| `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
+| `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `hinweise(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |

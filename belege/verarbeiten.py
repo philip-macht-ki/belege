@@ -252,8 +252,9 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             and not re.search(r"\b(dauerbeleg|bescheid|steuerbescheid|gebührenbescheid)\b", text.text, re.I)
         )
         befund = []
+        notizen = []
         if pruefbar:
-            from .pruefung import pruefe
+            from .pruefung import hinweise, pruefe
             if fund.datei.suffix.lower() == ".xml":
                 try:
                     from .xrechnung import lesen
@@ -261,6 +262,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
                 except (OSError, ValueError):
                     xml_daten = None
             befund = pruefe(einordnung, text, xml=xml_daten)
+            notizen = hinweise(einordnung, text, xml=xml_daten)
             if befund:
                 from .ablegen import ablegen_befund
                 ergebnis = ablegen_befund(fund, einordnung, befund, echt)
@@ -302,6 +304,7 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         }
         if pruefbar:
             daten["pruefung"] = {"status": "ok" if not befund else "befund", "punkte": befund}
+            daten["hinweise"] = notizen
         if ergebnis.daten.get("befund"):
             befund_pfad = Path(ergebnis.daten["befund"])
             daten["befund"] = str(befund_pfad.relative_to(kern.ablage_ordner()))

@@ -15,6 +15,8 @@ ust_id = ""
 # name = "Beispiel Holding GmbH"
 # namen = ["Beispiel Holding GmbH", "Beispiel Holding"]
 # ust_id = "DE123456789"
+# Optional: Anschrift auf Rechnungen prüfen (Straße mit Hausnummer, PLZ und Ort).
+# anschrift = { strasse = "Musterstraße 1", plz = "12345", ort = "Berlin" }
 # bereich = "Holding"
 # Konten aus dem Auszug: IBAN oder Kontokennung (bei MoneyMoney aus dessen Export).
 # Buchungen ohne zugeordnetes Konto gehören zur ersten Firma.
@@ -97,9 +99,11 @@ erlaubt = []
 # Erst mit fünf echten Rechnungen trocken testen: `belege pruefung Rechnung.pdf`.
 an = false
 ordner = "Manuell prüfen"
-regeln = ["empfaenger", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
+regeln = ["empfaenger", "anschrift", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
 kleinbetrag = 250.0
 entwurf_an_absender = true
+# EU-USt-IdNr. des Lieferanten zusätzlich über VIES prüfen (30 Tage lokal gecacht).
+ust_id_amtlich = false
 
 [bericht]
 # Leer = die Adresse des ersten Postfachs.

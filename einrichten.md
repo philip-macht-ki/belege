@@ -379,6 +379,11 @@ geprüft werden, bespricht Claude zunächst die gewünschten Regeln. In
 Befunde kontrolliert; erst danach setzt Claude `an = true`. Beanstandete
 Rechnungen liegen getrennt unter „Manuell prüfen“. Ist ein Mail-Absender bekannt,
 legt belege höchstens einen freundlichen Entwurf an, nie eine gesendete Mail.
+Bei mehreren Firmen kann Claude außerdem die eigene Anschrift im jeweiligen
+`[[firma]]`-Block eintragen; dann prüft belege Straße, Hausnummer, PLZ und Ort.
+Die amtliche EU-Prüfung der Lieferanten-USt-IdNr. bleibt mit
+`ust_id_amtlich = false` aus, bis sie ausdrücklich gewünscht ist. Hinweise wie
+Reverse Charge bleiben Hinweise für die Buchhaltung und erzeugen keinen Befund.
 
 Für den Monatsabgleich fragt Claude zusätzlich nach den Konten jeder Firma und
 trägt sie im jeweiligen Block ein, zum Beispiel

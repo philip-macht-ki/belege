@@ -63,6 +63,17 @@ def _ust(block: ET.Element) -> str:
     return ""
 
 
+def _anschrift(block: ET.Element) -> str:
+    """Liest die Postanschrift einer Partei aus CII oder UBL als Sichttext."""
+    strasse = _erst(block, "LineOne", "StreetName")
+    hausnummer = _erst(block, "BuildingNumber")
+    plz = _erst(block, "PostcodeCode", "PostalZone")
+    ort = _erst(block, "CityName")
+    erste = " ".join(teil for teil in (strasse, hausnummer) if teil)
+    zweite = " ".join(teil for teil in (plz, ort) if teil)
+    return "\n".join(teil for teil in (erste, zweite) if teil)
+
+
 def _steuer(root: ET.Element) -> bool:
     """Erkennt Steuerbeträge, -sätze und die steuerfreien EN-16931-Codes."""
     kategorien = {"AE", "K", "E", "Z"}
@@ -96,6 +107,7 @@ def lesen(datei: Path) -> dict:
             "nummer": _erst(root, "InvoiceNumber", "ID"), "datum": _datum(_erst(root, "IssueDate", "DateTimeString")),
             "verkaeufer": _name(verkaeufer), "verkaeufer_ust": _ust(verkaeufer),
             "kaeufer": _name(kaeufer), "kaeufer_ust": _ust(kaeufer),
+            "kaeufer_anschrift": _anschrift(kaeufer),
             "betrag": _zahl(_erst(root, "GrandTotalAmount")),
             "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                                if _lokal(e) == "GrandTotalAmount"), "EUR"),
@@ -117,6 +129,7 @@ def lesen(datei: Path) -> dict:
         "nummer": _erst(root, "InvoiceNumber", "ID"), "datum": _datum(_erst(root, "IssueDate")),
         "verkaeufer": _name(verkaeufer), "verkaeufer_ust": _ust(verkaeufer),
         "kaeufer": _name(kaeufer), "kaeufer_ust": _ust(kaeufer), "betrag": _zahl(gesamt),
+        "kaeufer_anschrift": _anschrift(kaeufer),
         "waehrung": next((e.attrib.get("currencyID", "EUR") for e in root.iter()
                            if _lokal(e) in {"PayableAmount", "TaxInclusiveAmount"}), "EUR"),
         "positionen": positionen, "syntax": "ubl",

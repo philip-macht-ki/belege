@@ -2,16 +2,21 @@
 from __future__ import annotations
 
 import re
+import json
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 from . import kern
 from .typen import Einordnung, Text
 
 
-STANDARD = ["empfaenger", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
+STANDARD = ["empfaenger", "anschrift", "ust_id_lieferant", "rechnungsnummer", "datum", "steuer", "leistung"]
 NAMEN = {
     "empfaenger": "Empfänger",
+    "anschrift": "Anschrift",
     "ust_id_lieferant": "USt-IdNr. oder Steuernummer des Lieferanten",
     "rechnungsnummer": "Rechnungsnummer",
     "datum": "Ausstellungsdatum",
@@ -55,6 +60,54 @@ def _empfaenger(text: str, firma: dict | None, xml: dict | None) -> str | None:
     return "Empfänger fehlt"
 
 
+def _anschrift_normal(wert: str) -> str:
+    """Vergleicht Anschriften tolerant, ohne die Hausnummer zu verlieren."""
+    wert = wert.casefold().replace("ß", "ss")
+    wert = wert.replace("str.", "strasse")
+    wert = re.sub(r"\bnr\.?\s*", "", wert)
+    return re.sub(r"[^a-z0-9]", "", wert)
+
+
+def _anschrift_zeilen(firma: dict, text: str) -> list[str]:
+    namen = [str(firma.get("name", "")), *map(str, firma.get("namen", []))]
+    zeilen = text.splitlines()[:55]
+    for nr, zeile in enumerate(zeilen):
+        if any(_normal(name) and _normal(name) in _normal(zeile) for name in namen):
+            block = []
+            for folgende in zeilen[nr + 1:nr + 6]:
+                if not folgende.strip():
+                    break
+                block.append(folgende.strip())
+            return block
+    return []
+
+
+def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
+    firma = _firma(e)
+    ziel = (firma or {}).get("anschrift")
+    if not isinstance(ziel, dict) or not all(str(ziel.get(feld, "")).strip() for feld in ("strasse", "plz", "ort")):
+        return None
+    erwartet_strasse = str(ziel["strasse"])
+    erwartet_plz = str(ziel["plz"])
+    erwartet_ort = str(ziel["ort"])
+    gefunden = str((xml or {}).get("kaeufer_anschrift", "")).strip()
+    if not gefunden:
+        zeilen = _anschrift_zeilen(firma, text) if firma else []
+        gefunden = "\n".join(zeilen)
+    if not gefunden:
+        return None  # Ohne eindeutigen Empfängerblock wäre das Raten.
+    normal = _anschrift_normal(gefunden)
+    if (_anschrift_normal(erwartet_strasse) in normal and erwartet_plz in normal
+            and _anschrift_normal(erwartet_ort) in normal):
+        return None
+    hat_adresse = bool(re.search(r"\b\d{5}\b", gefunden) and re.search(r"\d", gefunden)
+                       and re.search(r"(?:str(?:\.|asse)|stra(?:ß|ss)e|weg\b|allee\b|platz\b|gasse\b|ufer\b|ring\b)", gefunden, re.I))
+    if hat_adresse:
+        zeile = re.sub(r"\s+", " ", gefunden)[:100]
+        return f"Anschrift abweichend: {zeile}"
+    return "Anschrift fehlt"
+
+
 def _hat_lieferantensteuer(text: str, xml: dict | None) -> bool:
     if (xml or {}).get("verkaeufer_ust"):
         return True
@@ -62,6 +115,48 @@ def _hat_lieferantensteuer(text: str, xml: dict | None) -> bool:
     eu_format = r"(?:DE\s?\d{9}|ATU\s?\d{8}|[A-Z]{2}\s?[A-Z0-9]{7,14})"
     return bool(re.search(rf"\b{eu_format}\b", text, re.I) or
                 re.search(rf"\b{kennzeichen}\s*[:#.]?\s*[A-Z0-9][A-Z0-9 ./-]{{4,}}", text, re.I))
+
+
+def _lieferanten_ust(text: str, xml: dict | None, firma: dict | None) -> str | None:
+    """Nimmt nur eine EU-USt-IdNr. des Lieferanten, nie die eigene."""
+    eigene = re.sub(r"\s+", "", str((firma or {}).get("ust_id", "")).upper())
+    kandidaten = [str((xml or {}).get("verkaeufer_ust", ""))]
+    kandidaten.extend(re.findall(r"\b(?:DE\s?\d{9}|ATU\s?\d{8}|[A-Z]{2}\s?(?=[A-Z0-9]{7,14}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{7,14})\b", text, re.I))
+    for kandidat in kandidaten:
+        nummer = re.sub(r"[\s.-]", "", kandidat.upper())
+        if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{7,14}", nummer) and nummer != eigene:
+            return nummer
+    return None
+
+
+def _vies_pruefen(nummer: str) -> bool | None:
+    """Prüft eine EU-USt-IdNr.; None bedeutet absichtlich keinen Befund."""
+    cache_datei = kern.pfad("arbeit", "ust_id_cache.json")
+    cache = kern.lesen(cache_datei, {}) or {}
+    jetzt = kern.jetzt()
+    eintrag = cache.get(nummer, {})
+    try:
+        frisch = jetzt - datetime.fromisoformat(eintrag["am"]) < timedelta(days=30)
+    except (KeyError, TypeError, ValueError):
+        frisch = False
+    if frisch and eintrag.get("gueltig") in (True, False):
+        return bool(eintrag["gueltig"])
+    land, wert = nummer[:2], nummer[2:]
+    url = f"https://ec.europa.eu/taxation_customs/vies/rest-api/ms/{land}/vat/{wert}"
+    try:
+        with urlopen(url, timeout=10) as antwort:  # nosec B310 - feste URL der EU-Kommission
+            daten = json.loads(antwort.read().decode("utf-8"))
+    except (OSError, URLError, HTTPError, ValueError, json.JSONDecodeError) as fehler:
+        kern.log(f"EU-USt-IdNr.-Abfrage für {nummer} nicht verfügbar: {fehler}")
+        return None
+    fehlercode = str(daten.get("userError", "")).upper()
+    if fehlercode and fehlercode not in {"VALID", "INVALID"}:
+        kern.log(f"EU-USt-IdNr.-Abfrage für {nummer} nicht verfügbar: {fehlercode}")
+        return None
+    gueltig = bool(daten.get("isValid"))
+    cache[nummer] = {"am": jetzt.isoformat(), "gueltig": gueltig}
+    kern.schreiben(cache_datei, cache)
+    return gueltig
 
 
 def _hat_steuer(text: str, xml: dict | None) -> bool:
@@ -81,6 +176,10 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
     befund: list[str] = []
     if "empfaenger" in regeln and not kleinbetrag:
         punkt = _empfaenger(inhalt, _firma(e), xml)
+        if punkt:
+            befund.append(punkt)
+    if "anschrift" in regeln and not kleinbetrag:
+        punkt = _anschrift(e, inhalt, xml)
         if punkt:
             befund.append(punkt)
     if "ust_id_lieferant" in regeln and not kleinbetrag and not _hat_lieferantensteuer(inhalt, xml):
@@ -114,7 +213,28 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
             befund.append("Name und Anschrift des Lieferanten fehlt")
         if not (e.betrag or re.search(r"(?:brutto|gesamt|summe).{0,25}\d+[,.]\d{2}", inhalt, re.I)):
             befund.append("Bruttobetrag fehlt")
+    if (not befund and cfg.get("ust_id_amtlich", False) and not kleinbetrag):
+        nummer = _lieferanten_ust(inhalt, xml, _firma(e))
+        if nummer and _vies_pruefen(nummer) is False:
+            befund.append(f"USt-IdNr. des Lieferanten laut EU-Abfrage ungültig ({nummer})")
     return befund
+
+
+def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
+    """Gibt Buchhaltungshinweise zurück; sie sind ausdrücklich keine Befunde."""
+    cfg = kern.konfig("belege").get("pruefung", {})
+    if not (cfg.get("an", False) and e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb" and e.firma != "unklar"):
+        return []
+    inhalt = text.text
+    ust = _lieferanten_ust(inhalt, xml, _firma(e)) or ""
+    reverse = (ust and not ust.startswith("DE")) or bool(re.search(
+        r"reverse\s*charge|§\s*13b|steuerschuldnerschaft\s+des\s+leistungsempfängers", inhalt, re.I))
+    ergebnis = ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"] if reverse else []
+    kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
+    deutsch = ust.startswith("DE") or bool(re.search(r"\b(?:steuer\s*(?:-| )?nr\.?|st\.?\s*-?nr\.?)\s*[:#.]?\s*\d", inhalt, re.I))
+    if deutsch and not kleinbetrag and xml is None:
+        ergebnis.append("Lieferant schickt keine E-Rechnung; ab 2027/2028 Pflicht, rechtzeitig nachfragen")
+    return ergebnis
 
 
 def befehl(args) -> int:
@@ -174,7 +294,10 @@ def befehl(args) -> int:
             print("Nicht geprüft: keine Eingangsrechnung des Betriebs.")
             return 0
         befund = pruefe(e, text, xml=xml)
+        notizen = hinweise(e, text, xml=xml)
         print("OK: Pflichtangaben erfüllt." if not befund else "Befund:\n- " + "\n- ".join(befund))
+        if notizen:
+            print("Hinweise für die Buchhaltung:\n- " + "\n- ".join(notizen))
         return 0
     finally:
         if temporaer:
