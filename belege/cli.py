@@ -48,7 +48,7 @@ BEFEHLE = {
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
 OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten", "pruefung"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -71,6 +71,8 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--mail", action="store_true")
     argumente.add_argument("--antworten", action="store_true")
     argumente.add_argument("--tage", type=int)
+    argumente.add_argument("--monate", type=int, default=3)
+    argumente.add_argument("--vorschau", metavar="DATEI")
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
     argumente.add_argument("--microsoft", metavar="NAME", help="Microsoft-Postfach im Browser anmelden")

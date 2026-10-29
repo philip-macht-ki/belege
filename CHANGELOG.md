@@ -2,6 +2,19 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.13.1] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Weniger Fehlalarme: Mahnungen, Kataloge, Beiblätter, Pfandabrechnungen und erkennbare Auslands- oder Kleinbetragsfälle werden besser eingeordnet.
+- Wiederkehrende Probleme fasst `belege pruefung aufraeumen` je Anbieter zusammen; für bekannte Anbieter steht der passende Klickweg dabei.
+
+### Musst du etwas tun?
+
+Nein. Wenn du möchtest, kannst du Absender ohne Rechnungen später in die Liste `nie_beleg` aufnehmen.
+
 ## [1.13.0] – 29.10.2026
 
 aktion: keine

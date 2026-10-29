@@ -68,8 +68,21 @@ arbeit/                   Laufzeit, nie im Git
   monat/<JJJJ-MM>/        abgleich.json, fehlt_noch.csv, fehlt_noch.md, pruefen.md, klaerung.md, paket/
   logs/<datum>.log
   urteile.jsonl, cache/urteile/<hash>.json
+  pruefung_anbieter.json  Stand der Aufräumliste: erste_liste und Anbieter mit Status, Weg, Problemen, Zähler, Daten und Entwurfsmerker
   tmp/                    Anhänge während der Verarbeitung, wird je Lauf geleert
 ```
+
+### Aufräumliste Rechnungsprüfung
+
+`arbeit/pruefung_anbieter.json` ist nur Laufzeitstand und wird ausschließlich
+über `kern.schreiben` geschrieben:
+
+```json
+{"erste_liste":"<iso-zeit oder null>","anbieter":{"<schlüssel>":{"name":"...","status":"offen|erledigt|ignorieren","weg":"selbst|lieferant|hinweis","probleme":["..."],"rechnungen":4,"erstmals":"2026-09-07","zuletzt":"2026-10-15","entwurf":false}}}
+```
+
+Die mitgelieferte, beim Update überschreibbare Anleitung liegt in
+`vorlagen/pruefung_anleitungen.toml`; sie ist keine persönliche Konfiguration.
 
 ## Stammdaten eigener Firmen
 
@@ -196,6 +209,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `ablegen.py` | `sauber(s)`, `dateiname(e, ext)`, `ziel(e, ext) -> Path`, `ablegen(fund, e, text, echt) -> Ergebnis` |
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
 | `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `hinweise(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
+| `aufraeumen.py` | Anbieterstand und `liste(eintraege, zustand) -> (betreff, text)` für wiederkehrende Rechnungsbefunde; `belege pruefung aufraeumen`, `belege pruefung anbieter` |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
