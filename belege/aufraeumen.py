@@ -28,9 +28,15 @@ def _anleitung(name: str, titel: str = "") -> dict | None:
     return next((a for a in anleitungen() if any(str(x).casefold() in heuhaufen for x in a.get("erkennen", []))), None)
 
 
+def _steuerberater_hinweis(hinweise: list[str]) -> bool:
+    from .pruefung import EU_OHNE_SATZ
+    return EU_OHNE_SATZ in hinweise
+
+
 def weg(lieferant: str, punkte: list[str], hinweise: list[str], titel: str = "") -> tuple[str, str]:
+    """Genau ein Weg je Anbieter; `""` heißt: nichts zu melden."""
     if not punkte:
-        return "hinweis", ""
+        return ("hinweis", "") if _steuerberater_hinweis(hinweise) else ("", "")
     anleitung = _anleitung(lieferant, titel)
     empfaenger = all("empfänger" in p.casefold() or "anschrift" in p.casefold() for p in punkte)
     if empfaenger and anleitung:
@@ -73,7 +79,6 @@ def aktualisieren(eintrag: dict, daten: dict | None = None) -> tuple[dict, bool]
 
 def liste(eintraege: list[dict], daten: dict) -> tuple[str, str]:
     """Reine Darstellung; `daten` wird dabei absichtlich nicht verändert."""
-    gruppen: dict[str, list[dict]] = defaultdict(list)
     gesammelt: dict[str, dict] = {}
     keine_belege: list[str] = []
     for e in eintraege:
@@ -82,35 +87,48 @@ def liste(eintraege: list[dict], daten: dict) -> tuple[str, str]:
             continue
         name = str(e.get("lieferant") or "Unbekannt")
         key = schluessel(name)
-        bereits = key in gesammelt
-        aus_zustand = bool(daten.get("anbieter", {}).get(key))
-        z = gesammelt.get(key) or (daten.get("anbieter", {}).get(key) or {}).copy()
-        if z.get("status") in {"erledigt", "ignorieren"}:
+        bekannt = daten.get("anbieter", {}).get(key) or {}
+        if bekannt.get("status") in {"erledigt", "ignorieren"}:
             continue
-        punkte, hinweise = list(e.get("punkte") or []), list(e.get("hinweise") or [])
-        art, klickweg = weg(name, punkte, hinweise, str(e.get("titel") or ""))
-        z.update({"name": z.get("name", name), "rechnungen": int(z.get("rechnungen", 0)) + (1 if not aus_zustand else 0),
-                  "probleme": sorted(set(z.get("probleme", [])) | set(punkte)), "weg": art, "klickweg": klickweg})
-        gesammelt[key] = z
+        z = gesammelt.setdefault(key, {"name": bekannt.get("name", name), "rechnungen": 0, "probleme": set(),
+                                       "hinweise": set(), "entwurf": bool(bekannt.get("entwurf")), "titel": ""})
+        z["rechnungen"] += 1
+        z["probleme"] |= set(e.get("punkte") or [])
+        z["hinweise"] |= set(e.get("hinweise") or [])
+        z["titel"] = z["titel"] or str(e.get("titel") or "")
+    gruppen: dict[str, list[dict]] = defaultdict(list)
     for z in gesammelt.values():
-        gruppen[z["weg"]].append(z)
-    zeilen = ["Rechnungsprüfung: einmal aufräumen", ""]
+        art, klickweg = weg(z["name"], sorted(z["probleme"]), sorted(z["hinweise"]), z["titel"])
+        if art:
+            gruppen[art].append({**z, "klickweg": klickweg})
     anzahl = sum(len(v) for v in gruppen.values())
+    zeilen = ["Hallo,", "", "die Rechnungsprüfung hat deine letzten Rechnungen durchgesehen. Hier steht jeder Anbieter "
+              "nur einmal, mit genau einem Weg. Danach meldet sie sich nur noch bei Neuem.", ""]
     for art in ("selbst", "lieferant", "hinweis"):
         for z in sorted(gruppen[art], key=lambda x: (-x["rechnungen"], x["name"].casefold())):
-            probleme = ", ".join(z.get("probleme") or ["Hinweise"])
+            probleme = ", ".join(sorted(z["probleme"])) or "Reverse Charge ohne Pflichtsatz"
             if art == "selbst":
                 aktion = f"stellst du selbst um: {z['klickweg']}"
-            elif art == "lieferant":
+            elif art == "lieferant" and z["entwurf"]:
                 aktion = "Lieferant anschreiben – ein Entwurf liegt in deinem Postfach, er geht nie von allein raus"
+            elif art == "lieferant":
+                aktion = (f"Lieferant anschreiben – sag deinem Claude „Schreib {z['name']} wegen der Rechnung an“, "
+                          "er legt einen Entwurf an, der nie von allein rausgeht")
             else:
                 aktion = "nur ein Hinweis für den Steuerberater, du musst nichts tun"
-            zeilen.append(f"- {z['name']} ({z['rechnungen']} Rechnungen): {probleme} – {aktion}")
+            wort = "Rechnung" if z["rechnungen"] == 1 else "Rechnungen"
+            zeilen.append(f"- {z['name']} ({z['rechnungen']} {wort}): {probleme} – {aktion}")
     if keine_belege:
         zeilen += ["", "Diese Absender schicken dir offenbar keine Rechnungen – sollen sie auf die Liste ‚nie Beleg‘?",
                    *[f"- {name}" for name in sorted(set(keine_belege))]]
-    zeilen += ["", "Sag deinem Claude: ‚Meta ist erledigt‘ oder ‚SumUp ignorieren‘."]
-    return f"Rechnungsprüfung: einmal aufräumen ({anzahl} Anbieter)", "\n".join(zeilen)
+    zeilen += ["", "Wenn du etwas erledigt hast, sag deinem Claude: „Meta ist erledigt“ oder „SumUp ignorieren“. "
+               "Dann fragt die Prüfung dazu nicht mehr nach."]
+    wort = "Anbieter"
+    return f"Rechnungsprüfung: einmal aufräumen ({anzahl} {wort})", "\n".join(zeilen)
+
+
+def anzahl_zeilen(eintraege: list[dict], daten: dict) -> int:
+    return int(re.search(r"\((\d+) Anbieter\)", liste(eintraege, daten)[0]).group(1))
 
 
 def _eintraege(monate: int) -> list[dict]:
@@ -129,9 +147,15 @@ def befehl(args) -> int:
     vorschau = getattr(args, "vorschau", None)
     if vorschau:
         ziel = Path(vorschau)
-        inhalt = f"Subject: {betreff}\n\n{text}" if ziel.suffix.lower() == ".eml" else f"# {betreff}\n\n{text}\n"
-        ziel.write_text(inhalt, encoding="utf-8")
-    elif getattr(args, "echt", False) and anzahl_aktiv(eintraege, daten):
+        if ziel.suffix.lower() == ".eml":
+            from email.message import EmailMessage
+            nachricht = EmailMessage()
+            nachricht["Subject"] = betreff
+            nachricht.set_content(text)
+            ziel.write_bytes(bytes(nachricht))
+        else:
+            ziel.write_text(f"# {betreff}\n\n{text}\n", encoding="utf-8")
+    elif getattr(args, "echt", False) and anzahl_zeilen(eintraege, daten):
         from .bericht import empfaenger
         from .senden import senden
         senden(empfaenger(), betreff, text, [], True)
@@ -141,10 +165,6 @@ def befehl(args) -> int:
         daten["erste_liste"] = kern.jetzt().isoformat()
         speichern(daten)
     return 0
-
-
-def anzahl_aktiv(eintraege: list[dict], daten: dict) -> int:
-    return sum(1 for e in eintraege if (daten.get("anbieter", {}).get(schluessel(str(e.get("lieferant") or "")), {}).get("status", "offen") not in {"erledigt", "ignorieren"}))
 
 
 def anbieter_befehl(name: str = "", status: str = "") -> list[dict]:

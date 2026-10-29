@@ -78,13 +78,17 @@ def _kein_rechnungsdokument(text: str) -> bool:
             and not re.search(r"\b(?:gesamt|total|amount due|invoice total)\b.{0,30}\d", text, re.I)):
         return True
     titel = "\n".join(_titelzeilen(text, 8))
-    quittung = bool(re.search(r"^(?:quittung|receipt(?:\s+number)?|zahlungsbeleg|rcpt[-\s])", titel, re.I | re.M))
-    nummern = re.findall(r"(?:invoice\s*(?:number|no\.?|#)?|rechnung\s*(?:nr\.?|nummer)?)[\s:#-]*([A-Z0-9-]{3,})", text, re.I)
-    if quittung and nummern:
+    quittung = bool(re.search(r"^(?:quittung|receipt|zahlungsbeleg)\b|\brcpt-\d", titel, re.I | re.M))
+    # Nur eine Quittung, die auf eine eigene Rechnungsnummer verweist; eine Quittung
+    # ohne solchen Verweis kann die einzige Rechnung sein und bleibt prüfbar.
+    verweis = re.search(r"\b(?:invoice\s+(?:number|no\.?|#)|rechnungs?\s*(?:nr\.?|nummer)|zu\s+rechnung)[\s:#]*"
+                        r"((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{2,})", text, re.I)
+    eigene = re.search(r"\b(?:receipt\s+(?:number|no\.?|#)|quittungs?\s*(?:nr\.?|nummer))[\s:#]*([A-Z0-9-]{3,})", text, re.I)
+    if quittung and verweis and not (eigene and eigene.group(1).casefold() == verweis.group(1).casefold()):
         return True
     if re.search(r"\b(?:gutschrift|credit note|erstattung|refund|"
                  r"auftragsbestätigung|order confirmation|pro[ -]?forma|angebot|kontoauszug|"
-                 r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|"
+                 r"jahreskonto|auszahlungs(?:übersicht|bericht)|zahlungsbericht|zahlungsbeleg|"
                  r"lohnabrechnung|berechnung der umsatzsteuer)\b|\w*(?:vertrag|bescheid)\w*|"
                  r"(?:landesjustizkasse|gerichtskasse|justizkasse)", kopf, re.I):
         return True
@@ -370,6 +374,9 @@ _EMPFÄNGER_UST_KENNZEICHEN = re.compile(
     r"ust\s*-?id\s+des\s+leistungsempfängers|your\s+vat|customer\s+vat)", re.I)
 
 
+EU_OHNE_SATZ = "EU-Rechnung ohne Hinweis ‚Steuerschuldnerschaft des Leistungsempfängers‘; Reverse Charge gilt trotzdem, bitte so buchen"
+
+
 def _ust_id(nummer: str) -> str | None:
     """Normalisiert nur USt-IdNrn. aus EU-Mitgliedstaaten und Nordirland."""
     nummer = re.sub(r"[\s.-]", "", nummer.upper())
@@ -468,7 +475,8 @@ def _keine_umsatzsteuer_berechnet(text: str) -> bool:
 def _eu_reverse_charge_ohne_satz(text: str, xml: dict | None, firma: dict | None) -> bool:
     ust = _lieferanten_ust(text, xml, firma) or ""
     eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
-    return bool(ust and not ust.startswith("DE") and eigene.startswith("DE")
+    eigene_drauf = bool(eigene) and eigene in re.sub(r"[\s.-]", "", text).upper()
+    return bool(ust and not ust.startswith("DE") and eigene.startswith("DE") and eigene_drauf
                 and (_keine_umsatzsteuer_berechnet(text) or not _hat_steuer(text, xml)))
 
 
@@ -545,8 +553,10 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None, absender: str 
         befund.append("Rechnungsdatum fehlt")
     leistung_muster = (r"(?:leistung(?:sdatum|szeitraum)?|leistungsdatum\s+entspricht\s+rechnungsdatum|"
                        r"bezeichnung|beschreibung|artikel|position|pos\.?|description|item|menge|"
-                       r"leistungszeitraum|service|abonnement|subscription|plan)\D{0,80}\S|"
-                       r"(?:^|\n)[^\n]*[A-Za-zÄÖÜäöü][^\n]*\s+\d+(?:[,.]\d+)?\s+(?:[€$]\s*)?\d+[,.]\d{2}\b")
+                       r"leistungszeitraum|service|abonnement|subscription|plan|\babo\b|\(monatlich\)|\(jährlich\))\D{0,80}\S|"
+                       r"(?:^|\n)[^\n]*[A-Za-zÄÖÜäöü][^\n]*\s+\d+(?:[,.]\d+)?\s+(?:[€$]\s*)?\d+[,.]\d{2}\b|"
+                       # Positionszeile "8x Kunstblumen …" ohne Spaltenkopf
+                       r"(?:^|\n)\s*\d+\s*(?:x|×|stk\.?|stück)\s+[A-Za-zÄÖÜäöü]{3}")
     if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(leistung_muster, inhalt, re.I)):
         befund.append(NAMEN["leistung"] + " fehlt")
     steuer_ok = (_hat_steuer(inhalt, xml) or _eu_reverse_charge_ohne_satz(inhalt, xml, firma)
@@ -589,7 +599,7 @@ def hinweise(e: Einordnung, text: Text, *, xml: dict | None = None, absender: st
     reverse = _reverse_charge_hinweis(inhalt) or bool(ust and not ust.startswith("DE") and _keine_umsatzsteuer_berechnet(inhalt))
     ergebnis = ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"] if reverse else []
     if _eu_reverse_charge_ohne_satz(inhalt, xml, firma) and not _reverse_charge_hinweis(inhalt):
-        ergebnis.append("EU-Rechnung ohne Hinweis ‚Steuerschuldnerschaft des Leistungsempfängers‘; Reverse Charge gilt trotzdem, bitte so buchen")
+        ergebnis.append(EU_OHNE_SATZ)
     kleinbetrag = e.betrag is not None and e.betrag <= float(cfg.get("kleinbetrag", 250.0))
     deutsch = ust.startswith("DE") or _deutsche_steuernummer_ausserhalb_empfaengerblock(inhalt)
     if deutsch and not kleinbetrag and xml is None:

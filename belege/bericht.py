@@ -179,8 +179,12 @@ def befehl(args) -> int:
     if echt(args) and konfig("belege").get("pruefung", {}).get("an", False):
         from argparse import Namespace
         from .aufraeumen import befehl as aufraeumen, zustand
-        if not zustand().get("erste_liste"):
-            aufraeumen(Namespace(monate=3, vorschau=None, echt=True))
+        try:
+            if not zustand().get("erste_liste"):
+                aufraeumen(Namespace(monate=3, vorschau=None, echt=True))
+        except Exception as fehler:  # Der Tagesbericht geht trotzdem raus.
+            from .kern import ereignis
+            ereignis("fehler", f"Aufräumliste der Rechnungsprüfung nicht erstellt: {fehler}")
     liste = neue_ereignisse()
     text, betreff = text_und_betreff(liste)
     if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", False):

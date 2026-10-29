@@ -25,16 +25,17 @@ def test_mahnung_und_kuerzel_liste_bleiben_still_und_fliestext_nicht(repo):
 def test_eu_ohne_hinweis_nur_mit_eigener_ustid(repo):
     cfg = repo / "konfig" / "belege.toml"
     cfg.write_text(cfg.read_text(encoding="utf-8").replace('ust_id = ""', 'ust_id = "DE111111111"').replace("an = false", "an = true"), encoding="utf-8")
-    text = _rechnung("VAT number: FR12345678901", "")
+    text = _rechnung("VAT number: FR12345678901\nIhre USt-IdNr.: DE 111 111 111", "")
     assert not any("Steuersatz" in p for p in pruefe(_e(), text))
     assert any("EU-Rechnung ohne" in p for p in hinweise(_e(), text))
-    cfg.write_text(cfg.read_text(encoding="utf-8").replace('ust_id = "DE111111111"', ''), encoding="utf-8")
-    assert "Steuersatz" in " ".join(pruefe(_e(), text))
+    ohne_eigene = _rechnung("VAT number: FR12345678901", "")
+    assert "Steuersatz" in " ".join(pruefe(_e(), ohne_eigene))
+    assert not any("EU-Rechnung ohne" in p for p in hinweise(_e(), ohne_eigene))
 
 
 def test_ocr_steuer_und_kleinbetrag_position_und_drittland(repo):
     assert not any("Steuersatz" in p for p in pruefe(_e(), _rechnung("MwSt\n\n\n19 %")))
-    klein = Text("Receipt\nRechnung RE-1\n29.10.2026\niCloud+ mit 50 GB 2,99\nGesamt 2,99", "klartext", 1)
+    klein = Text("Rechnung\n4. September 2026\nBestellnummer: AB12CD\niCloud+ mit 50 GB (Monatlich)   2,99 €\nGesamt 2,99", "klartext", 1)
     assert not any("Leistungsbeschreibung" in p for p in pruefe(_e(2.99), klein))
     ausland = _rechnung("Canva Pty Ltd\nAustralia\nABN 123 456 789", "")
     assert not any("Steuersatz" in p for p in pruefe(_e(), ausland))
@@ -50,3 +51,82 @@ def test_liste_sortiert_blendet_aus_und_status_wird_bei_neuem_problem_geoeffnet(
     daten = {"erste_liste": None, "anbieter": {"muster": {"name": "Muster", "status": "erledigt", "probleme": ["Empfänger fehlt"], "rechnungen": 1}}}
     neu, melden = aktualisieren({"lieferant": "Muster GmbH", "punkte": ["Steuer fehlt"], "hinweise": [], "datum": "2026-10-02"}, daten)
     assert neu["status"] == "offen" and melden
+
+
+import pytest  # noqa: E402
+
+from belege import verarbeiten  # noqa: E402
+from belege.aufraeumen import befehl as aufraeumen_befehl, weg, zustand  # noqa: E402
+from belege.pruefung import EU_OHNE_SATZ  # noqa: E402
+from belege.typen import Fund  # noqa: E402
+
+
+@pytest.mark.parametrize("kopf", [
+    "Muster Anwälte\nAktenzeichen 12/26\n\n\nZAHLUNGSERINNERUNG\nRechnung RE-55 vom 01.08.2026",
+    "Muster Insolvenzverwaltung\nAttraktive Veräußerungsmöglichkeit\nStaRUG-Verfahren Katalog",
+    "Telekom Muster\nAnlage Rechnungskonten\nKundenkonto 1234",
+    "Muster Inc.\nFor ACH delivery\nRouting 0000\nAccount 1111",
+    "Getränke Muster GmbH\nLeergut- & Transportmittel-Abrechnung\nRücknahme 20.10.2026",
+    "Receipt\nMuster SAS\nReceipt number RCPT-000001\nInvoice number INV-839346-001\nAmount paid 10,00",
+])
+def test_keine_rechnungen_bleiben_still(repo, kopf):
+    assert pruefe(_e(), Text(kopf, "klartext", 1)) == []
+
+
+def test_quittung_ohne_verweis_bleibt_pruefbar(repo):
+    assert pruefe(_e(), Text("Quittung\nMuster Kiosk\nGetränk 3,00", "klartext", 1)) != []
+
+
+def test_empfaenger_als_nachname_vorname(repo):
+    text = Text("Muster Steuerberatung\nMusterweg 1\n12345 Musterstadt\nBeispiel, Mara\nRechnung RE-1\n29.10.2026\n"
+                "Leistung: Beratung\nMwSt 19 %\nUSt-IdNr. DE123456789", "klartext", 1)
+    assert not any("Empfänger" in p for p in pruefe(_e(), text))
+
+
+def test_positionszeile_ohne_kopfwort_ist_leistung(repo):
+    text = _rechnung().text.replace("Leistung: Beratung\n", "8x Kunstblumen schalen a32€\n256,00\n")
+    assert not any("Leistungsbeschreibung" in p for p in pruefe(_e(), Text(text, "klartext", 1)))
+
+
+def test_weg_hinweis_nur_bei_eu_ohne_satz():
+    assert weg("Muster", [], ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]) == ("", "")
+    assert weg("Muster", [], [EU_OHNE_SATZ])[0] == "hinweis"
+    assert weg("Meta Platforms Ireland", ["Empfänger fehlt"], [])[0] == "selbst"
+    assert weg("Unbekannt GmbH", ["Empfänger fehlt"], [])[0] == "lieferant"
+
+
+def test_liste_ohne_entwurf_verspricht_keinen_und_zaehlt_rechnungen():
+    eintraege = [{"lieferant": "Lieferant GmbH", "punkte": ["Steuer fehlt"], "hinweise": []}] * 3 + [
+        {"lieferant": "Nur RC", "punkte": [], "hinweise": ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]}]
+    betreff, text = liste(eintraege, {"anbieter": {}})
+    assert betreff == "Rechnungsprüfung: einmal aufräumen (1 Anbieter)" and "€" not in betreff
+    assert "(3 Rechnungen)" in text and "Entwurf liegt" not in text and "Nur RC" not in text
+
+
+def test_vorschau_als_eml_sendet_nichts(repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("belege.senden.senden", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("gesendet")))
+    ziel = tmp_path / "liste.eml"
+    args = type("Args", (), {"monate": 3, "vorschau": str(ziel), "echt": False})()
+    assert aufraeumen_befehl(args) == 0
+    from email import message_from_bytes, policy
+    mail = message_from_bytes(ziel.read_bytes(), policy=policy.default)
+    assert mail["Subject"].startswith("Rechnungsprüfung: einmal aufräumen")
+    assert not zustand().get("erste_liste")
+
+
+def test_nur_ein_entwurf_je_anbieter(repo, monkeypatch):
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("an = false", "an = true"), encoding="utf-8")
+    entwuerfe = []
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_, **__: _e())
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.pruefung.pruefe", lambda *_a, **_k: ["Rechnungsnummer fehlt"])
+    monkeypatch.setattr("belege.kern.firma", lambda *_a, **_k: {"name": "Studio Beispiel", "ust_id": "DE111111111"})
+    monkeypatch.setattr("belege.senden.entwurf", lambda *a, **_k: entwuerfe.append(a))
+    for nummer in (1, 2):
+        datei = repo / f"rechnung{nummer}.pdf"
+        datei.write_bytes(b"%PDF" + bytes([nummer]))
+        fund = Fund(datei, "postfach", datei.name, date(2026, 10, nummer), {"von": "rechnung@muster.test"})
+        assert verarbeiten.verarbeite(fund, True).status == "befund"
+    assert len(entwuerfe) == 1
+    assert zustand()["anbieter"]["muster"]["rechnungen"] == 2

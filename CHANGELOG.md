@@ -8,12 +8,14 @@ aktion: keine
 
 ### Was ist neu für dich
 
-- Weniger Fehlalarme: Mahnungen, Kataloge, Beiblätter, Pfandabrechnungen und erkennbare Auslands- oder Kleinbetragsfälle werden besser eingeordnet.
-- Wiederkehrende Probleme fasst `belege pruefung aufraeumen` je Anbieter zusammen; für bekannte Anbieter steht der passende Klickweg dabei.
+- Weniger Fehlalarme in der Rechnungsprüfung: Mahnungen, Verkaufskataloge, Beiblätter, Pfandabrechnungen und Quittungen zu einer vorhandenen Rechnung gelten nicht mehr als Rechnung.
+- EU-Anbieter, die Reverse Charge nur mit 0 % ausweisen, lösen keinen Alarm und keinen Entwurf mehr aus; das geht als Hinweis an deinen Steuerberater.
+- Hast du die Prüfung eingeschaltet, bekommst du einmal eine Aufräumliste: eine Zeile je Anbieter, mit genau einem Weg – selbst umstellen (mit Klickweg), Lieferant anschreiben oder nur ein Hinweis. Danach meldet sie sich nur bei Neuem.
+- Einen Lieferanten-Entwurf gibt es nur noch einmal je Anbieter, nicht für jede Rechnung.
 
 ### Musst du etwas tun?
 
-Nein. Wenn du möchtest, kannst du Absender ohne Rechnungen später in die Liste `nie_beleg` aufnehmen.
+Nein. Wenn du einen Punkt erledigt hast, sag deinem Claude „Meta ist erledigt“ oder „SumUp ignorieren“. Absender, die nie Rechnungen schicken, kann er in `nie_beleg` eintragen.
 
 ## [1.13.0] – 29.10.2026
 

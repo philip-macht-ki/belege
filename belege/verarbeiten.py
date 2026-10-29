@@ -316,7 +316,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             entwurf_angelegt = False
             anbieter = None
             anbieter_neu = False
-            if pruefbar and (befund or notizen):
+            from .pruefung import EU_OHNE_SATZ
+            if pruefbar and (befund or EU_OHNE_SATZ in notizen):
                 from .aufraeumen import aktualisieren, speichern, zustand
                 stand = zustand()
                 anbieter, anbieter_neu = aktualisieren({"lieferant": einordnung.lieferant, "punkte": befund,

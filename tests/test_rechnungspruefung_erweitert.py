@@ -127,11 +127,9 @@ def test_hinweise_reverse_charge_und_pdf_erechnung_und_kleinbetrag(repo):
 def test_hinweise_ust_id_nur_eu_gekennzeichnet_und_nicht_beim_empfaenger(repo):
     _konfig(repo)
     assert hinweise(_einordnung(), Text("Rechnungsnummer RE20261029", "klartext", 1)) == []
-    assert hinweise(_einordnung(), Text("VAT number: IE6388047V", "klartext", 1)) == [
-        "EU-Rechnung ohne Hinweis ‚Steuerschuldnerschaft des Leistungsempfängers‘; Reverse Charge gilt trotzdem, bitte so buchen"]
+    assert hinweise(_einordnung(), Text("VAT number: IE6388047V", "klartext", 1)) == []
     assert hinweise(_einordnung(), Text("BTW: NL123456789B01\nVAT 0%", "klartext", 1)) == [
-        "Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)",
-        "EU-Rechnung ohne Hinweis ‚Steuerschuldnerschaft des Leistungsempfängers‘; Reverse Charge gilt trotzdem, bitte so buchen"]
+        "Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]
     assert hinweise(_einordnung(), Text("VAT number: CHE123456789", "klartext", 1)) == []
     assert hinweise(_einordnung(), Text("Rechnung an: Eigene GmbH, VAT number: NL123456789B01", "klartext", 1)) == []
     konfig = repo / "konfig" / "belege.toml"
