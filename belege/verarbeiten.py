@@ -239,8 +239,10 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         from .ablegen import ablegen
 
         pruefung = kern.konfig("belege").get("pruefung", {})
-        mehrfirmen = len(kern.firmen()) > 1
-        firma_eindeutig = not mehrfirmen or (einordnung.firma not in {"", "unklar"} and kern.firma(einordnung.firma) is not None)
+        firma_eindeutig = (
+            einordnung.firma not in {"", "unklar"}
+            and kern.firma(einordnung.firma) is not None
+        )
         pruefbar = (
             pruefung.get("an", False)
             and einordnung.ist_beleg
@@ -308,9 +310,16 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         _original_erledigt(fund)
         if echt:
             entwurf_angelegt = False
-            if befund and firma_eindeutig and pruefung.get("entwurf_an_absender", True) and fund.mail and fund.mail.get("von") and not any("unklar" in punkt.casefold() for punkt in befund):
+            firma_eintrag = kern.firma(einordnung.firma) or {}
+            eigene_empfaengerdaten = all(
+                str(firma_eintrag.get(feld, "")).strip()
+                for feld in ("name", "ust_id")
+            )
+            if (befund and firma_eindeutig and eigene_empfaengerdaten
+                    and pruefung.get("entwurf_an_absender", True)
+                    and fund.mail and fund.mail.get("von")
+                    and not any("unklar" in punkt.casefold() for punkt in befund)):
                 from .senden import entwurf
-                firma_eintrag = kern.firma(einordnung.firma) or {}
                 betreff = "Bitte um korrigierte Rechnung"
                 datum_text = einordnung.datum.strftime("%d.%m.%Y") if einordnung.datum else "nicht erkennbar"
                 mailtext = ("Guten Tag,\n\nbitte sende uns eine korrigierte Rechnung. "

@@ -91,13 +91,18 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
                      r"\s*[:#.]?\s*[A-Z0-9][A-Z0-9./-]{2,}")
     if "rechnungsnummer" in regeln and not kleinbetrag and not (nummer or re.search(nummer_muster, inhalt, re.I)):
         befund.append(NAMEN["rechnungsnummer"] + " fehlt")
-    datum_muster = (r"(?:rechnungsdatum|ausstellungsdatum|invoice\s*date|\bdatum\b)\D{0,20}"
-                    r"(?:\d{1,2}[./-]\d{1,2}[./-]20\d{2}|20\d{2}[./-]\d{1,2}[./-]\d{1,2}|"
-                    r"[A-Za-z]+\s+\d{1,2},?\s+20\d{2})")
+    monat = (r"(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|"
+             r"oktober|november|dezember|january|february|march|april|may|june|july|"
+             r"august|september|october|november|december|jan|feb|mar|apr|jun|jul|"
+             r"aug|sep|sept|oct|nov|dec)")
+    datum_muster = (r"(?:rechnungsdatum|ausstellungsdatum|ausgestellt\s+am|invoice\s*date|\bdatum\b)\D{0,20}"
+                    rf"(?:\d{{1,2}}[./-]\d{{1,2}}[./-]20\d{{2}}|20\d{{2}}[./-]\d{{1,2}}[./-]\d{{1,2}}|"
+                    rf"\d{{1,2}}\.?\s+{monat}\s+20\d{{2}}|{monat}\s+\d{{1,2}},?\s+20\d{{2}})")
     if "datum" in regeln and not ((xml or {}).get("datum") or re.search(datum_muster, inhalt, re.I)):
         befund.append("Rechnungsdatum fehlt")
     leistung_muster = (r"(?:leistung(?:sdatum|szeitraum)?|leistungsdatum\s+entspricht\s+rechnungsdatum|"
-                       r"artikel|position|menge|leistungszeitraum|service|beschreibung)\D{0,80}\S")
+                       r"bezeichnung|beschreibung|artikel|position|pos\.?|description|item|menge|"
+                       r"leistungszeitraum|service)\D{0,80}\S")
     if "leistung" in regeln and not ((xml or {}).get("positionen") or re.search(leistung_muster, inhalt, re.I)):
         befund.append(NAMEN["leistung"] + " fehlt")
     steuer_ok = _hat_steuer(inhalt, xml) or (kleinbetrag and bool(re.search(r"\b\d{1,2}\s*%", inhalt)))
@@ -161,6 +166,9 @@ def befehl(args) -> int:
         text = auslesen(datei)
         e = einordnen(fund, text)
     try:
+        if e.firma == "unklar":
+            print("Firma unklar – wird nicht geprüft, landet in Unsortiert")
+            return 0
         if not (e.ist_beleg and e.art == "eingang" and e.bereich == "betrieb"):
             print("Nicht geprüft: keine Eingangsrechnung des Betriebs.")
             return 0
