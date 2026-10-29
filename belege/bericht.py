@@ -93,7 +93,9 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         zeilen = [_zeile_dokument(e) for e in gruppen["dokument"]]
         absaetze.append(f"Dokumente abgelegt ({len(zeilen)})\n" + "\n".join(zeilen))
 
-    ansehen = gruppen["unsortiert"] + gruppen["zweifel"] + gruppen["vertraulich"]
+    # Befunde bekannter Anbieter stehen schon in der Aufräumliste; nicht täglich wiederholen.
+    zweifel = [e for e in gruppen["zweifel"] if e.get("daten", {}).get("pruefung_neu") is not False]
+    ansehen = gruppen["unsortiert"] + zweifel + gruppen["vertraulich"]
     befund = [e for e in gruppen["zweifel"] if e.get("daten", {}).get("pruefung", {}).get("status") == "befund"]
     if befund:
         zeilen = []

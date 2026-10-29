@@ -59,7 +59,12 @@ def _kein_rechnungsdokument(text: str) -> bool:
         return True
     # Mahnungen sind oft mehrseitig; ein beiläufiges "Erinnerung" in einer
     # Rechnung dagegen nie. Deshalb nur ein Titel/eine eigene Zeile.
-    for zeile in zeilen:
+    # Eine echte Rechnung mit einer Position "Mahnung" hat einen eigenen Rechnungstitel.
+    titel_nr = next((nr for nr, z in enumerate(zeilen)
+                     if re.fullmatch(r"(?:rechnung|invoice|rechnung\s+nr\.?.*|invoice\s+(?:no|number).*)", z, re.I)), None)
+    for nr, zeile in enumerate(zeilen):
+        if titel_nr is not None and nr > titel_nr and not re.search(r"zahlungserinnerung", zeile, re.I):
+            continue
         if re.fullmatch(r"(?:zahlungserinnerung|erinnerung|mahnung|zahlungsaufforderung)[:.! ]*", zeile, re.I):
             return True
         if re.match(r"^(?:ZAHLUNGSERINNERUNG|ERINNERUNG|MAHNUNG|ZAHLUNGSAUFFORDERUNG)\b", zeile):
@@ -476,7 +481,7 @@ def _eu_reverse_charge_ohne_satz(text: str, xml: dict | None, firma: dict | None
     ust = _lieferanten_ust(text, xml, firma) or ""
     eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
     eigene_drauf = bool(eigene) and eigene in re.sub(r"[\s.-]", "", text).upper()
-    return bool(ust and not ust.startswith("DE") and eigene.startswith("DE") and eigene_drauf
+    return bool(ust and eigene and ust[:2] != eigene[:2] and eigene_drauf
                 and (_keine_umsatzsteuer_berechnet(text) or not _hat_steuer(text, xml)))
 
 

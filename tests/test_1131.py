@@ -130,3 +130,33 @@ def test_nur_ein_entwurf_je_anbieter(repo, monkeypatch):
         assert verarbeiten.verarbeite(fund, True).status == "befund"
     assert len(entwuerfe) == 1
     assert zustand()["anbieter"]["muster"]["rechnungen"] == 2
+
+
+def test_review_schluessel_zustand_und_eigene_eu_firma(repo):
+    from belege.aufraeumen import schluessel
+    from belege import kern
+    assert schluessel("Meta Platforms Ireland Ltd") == schluessel("Meta")
+    assert schluessel("Metallbau Schmidt GmbH") != schluessel("Meta")
+    kern.schreiben(kern.pfad("arbeit", "pruefung_anbieter.json"), {"anbieter": []})
+    assert zustand() == {"anbieter": {}, "erste_liste": None}
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace('ust_id = ""', 'ust_id = "FR12345678901"'), encoding="utf-8")
+    text = Text("Muster BV\nRechnung RE-1\n29.10.2026\nLeistung: Beratung\nBTW NL123456789B01\n"
+                "Klant: FR 12345678901\nTotal 100,00", "klartext", 1)
+    assert not any("Steuersatz" in p for p in pruefe(_e(), text))
+
+
+def test_mahnung_als_position_in_echter_rechnung_bleibt_pruefbar(repo):
+    text = Text("Muster Inkasso GmbH\nRechnung\nRechnung Nr. RE-42\n29.10.2026\nMahnung\n12,00", "klartext", 1)
+    assert pruefe(_e(), text) != []
+
+
+def test_aufraeumliste_merkt_sich_fehlversand_nicht(repo, monkeypatch):
+    from belege import kern
+    kern.schreiben(kern.pfad("arbeit", "index.json"), {"a": {"lieferant": "Muster GmbH", "datum": date.today().isoformat(),
+                                                           "pruefung": {"status": "befund", "punkte": ["Steuer fehlt"]}}})
+    monkeypatch.setattr("belege.senden.senden", lambda *_a, **_k: kern.Ergebnis("befund", "Nicht gesendet"))
+    monkeypatch.setattr("belege.bericht.empfaenger", lambda: "ich@example.test")
+    args = type("Args", (), {"monate": 3, "vorschau": None, "echt": True})()
+    assert aufraeumen_befehl(args) == 1
+    assert not zustand().get("erste_liste")

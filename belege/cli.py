@@ -86,7 +86,9 @@ def main(argv: list[str] | None = None) -> int:
     """Leitet einen Befehl an sein Fachmodul weiter und erklärt fehlende Teile."""
     args = parser().parse_args(argv)
     modul, funktion, _ = BEFEHLE[args.befehl]
-    if args.befehl in SCHREIBEND and args.echt:
+    # `belege pruefung <datei>` bleibt trocken; nur die Aufräumliste sendet.
+    schreibend = args.befehl in SCHREIBEND and args.echt and (args.befehl != "pruefung" or args.ziel[:1] == ["aufraeumen"])
+    if schreibend:
         from .kern import fremder_rechner, log, rechner
 
         erlaubt = fremder_rechner()
@@ -95,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     try:
         befehl = getattr(importlib.import_module(f"belege.{modul}"), funktion)
-        if args.befehl in SCHREIBEND and args.echt:
+        if schreibend:
             from .kern import Gesamtsperre
 
             # Beim Aufwachen starten mehrere Zeitpläne zugleich. Sie laufen nacheinander;

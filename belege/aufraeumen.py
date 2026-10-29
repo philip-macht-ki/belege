@@ -11,6 +11,10 @@ from . import kern
 
 
 def schluessel(name: str) -> str:
+    # Bekannte Anbieter heißen auf Rechnungen verschieden ("Meta Platforms Ireland Ltd").
+    anleitung = _anleitung(name)
+    if anleitung:
+        name = str(anleitung.get("name", name))
     wert = re.sub(r"\b(?:gmbh|ug|ag|kg|ohg|ltd|llc|inc|limited)\b", "", name.casefold())
     return re.sub(r"[^a-z0-9äöüß]", "", wert)
 
@@ -25,7 +29,9 @@ def anleitungen() -> list[dict]:
 
 def _anleitung(name: str, titel: str = "") -> dict | None:
     heuhaufen = f"{name} {titel}".casefold()
-    return next((a for a in anleitungen() if any(str(x).casefold() in heuhaufen for x in a.get("erkennen", []))), None)
+    # Ganze Wörter: "Metallbau" ist nicht Meta.
+    return next((a for a in anleitungen()
+                 if any(re.search(rf"(?<!\w){re.escape(str(x).casefold())}(?!\w)", heuhaufen) for x in a.get("erkennen", []))), None)
 
 
 def _steuerberater_hinweis(hinweise: list[str]) -> bool:
@@ -45,7 +51,13 @@ def weg(lieferant: str, punkte: list[str], hinweise: list[str], titel: str = "")
 
 
 def zustand() -> dict:
-    return kern.lesen(kern.pfad("arbeit", "pruefung_anbieter.json"), {}) or {"erste_liste": None, "anbieter": {}}
+    daten = kern.lesen(kern.pfad("arbeit", "pruefung_anbieter.json"), {})
+    if not isinstance(daten, dict):
+        daten = {}
+    anbieter = daten.get("anbieter")
+    daten["anbieter"] = {k: v for k, v in anbieter.items() if isinstance(v, dict)} if isinstance(anbieter, dict) else {}
+    daten.setdefault("erste_liste", None)
+    return daten
 
 
 def speichern(daten: dict) -> None:
@@ -158,7 +170,10 @@ def befehl(args) -> int:
     elif getattr(args, "echt", False) and anzahl_zeilen(eintraege, daten):
         from .bericht import empfaenger
         from .senden import senden
-        senden(empfaenger(), betreff, text, [], True)
+        ergebnis = senden(empfaenger(), betreff, text, [], True)
+        if ergebnis.status != "ok":
+            kern.ereignis("fehler", f"Aufräumliste nicht gesendet: {ergebnis.meldung}")
+            return 1
     else:
         print(betreff + "\n\n" + text)
     if getattr(args, "echt", False):
