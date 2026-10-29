@@ -810,6 +810,19 @@ def paket_packen(monat: str, ziel: Path, index: dict, firma: str | None = None, 
     return sorted(dateien)
 
 
+def _hinweise_text(monat: str, index: dict, firma: dict | None = None) -> str:
+    """Formatiert reine Buchhaltungshinweise für die monatliche Übergabe."""
+    zeilen = []
+    for eintrag in index.values():
+        if not str(eintrag.get("datum", "")).startswith(monat):
+            continue
+        if firma and kern.firma_von(eintrag) != firma["name"]:
+            continue
+        for hinweis in eintrag.get("hinweise", []):
+            zeilen.append(f"- {Path(str(eintrag.get('pfad', 'Unbekannt'))).name}: {hinweis}")
+    return "Hinweise für die Buchhaltung\n" + "\n".join(zeilen) if zeilen else ""
+
+
 def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, firma: dict | None = None) -> None:
     """Übergibt das Paket an den Steuerberater, einmal je Monat.
 
@@ -833,6 +846,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     cfg = kern.konfig("belege").get("uebergabe", {})
     cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
     adressen = cfg.get("adressen") if isinstance(cfg.get("adressen"), dict) else None
+    hinweise = _hinweise_text(monat, index, firma)
     if adressen and cfg.get("weg", "mail") == "mail":
         from .senden import senden
         name = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
@@ -849,7 +863,8 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
                 continue
             # Die offenen Posten stehen wie bei der gemeinsamen Übergabe im Text, hier in der Mail mit den Eingangsbelegen.
             posten = ("\n\n" + offene_posten_text(monat, ergebnis)) if art == "eingang" else ""
-            text_art = f"Hallo,\n\nanbei {len(dateien)} Belege ({art}) für {monat[5:]}/{monat[:4]}.{posten}\n\nViele Grüße\n{name}"
+            notizen = ("\n\n" + hinweise) if art == "eingang" and hinweise else ""
+            text_art = f"Hallo,\n\nanbei {len(dateien)} Belege ({art}) für {monat[5:]}/{monat[:4]}.{posten}{notizen}\n\nViele Grüße\n{name}"
             r = senden(adresse, f"Belege {monat[5:]}/{monat[:4]} ({art}), {name}", text_art, dateien, echt, fortschritt=f"uebergabe:{eigene}")
             print(f"{r.status}: {r.meldung}")
             if echt and r.status == "ok":
@@ -862,6 +877,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     text = (
         f"Hallo,\n\nanbei {len(dateien)} Belege für {monat[5:]}/{monat[:4]}.\n\n"
         + offene_posten_text(monat, ergebnis)
+        + (("\n\n" + hinweise) if hinweise else "")
         + f"\n\nViele Grüße\n{betrieb}"
     )
 

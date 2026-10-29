@@ -15,6 +15,8 @@ def schwaerzen(text: str) -> str:
     """Entfernt typische personenbezogene und geheime Werte aus Diagnoseausgaben."""
     text = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "<mail>", text)
     text = re.sub(r"(?i)\b[A-Z]{2}\d{2}(?:[ ]?\d){10,30}(?![\d.])\b", "<iban>", text)
+    eu_land = r"(?:ATU|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK|XI)"
+    text = re.sub(rf"(?i)\b{eu_land}(?=[A-Z0-9 .-]{{7,16}}\b)(?=[A-Z0-9 .-]*\d)[A-Z0-9 .-]{{7,16}}\b", "<ust-id>", text)
     text = re.sub(r"(?<![\w.])-?\d{1,3}(?:[. ]\d{3})*,\d{2}(?!\d)", "<betrag>", text)
     text = re.sub(r"(?<![\w.])-?\d+\.\d{2}(?!\d)", "<betrag>", text)
     geheim_name = r"(?:access_token|refresh_token|id_token|client_secret|api[_ -]?key|token|passwort|password|secret|code|state|session|sid)"

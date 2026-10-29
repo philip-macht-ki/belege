@@ -82,6 +82,16 @@ mit `--echt` laufen. Danach fragt er nach Betriebsname, weiteren Schreibweisen,
 Tätigkeit, USt-IdNr und ob Privatbelege getrennt abgelegt werden, trägt alles
 ein und hält wieder an.
 
+## Stammdatenblatt anlegen
+
+Noch vor dem ersten echten Einordnen legt Claude immer `konfig/stammdaten.toml`
+an, auch bei nur einer Firma. Claude fragt für jede Firma nach Name,
+Schreibweisen auf Rechnungen, Anschrift und weiteren Anschriften,
+USt-IdNr., Steuernummer, Geschäftsführung, Handelsregister und IBANs. Nichts
+wird geraten: Fehlende Angaben bleiben als leere Felder mit dem Kommentar
+`# bitte ergänzen` stehen. Die Betriebsschlüssel wie Ablagebereich und Konten
+bleiben gegebenenfalls in `konfig/belege.toml`; danach läuft `uv run belege pruefen`.
+
 ## Schritt 2: Postfach verbinden, erst nach ausdrücklichem Weiter
 
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
@@ -379,6 +389,11 @@ geprüft werden, bespricht Claude zunächst die gewünschten Regeln. In
 Befunde kontrolliert; erst danach setzt Claude `an = true`. Beanstandete
 Rechnungen liegen getrennt unter „Manuell prüfen“. Ist ein Mail-Absender bekannt,
 legt belege höchstens einen freundlichen Entwurf an, nie eine gesendete Mail.
+Bei mehreren Firmen kann Claude außerdem die eigene Anschrift im jeweiligen
+`[[firma]]`-Block eintragen; dann prüft belege Straße, Hausnummer, PLZ und Ort.
+Die amtliche EU-Prüfung der Lieferanten-USt-IdNr. bleibt mit
+`ust_id_amtlich = false` aus, bis sie ausdrücklich gewünscht ist. Hinweise wie
+Reverse Charge bleiben Hinweise für die Buchhaltung und erzeugen keinen Befund.
 
 Für den Monatsabgleich fragt Claude zusätzlich nach den Konten jeder Firma und
 trägt sie im jeweiligen Block ein, zum Beispiel

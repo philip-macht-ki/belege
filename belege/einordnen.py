@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from .kern import konfig, firmen, firma
+from .kern import konfig, firmen, firma, hat_stammdatenblatt
 from .typen import Einordnung, Fund, Text
 from .urteil import frage, vorlage
 
@@ -182,20 +182,117 @@ def _betrag(text: str) -> float | None:
     return max(werte) if werte else None
 
 
-def _firmen_im_text(text: str) -> set[str]:
-    """Alle eigenen Firmen, die im Belegtext vorkommen."""
-    oben = "\n".join(text.splitlines()[:45]).casefold()
-    treffer: set[str] = set()
+def _nummer_normal(wert: object) -> str:
+    """USt-IdNr. und Steuernummer ohne deren übliche Trennzeichen."""
+    return re.sub(r"[^a-z0-9]", "", str(wert).casefold())
+
+
+def _empfaengerraum(zeilen: list[str]) -> str:
+    """Eigene Nummern im Eingangsbeleg, ohne Ausstellerkopf und -impressum."""
+    # Die ersten drei belegten Zeilen gehören regelmäßig zum Briefkopf des
+    # Ausstellers. Danach darf die Empfängeranschrift auch ohne "Rechnung an"
+    # bis zu Zeile 45 stehen; so bleiben Stripe- und Auslandsvorlagen erfasst.
+    kopf = {nr for nr, zeile in enumerate(zeilen) if zeile.strip()}
+    aussteller = set(sorted(kopf)[:3]) if len(kopf) > 3 else set()
+    raum = []
+    for nr, zeile in enumerate(zeilen):
+        # Im Lieferantenfuß können fremde USt-IdNrn. stehen. Er beginnt den
+        # auszuschließenden Rest, auch wenn kein Empfängermarker vorhanden ist.
+        if nr not in aussteller and re.search(
+            r"\bimpressum\b|\b(?:lieferant|verkäufer|seller)\b", zeile, re.I
+        ):
+            break
+        if nr not in aussteller:
+            raum.append(zeile)
+    return "\n".join(raum)
+
+
+def _anschrift_treffer(zeilen: list[str]) -> set[str]:
+    """Anschrift entscheidet nur bei genau einer Stammdatenfirma."""
+    if not hat_stammdatenblatt():
+        return set()
+    raum = "\n".join(zeilen)
+    funde: dict[tuple[str, str], list[str]] = {}
     for eintrag in firmen():
-        ust = str(eintrag.get("ust_id", "")).strip().casefold().replace(" ", "")
-        raum_ohne_leer = re.sub(r"\s+", "", oben)
-        if ust and ust in raum_ohne_leer:
-            treffer.add(eintrag["name"])
+        anschrift = eintrag.get("anschrift")
+        if not isinstance(anschrift, dict):
             continue
-        namen = [eintrag["name"], *eintrag.get("namen", [])]
-        if any(str(name).strip() and str(name).casefold() in oben for name in namen):
-            treffer.add(eintrag["name"])
+        strasse, plz = _nummer_normal(anschrift.get("strasse", "")), _nummer_normal(anschrift.get("plz", ""))
+        if strasse and plz:
+            funde.setdefault((strasse, plz), []).append(eintrag["name"])
+    treffer: set[str] = set()
+    normal = _nummer_normal(raum)
+    for (strasse, plz), namen in funde.items():
+        if len(namen) == 1 and strasse in normal and plz in normal:
+            treffer.add(namen[0])
     return treffer
+
+
+def _nummer_muster(wert: object) -> re.Pattern[str] | None:
+    """Baut eine eigene Nummer mit erlaubten Trennzeichen und Token-Grenzen."""
+    zeichen = re.findall(r"[A-Za-z0-9]", str(wert))
+    if not zeichen:
+        return None
+    # [^\W_] entspricht einem Unicode-Buchstaben oder einer Ziffer, aber keinem
+    # Unterstrich. So wird eine Nummer nie in Rechnungs- oder Kontonummern erkannt.
+    getrennt = r"[\s./-]*".join(map(re.escape, zeichen))
+    return re.compile(rf"(?<![^\W_]){getrennt}(?![^\W_])", re.I)
+
+
+def _merkmale(text: str, art: str | None = None) -> tuple[set[str], set[str], set[str]]:
+    """Eigene Nummern, eindeutige Anschriften und Namen in ihrer Rangfolge."""
+    zeilen = text.splitlines()[:45]
+    oben = "\n".join(zeilen)
+    nummernraum = text if art == "ausgang" else _empfaengerraum(zeilen)
+    nummer_treffer, namen_treffer = set(), set()
+    for eintrag in firmen():
+        ids = [eintrag.get("ust_id", ""), eintrag.get("steuernummer", "")]
+        if any(muster and muster.search(nummernraum) for wert in ids
+               if (muster := _nummer_muster(wert))):
+            nummer_treffer.add(eintrag["name"])
+        namen = [eintrag["name"], *eintrag.get("namen", [])]
+        if any(str(name).strip() and str(name).casefold() in oben.casefold() for name in namen):
+            namen_treffer.add(eintrag["name"])
+    return nummer_treffer, _anschrift_treffer(zeilen), namen_treffer
+
+
+_RECHTSFORM = re.compile(
+    r"\b(?:gmbh|ug|ag|kg|ohg|gbr|e\.?\s*k\.?|se|ltd\.?|mb|uab|"
+    r"s\.?\s*à\s*r\.?\s*l\.?|sarl)\b",
+    re.I,
+)
+
+
+def _gesellschaft(eintrag: dict) -> bool:
+    """Erkennt Gesellschaften über Rechtsformfeld oder kanonischen Namen."""
+    return bool(_RECHTSFORM.search(
+        f"{eintrag.get('name', '')} {eintrag.get('rechtsform', '')}"
+    ))
+
+
+def _namensrang(treffer: set[str]) -> set[str]:
+    """Bevorzugt Gesellschaften vor Personen und ignoriert Geschäftsführer."""
+    eintraege = {eintrag["name"]: eintrag for eintrag in firmen()}
+    gesellschaften = {name for name in treffer if _gesellschaft(eintraege[name])}
+    if gesellschaften:
+        return gesellschaften
+    # Ist eine natürliche Person nur als Geschäftsführer einer ebenfalls
+    # genannten Firma hinterlegt, ist sie dort Ansprechpartner, nicht Empfänger.
+    ohne_geschaeftsfuehrer = set(treffer)
+    for name in treffer:
+        for andere in treffer - {name}:
+            wert = eintraege[andere].get("geschaeftsfuehrer", eintraege[andere].get("geschäftsführer", ""))
+            werte = wert if isinstance(wert, list) else [wert]
+            if any(str(wert).casefold().strip() == name.casefold() for wert in werte):
+                ohne_geschaeftsfuehrer.discard(name)
+                break
+    return ohne_geschaeftsfuehrer
+
+
+def _firmen_im_text(text: str) -> set[str]:
+    """Alle erkannten eigenen Firmen (für die Unklarheitsbehandlung)."""
+    nummern, anschriften, namen = _merkmale(text)
+    return nummern | anschriften | namen
 
 
 def _firma_aus_abschnitt(text: str, kandidaten: set[str]) -> str | None:
@@ -205,27 +302,16 @@ def _firma_aus_abschnitt(text: str, kandidaten: set[str]) -> str | None:
 
 
 def _firma_aus_text(text: str, art: str | None = None) -> str | None:
-    """Erkennt die Firma nach allen Treffern und ihrer Belegposition.
-
-    Bei mehreren eigenen Firmen entscheidet bei Eingangsrechnungen ausschließlich
-    der Empfängerblock, bei Ausgangsrechnungen der kurze Ausstellerkopf.
-    """
-    treffer = _firmen_im_text(text)
-    if len(treffer) != 1:
-        if not treffer:
-            return None
-        zeilen = text.splitlines()[:45]
-        marker = re.compile(r"rechnung\s+an|rechnungsempf[äa]nger|kunde|an\s*:", re.I)
-        marker_nr = next((i for i, zeile in enumerate(zeilen) if marker.search(zeile)), None)
-        if art == "ausgang":
-            return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
-        if marker_nr is not None:
-            empfaenger = _firma_aus_abschnitt("\n".join(zeilen[marker_nr:marker_nr + 7]), treffer)
-            if empfaenger:
-                return empfaenger
-            return _firma_aus_abschnitt("\n".join(zeilen[:marker_nr]), treffer)
-        return _firma_aus_abschnitt("\n".join(zeilen[:5]), treffer)
-    return next(iter(treffer))
+    """Erkennt die Firma über das jeweils höchste eindeutige Merkmal."""
+    nummern, anschriften, namen = _merkmale(text, art)
+    # Die Ränge entscheiden strikt: Ein eindeutiger höherer Rang wird nie von
+    # einem niedrigeren Merkmal relativiert.
+    if nummern:
+        return next(iter(nummern)) if len(nummern) == 1 else None
+    if anschriften:
+        return next(iter(anschriften)) if len(anschriften) == 1 else None
+    treffer = _namensrang(namen)
+    return next(iter(treffer)) if len(treffer) == 1 else None
 
 
 def _eigener_betrieb(text: str) -> bool:

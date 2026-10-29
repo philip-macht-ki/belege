@@ -2,6 +2,22 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.13.0] – 29.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Ein Stammdatenblatt mit allen deinen Firmen; Rechnungen werden über USt-IdNr., Steuernummer und Anschrift sicherer der richtigen Firma zugeordnet.
+- Belege kann jetzt auch deine Anschrift auf Rechnungen prüfen.
+- Auf Wunsch fragt belege Lieferanten-USt-IdNrn. bei der EU ab; Störungen dort erzeugen keinen Fehlalarm.
+- Reverse Charge und fehlende E-Rechnungen erscheinen als Hinweise für die Buchhaltung, nicht als Befund.
+- Weniger Fehlalarme bei ausländischen Rechnungen, Gutschriften und langen Abrechnungen.
+
+### Musst du etwas tun?
+
+Nur wenn du es möchtest: Lass Claude die Anschrift im `[[firma]]`-Block eintragen oder die amtliche USt-Id-Prüfung einschalten.
+
 ## [1.12.0] – 29.10.2026
 
 aktion: keine

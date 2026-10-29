@@ -5,7 +5,8 @@ import json, os, re, shutil, stat, subprocess, sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
-from .kern import ablage_ordner, jetzt, konfig, konten, pfad, rechner, firmen
+from .kern import (ablage_ordner, jetzt, konfig, konten, pfad, rechner, firmen,
+                   hat_stammdatenblatt, stammdaten_firmen)
 
 SYNC = (
     "Library/CloudStorage",
@@ -182,6 +183,32 @@ def befehl(args) -> int:
         z("ROT", f"Urteil nicht prüfbar: {e}")
     try:
         cfg = konfig("belege")
+        if not hat_stammdatenblatt():
+            z("GELB", "Stammdatenblatt fehlt (optional)",
+              "konfig/stammdaten.toml mit allen eigenen Firmen anlegen.")
+        else:
+            stamm = stammdaten_firmen()
+            fehler = ["keine Firma eingetragen"] if not stamm else []
+            ids: dict[tuple[str, str], str] = {}
+            for nr, eintrag in enumerate(stamm, start=1):
+                name = str(eintrag.get("name", "")).strip()
+                anschrift = eintrag.get("anschrift")
+                if not name:
+                    fehler.append(f"Firma {nr}: name fehlt")
+                if not str(eintrag.get("ust_id", "")).strip() and not str(eintrag.get("steuernummer", "")).strip():
+                    fehler.append(f"{name or f'Firma {nr}'}: ust_id oder steuernummer fehlt")
+                if not isinstance(anschrift, dict) or not all(str(anschrift.get(feld, "")).strip() for feld in ("strasse", "plz", "ort")):
+                    fehler.append(f"{name or f'Firma {nr}'}: anschrift mit strasse, plz und ort fehlt")
+                for feld in ("ust_id", "steuernummer"):
+                    wert = re.sub(r"[^a-z0-9]", "", str(eintrag.get(feld, "")).casefold())
+                    schluessel = (feld, wert)
+                    if wert and schluessel in ids:
+                        fehler.append(f"{feld} doppelt: {name or f'Firma {nr}'} und {ids[schluessel]}")
+                    elif wert:
+                        ids[schluessel] = name or f"Firma {nr}"
+            z("ROT" if fehler else "GRUEN",
+              "Stammdatenblatt fehlerhaft: " + "; ".join(fehler) if fehler else f"Stammdatenblatt: {len(stamm)} Firma/Firmen",
+              "konfig/stammdaten.toml ergänzen." if fehler else None)
         alle_firmen = firmen()
         bereiche = [f["bereich"] for f in alle_firmen]
         namen = [n.casefold() for f in alle_firmen for n in [f["name"], *f.get("namen", [])] if n]

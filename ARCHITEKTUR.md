@@ -50,7 +50,8 @@ etwas löschen, nie ungefragt senden.
 ## Ordner
 
 ```
-konfig/belege.toml        Betrieb, Ablage, Konten, Quellen, Senden, Übergabe, Urteil
+konfig/belege.toml        Betriebsschlüssel, Ablage, Konten, Quellen, Senden, Übergabe, Urteil
+konfig/stammdaten.toml    optional: alle eigenen Firmen und ihre festen Stammdaten
 konfig/regeln.toml        feste Regeln: Absender, Ausschlüsse, Buchungen ohne Beleg
 konfig/konten.toml        optionales Register der Auszugskonten
 konfig/waechter.md        Wächter-Regeln in Klartext, eine je Zeile ("- ...")
@@ -69,6 +70,22 @@ arbeit/                   Laufzeit, nie im Git
   urteile.jsonl, cache/urteile/<hash>.json
   tmp/                    Anhänge während der Verarbeitung, wird je Lauf geleert
 ```
+
+## Stammdaten eigener Firmen
+
+Alle eigenen Firmen stehen, auch bei nur einer Firma, in
+`konfig/stammdaten.toml`, je ein menschenlesbarer `[[firma]]`-Block. Pflicht
+sind `name`, mindestens `ust_id` oder `steuernummer` sowie `anschrift` mit
+`strasse`, `plz`, `ort`; weitere Betriebsanschriften, IBANs und Registerdaten
+gehören ebenfalls dorthin. `belege.toml` behält Betriebsschlüssel wie
+`bereich`, `konten`, `uebergabe` und `pruefung`; gleiche Namen ergänzen die
+Stammdaten. Fehlt das optionale Blatt, gelten alle bisherigen `[[firma]]`- und
+`[betrieb]`-Einstellungen unverändert. Die Zuordnung nutzt strikt zuerst eigene
+USt-IdNr./Steuernummer, dann eine unter den Stammdaten eindeutige Straße+PLZ,
+danach Namen: Ein eindeutiger höherer Rang entscheidet allein; nur mehrere
+Treffer auf seinem Rang bleiben Unsortiert. Auf dem Namensrang gewinnt eine
+Gesellschaft mit Rechtsform vor einer natürlichen Person; ein alleiniger
+Personenname bleibt einem Einzelunternehmen zugeordnet.
 
 ## Ablage (im synchronisierten Ordner des Mitglieds)
 
@@ -148,7 +165,8 @@ class Einordnung:
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>",
   "befund": "<relativer Pfad zur .befund.txt oder null>",
-  "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]}}}
+  "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]},
+  "hinweise": ["Buchhaltungshinweis …"]}}
 ```
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
@@ -177,7 +195,7 @@ Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 | `einordnen.py` | `einordnen(fund: Fund, text: Text) -> Einordnung` (Regeln → Urteil → Rückfall) |
 | `ablegen.py` | `sauber(s)`, `dateiname(e, ext)`, `ziel(e, ext) -> Path`, `ablegen(fund, e, text, echt) -> Ergebnis` |
 | `verarbeiten.py` | `verarbeite(fund, echt) -> Ergebnis` (Fingerabdruck → E-Rechnung? → Text → Einordnung → Ablage → Index → Ereignis) |
-| `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
+| `pruefung.py` | `pruefe(einordnung, text, xml=None) -> list[str]`, `hinweise(einordnung, text, xml=None) -> list[str]`, `belege pruefung <datei>` (trocken) |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
 | `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |

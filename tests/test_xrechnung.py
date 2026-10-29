@@ -83,3 +83,20 @@ def test_xrechnung_pruefung_uebergibt_steuerfelder(repo, capsys):
     </SupplyChainTradeTransaction></CrossIndustryInvoice>""", encoding="utf-8")
     assert befehl(type("Args", (), {"ziel": [str(xml)]})()) == 0
     assert "OK: Pflichtangaben erfüllt." in capsys.readouterr().out
+
+
+def test_cii_nummer_nicht_aus_profilkennung(repo):
+    # Echtlauf: Factur-X/ZUGFeRD beginnen mit ExchangedDocumentContext/…/ID (Profil-URN).
+    p = repo / "zugferd.xml"
+    p.write_text(
+        "<CrossIndustryInvoice><ExchangedDocumentContext><GuidelineSpecifiedDocumentContextParameter>"
+        "<ID>urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic</ID>"
+        "</GuidelineSpecifiedDocumentContextParameter></ExchangedDocumentContext>"
+        "<ExchangedDocument><ID>RE-2026-345</ID><TypeCode>380</TypeCode>"
+        "<IssueDateTime><DateTimeString>20261013</DateTimeString></IssueDateTime></ExchangedDocument>"
+        "<SupplyChainTradeTransaction><ApplicableHeaderTradeSettlement><SpecifiedTradeSettlementHeaderMonetarySummation>"
+        '<GrandTotalAmount currencyID="EUR">36.90</GrandTotalAmount>'
+        "</SpecifiedTradeSettlementHeaderMonetarySummation></ApplicableHeaderTradeSettlement></SupplyChainTradeTransaction>"
+        "</CrossIndustryInvoice>"
+    )
+    assert lesen(p)["nummer"] == "RE-2026-345"
