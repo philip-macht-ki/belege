@@ -104,14 +104,15 @@ def liste(eintraege: list[dict], daten: dict) -> tuple[str, str]:
             continue
         z = gesammelt.setdefault(key, {"name": bekannt.get("name", name), "rechnungen": 0, "probleme": set(),
                                        "hinweise": set(), "entwurf": bool(bekannt.get("entwurf")), "titel": ""})
-        z["rechnungen"] += 1
+        # Gezählt wird nur, was in dieser Zeile steht: Befund oder EU-Hinweis.
+        z["rechnungen"] += 1 if (e.get("punkte") or _steuerberater_hinweis(list(e.get("hinweise") or []))) else 0
         z["probleme"] |= set(e.get("punkte") or [])
         z["hinweise"] |= set(e.get("hinweise") or [])
         z["titel"] = z["titel"] or str(e.get("titel") or "")
     gruppen: dict[str, list[dict]] = defaultdict(list)
     for z in gesammelt.values():
         art, klickweg = weg(z["name"], sorted(z["probleme"]), sorted(z["hinweise"]), z["titel"])
-        if art:
+        if art and z["rechnungen"]:
             gruppen[art].append({**z, "klickweg": klickweg})
     anzahl = sum(len(v) for v in gruppen.values())
     zeilen = ["Hallo,", "", "die Rechnungsprüfung hat deine letzten Rechnungen durchgesehen. Hier steht jeder Anbieter "
@@ -122,9 +123,9 @@ def liste(eintraege: list[dict], daten: dict) -> tuple[str, str]:
             if art == "selbst":
                 aktion = f"stellst du selbst um: {z['klickweg']}"
             elif art == "lieferant" and z["entwurf"]:
-                aktion = "Lieferant anschreiben – ein Entwurf liegt in deinem Postfach, er geht nie von allein raus"
+                aktion = "Lieferant anschreiben: Ein Entwurf liegt in deinem Postfach, er geht nie von allein raus"
             elif art == "lieferant":
-                aktion = (f"Lieferant anschreiben – sag deinem Claude „Schreib {z['name']} wegen der Rechnung an“, "
+                aktion = (f"Lieferant anschreiben: Sag deinem Claude „Schreib {z['name']} wegen der Rechnung an“, "
                           "er legt einen Entwurf an, der nie von allein rausgeht")
             else:
                 aktion = "nur ein Hinweis für den Steuerberater, du musst nichts tun"

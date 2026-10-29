@@ -187,3 +187,10 @@ def test_erinnerung_ohne_hinweise_quittung_mit(repo):
     assert hinweise(_e(), quittung) != []
     erinnerung = Text("Muster Verrechnungsstelle\nUSt-IdNr. DE123456789\n\nERINNERUNG\nRechnung RE-1", "klartext", 1)
     assert hinweise(_e(), erinnerung) == []
+
+
+def test_liste_zaehlt_nur_rechnungen_mit_befund():
+    eintraege = [{"lieferant": "Meta", "punkte": ["Empfänger fehlt"], "hinweise": []},
+                 {"lieferant": "Meta", "punkte": [], "hinweise": ["Reverse Charge: Umsatzsteuer selbst anmelden (§ 13b UStG)"]}]
+    _, text = liste(eintraege, {"anbieter": {}})
+    assert "Meta (1 Rechnung)" in text
