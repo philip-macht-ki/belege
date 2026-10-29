@@ -103,8 +103,12 @@ def lesen(datei: Path) -> dict:
         for zeile in _alle(root, "IncludedSupplyChainTradeLineItem"):
             betrag = _zahl(_erst(zeile, "LineTotalAmount") or "0")
             positionen.append({"text": _erst(zeile, "Name"), "betrag": betrag})
+        # Die Rechnungsnummer steht unter ExchangedDocument/ID. Das erste ID im Dokument
+        # ist bei ZUGFeRD/Factur-X die Profilkennung ("urn:cen.eu:en16931:…").
+        dokument = next((e for e in root.iter() if _lokal(e) == "ExchangedDocument"), None)
+        nummer = next((_text(e) for e in (dokument if dokument is not None else []) if _lokal(e) == "ID" and _text(e)), "")
         return {
-            "nummer": _erst(root, "InvoiceNumber", "ID"), "datum": _datum(_erst(root, "IssueDate", "DateTimeString")),
+            "nummer": nummer or _erst(root, "InvoiceNumber"), "datum": _datum(_erst(root, "IssueDate", "DateTimeString")),
             "verkaeufer": _name(verkaeufer), "verkaeufer_ust": _ust(verkaeufer),
             "kaeufer": _name(kaeufer), "kaeufer_ust": _ust(kaeufer),
             "kaeufer_anschrift": _anschrift(kaeufer),
