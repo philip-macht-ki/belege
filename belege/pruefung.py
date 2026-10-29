@@ -95,8 +95,9 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None) -> list[str]:
              r"oktober|november|dezember|january|february|march|april|may|june|july|"
              r"august|september|october|november|december|jan|feb|mar|apr|jun|jul|"
              r"aug|sep|sept|oct|nov|dec)")
-    datum_muster = (r"(?:rechnungsdatum|ausstellungsdatum|ausgestellt\s+am|invoice\s*date|\bdatum\b)\D{0,20}"
-                    rf"(?:\d{{1,2}}[./-]\d{{1,2}}[./-]20\d{{2}}|20\d{{2}}[./-]\d{{1,2}}[./-]\d{{1,2}}|"
+    # Jedes vollständige Datum zählt: Ein Fehlbefund samt Entwurf an den Lieferanten wiegt schwerer
+    # als ein übersehenes fehlendes Rechnungsdatum.
+    datum_muster = (rf"(?:\d{{1,2}}[./-]\d{{1,2}}[./-]20\d{{2}}|20\d{{2}}[./-]\d{{1,2}}[./-]\d{{1,2}}|"
                     rf"\d{{1,2}}\.?\s+{monat}\s+20\d{{2}}|{monat}\s+\d{{1,2}},?\s+20\d{{2}})")
     if "datum" in regeln and not ((xml or {}).get("datum") or re.search(datum_muster, inhalt, re.I)):
         befund.append("Rechnungsdatum fehlt")

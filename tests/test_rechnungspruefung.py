@@ -30,3 +30,10 @@ def test_reverse_charge_und_xml_felder(repo):
     assert pruefe(_einordnung(300), text) == []
     xml = {"kaeufer": "Studio Beispiel", "verkaeufer_ust": "DE123456789", "nummer": "R-1", "datum": date(2026, 10, 29), "positionen": [{"text": "Beratung"}], "steuer": True}
     assert pruefe(_einordnung(300), Text("", "xml", 1), xml=xml) == []
+
+
+
+def test_datum_in_ueblichen_formulierungen_wird_erkannt(repo):
+    for zeile in ["Rechnung vom 29. Oktober 2026", "Hamburg, 29.10.2026", "Date: Oct 29, 2026", "2026-10-29"]:
+        text = Text(f"Rechnung an: Studio Beispiel\nRechnungsnummer: RE-1\n{zeile}\nLeistung: Beratung\nUSt-IdNr.: DE123456789\n19 % USt", "klartext", 1)
+        assert not any("datum" in punkt.lower() for punkt in pruefe(_einordnung(300), text)), zeile
