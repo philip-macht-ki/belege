@@ -56,14 +56,19 @@ def _brauchbar(text: str) -> bool:
     return len(text.strip()) >= 100 and not _metaantwort(text) and fehlerquote(text) <= 0.10
 
 
-def _seiten(datei: Path) -> int:
-    """Zählt höchstens die ersten zwei PDF-Seiten."""
+def _seiten(datei: Path, hoechstens: int | None = 2) -> int:
+    """Zählt die PDF-Seiten, für die Kostenschätzung höchstens die ersten zwei.
+
+    auslesen() braucht die echte Zahl: Die Rechnungsprüfung muss wissen, ob
+    hinter den zwei gelesenen Seiten noch etwas kommt.
+    """
+    deckel = (lambda n: n) if hoechstens is None else (lambda n: min(hoechstens, n))
     if datei.suffix.lower() != ".pdf":
         return 1
     try:
         from pypdf import PdfReader
 
-        return min(2, len(PdfReader(str(datei)).pages))
+        return deckel(len(PdfReader(str(datei)).pages))
     except Exception:  # Poppler bleibt ein optionaler Rückfall.
         pass
     if not shutil.which("pdfinfo"):
@@ -71,7 +76,7 @@ def _seiten(datei: Path) -> int:
     try:
         ergebnis = subprocess.run(["pdfinfo", str(datei)], capture_output=True, text=True, timeout=20)
         treffer = re.search(r"^Pages:\s*(\d+)", ergebnis.stdout, re.M)
-        return min(2, int(treffer.group(1))) if treffer else 1
+        return deckel(int(treffer.group(1))) if treffer else 1
     except OSError:
         return 1
 
@@ -377,7 +382,7 @@ def auslesen(datei: Path, mail: dict | None = None) -> Text:
     """
     datei = Path(datei)
     endung = datei.suffix.lower()
-    seiten = _seiten(datei)
+    seiten = _seiten(datei, None)
     if endung == ".xml":
         from .xrechnung import ist_erechnung, lesen, sichttext
 

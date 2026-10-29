@@ -164,3 +164,18 @@ def test_firma_kann_pruefung_abschalten(repo, monkeypatch):
     monkeypatch.setattr("belege.pruefung._firma", lambda _e: {"pruefung": False})
     assert pruefe(_e(firma="Ausland UAB"), Text("Rechnung", "klartext", 1)) == []
     assert hinweise(_e(firma="Ausland UAB"), Text("Reverse-Charge", "klartext", 1)) == []
+
+
+def test_auslesen_meldet_echte_seitenzahl_ueber_zwei(tmp_path):
+    # Echtlauf: _seiten() deckelte auf 2, die Regel "mehr als 2 Seiten → nur Kopfprüfung"
+    # griff deshalb bei dreiseitigen Steuerberater-Rechnungen nie.
+    from pypdf import PdfWriter
+    from belege.text import _seiten, auslesen
+    pdf = tmp_path / "drei.pdf"
+    w = PdfWriter()
+    for _ in range(3):
+        w.add_blank_page(width=595, height=842)
+    with pdf.open("wb") as f:
+        w.write(f)
+    assert auslesen(pdf).seiten == 3
+    assert _seiten(pdf) == 2  # Kostenschätzung bleibt bei zwei Seiten
