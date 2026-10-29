@@ -315,14 +315,27 @@ def ablage_ordner() -> Path:
     return erweitert(konfig("belege")["ablage"]["ordner"])
 
 
-def firmen() -> list[dict]:
-    """Firmen aus der Konfiguration, einschließlich des alten Einzelbetriebs.
+def stammdaten_datei() -> Path:
+    """Der feste, optionale Ort für die Stammdaten eigener Firmen."""
+    return ROOT / "konfig" / "stammdaten.toml"
 
-    Sobald [[firma]] verwendet wird, ergänzt [betrieb] die Liste nur noch, wenn
-    er nicht bereits durch Namen oder Schreibweise enthalten ist. Das hält alte
-    Konfigurationen und den Übergang zu mehreren Firmen kompatibel.
-    """
-    cfg = konfig("belege")
+
+def stammdaten_firmen() -> list[dict]:
+    """Liest Stammdaten, ohne eine fehlende optionale Datei zu erzeugen."""
+    datei = stammdaten_datei()
+    if not datei.exists():
+        return []
+    with open(datei, "rb") as f:
+        daten = tomllib.load(f)
+    return [dict(firma) for firma in daten.get("firma", [])]
+
+
+def hat_stammdatenblatt() -> bool:
+    return stammdaten_datei().exists()
+
+
+def _firmen_aus_belege(cfg: dict) -> list[dict]:
+    """Bisherige Mehrfirmenlogik für belege.toml, unverändert kompatibel."""
     explizit = [dict(f) for f in cfg.get("firma", [])]
     betrieb = dict(cfg.get("betrieb", {}))
     if not explizit:
@@ -360,6 +373,44 @@ def firmen() -> list[dict]:
     if len(bereiche) != len(set(bereiche)):
         raise RuntimeError("Mehrere Firmen haben nach der Bereinigung denselben Bereich.")
     return ergebnis
+
+
+def firmen() -> list[dict]:
+    """Eigene Firmen; Stammdaten ergänzen die alten Betriebs-Schlüssel."""
+    cfg = konfig("belege")
+    stamm = stammdaten_firmen()
+    if not hat_stammdatenblatt():
+        return _firmen_aus_belege(cfg)
+
+    explizit = [dict(f) for f in cfg.get("firma", [])]
+    zusammen: list[dict] = []
+    verwendet: set[int] = set()
+    for eintrag in stamm:
+        name = str(eintrag.get("name", "")).strip()
+        passend = next((nr for nr, alt in enumerate(explizit)
+                        if str(alt.get("name", "")).strip().casefold() == name.casefold()), None)
+        neu = dict(eintrag)
+        neu["land"] = str(neu.get("land") or "DE")
+        if passend is not None:
+            alt = explizit[passend]
+            verwendet.add(passend)
+            for schluessel in ("bereich", "konten", "uebergabe", "pruefung"):
+                if schluessel in alt:
+                    neu[schluessel] = alt[schluessel]
+            neu["namen"] = list(dict.fromkeys([
+                *neu.get("namen", []), *alt.get("namen", [])
+            ]))
+        if not neu.get("konten") and neu.get("ibans"):
+            neu["konten"] = list(neu["ibans"])
+        zusammen.append(neu)
+    # Nicht übernommene alte Blöcke sind Bestandskonfiguration und bleiben aktiv.
+    zusammen.extend(alt for nr, alt in enumerate(explizit) if nr not in verwendet)
+    # [betrieb] verhält sich weiterhin wie bei der alten Konfiguration.
+    if cfg.get("betrieb", {}).get("name"):
+        namen = {str(n).casefold() for f in zusammen for n in [f.get("name", ""), *f.get("namen", [])] if n}
+        if str(cfg["betrieb"]["name"]).casefold() not in namen:
+            zusammen.insert(0, dict(cfg["betrieb"]))
+    return _firmen_aus_belege({**cfg, "firma": zusammen})
 
 
 def firma(name: str | None) -> dict | None:

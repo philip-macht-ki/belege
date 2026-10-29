@@ -8,6 +8,7 @@ aktion: keine
 
 ### Was ist neu für dich
 
+- Ein Stammdatenblatt mit allen deinen Firmen; Rechnungen werden über USt-IdNr., Steuernummer und Anschrift sicherer der richtigen Firma zugeordnet.
 - Belege kann jetzt auch deine Anschrift auf Rechnungen prüfen.
 - Auf Wunsch fragt belege Lieferanten-USt-IdNrn. bei der EU ab; Störungen dort erzeugen keinen Fehlalarm.
 - Reverse Charge und fehlende E-Rechnungen erscheinen als Hinweise für die Buchhaltung, nicht als Befund.

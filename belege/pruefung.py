@@ -193,14 +193,18 @@ def _empfaengerblock_ust_zeilen(firma: dict | None, text: str) -> set[int]:
 
 def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     firma = _firma(e)
-    ziel = (firma or {}).get("anschrift")
-    if not isinstance(ziel, dict) or not all(str(ziel.get(feld, "")).strip() for feld in ("strasse", "plz", "ort")):
+    ziele = [(firma or {}).get("anschrift"), *((firma or {}).get("weitere_anschriften", []) or [])]
+    ziele = [ziel for ziel in ziele if isinstance(ziel, dict) and all(
+        str(ziel.get(feld, "")).strip() for feld in ("strasse", "plz", "ort"))]
+    if not ziele:
         return None
-    erwartet_strasse = str(ziel["strasse"])
-    erwartet_plz = str(ziel["plz"])
-    erwartet_ort = str(ziel["ort"])
     kopf = "\n".join(text.splitlines()[:40])
-    if _anschrift_normal(erwartet_strasse) in _anschrift_normal(kopf) and erwartet_plz in kopf:
+    def passt(gefunden: str) -> bool:
+        normal = _anschrift_normal(gefunden)
+        return any(_anschrift_normal(str(ziel["strasse"])) in normal
+                   and str(ziel["plz"]) in gefunden
+                   and _anschrift_normal(str(ziel["ort"])) in normal for ziel in ziele)
+    if passt(kopf):
         return None
     gefunden = str((xml or {}).get("kaeufer_anschrift", "")).strip()
     if not gefunden:
@@ -210,11 +214,9 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
         name_gefunden = True
     if not gefunden:
         return "Anschrift fehlt" if name_gefunden else None
-    normal = _anschrift_normal(gefunden)
-    if (_anschrift_normal(erwartet_strasse) in normal and erwartet_plz in normal
-            and _anschrift_normal(erwartet_ort) in normal):
+    if passt(gefunden):
         return None
-    if erwartet_plz in gefunden:
+    if any(str(ziel["plz"]) in gefunden for ziel in ziele):
         return None
     hat_adresse = bool(re.search(r"\b\d{5}\b", gefunden) and re.search(r"\d", gefunden)
                        and re.search(r"(?:str(?:\.|asse)|stra(?:ß|ss)e|weg\b|allee\b|platz\b|gasse\b|ufer\b|ring\b)", gefunden, re.I))

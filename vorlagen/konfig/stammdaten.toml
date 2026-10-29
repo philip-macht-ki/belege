@@ -1,0 +1,17 @@
+# Claude füllt dieses Stammdatenblatt bei der Einrichtung gemeinsam mit dir aus.
+# Alle eigenen Firmen stehen hier, auch wenn es nur eine ist. Die Daten sind Beispiele.
+
+[[firma]]
+name = "Beispiel & Partner GmbH"
+namen = ["Beispiel und Partner", "Beispiel Partner GmbH"]
+rechtsform = "GmbH"
+ust_id = "DE123456789"
+steuernummer = "12/345/67890"
+anschrift = { strasse = "Beispielstraße 12", plz = "12345", ort = "Beispielstadt", land = "DE" }
+weitere_anschriften = [
+  # { strasse = "Hotelweg 4", plz = "12345", ort = "Beispielstadt", land = "DE" },
+]
+geschaeftsfuehrer = ["Erika Beispiel"]
+handelsregister = "HRB 12345 Amtsgericht Beispielstadt"
+ibans = ["DE12 3456 7890 1234 5678 90"]
+land = "DE"

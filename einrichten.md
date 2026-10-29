@@ -82,6 +82,16 @@ mit `--echt` laufen. Danach fragt er nach Betriebsname, weiteren Schreibweisen,
 Tätigkeit, USt-IdNr und ob Privatbelege getrennt abgelegt werden, trägt alles
 ein und hält wieder an.
 
+## Stammdatenblatt anlegen
+
+Noch vor dem ersten echten Einordnen legt Claude immer `konfig/stammdaten.toml`
+an, auch bei nur einer Firma. Claude fragt für jede Firma nach Name,
+Schreibweisen auf Rechnungen, Anschrift und weiteren Anschriften,
+USt-IdNr., Steuernummer, Geschäftsführung, Handelsregister und IBANs. Nichts
+wird geraten: Fehlende Angaben bleiben als leere Felder mit dem Kommentar
+`# bitte ergänzen` stehen. Die Betriebsschlüssel wie Ablagebereich und Konten
+bleiben gegebenenfalls in `konfig/belege.toml`; danach läuft `uv run belege pruefen`.
+
 ## Schritt 2: Postfach verbinden, erst nach ausdrücklichem Weiter
 
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
