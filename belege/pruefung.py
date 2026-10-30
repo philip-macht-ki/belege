@@ -353,13 +353,56 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     return "Anschrift fehlt"
 
 
-def _hat_lieferantensteuer(text: str, xml: dict | None) -> bool:
+_STEUERNUMMER_KENNZEICHEN = re.compile(r"\b(?:steuer\s*-?\s*nr\.?|steuernummer|st\.?\s*-?\s*nr\.?|stnr)", re.I)
+# Steuernummer wie 19/295/12345, 2929512345 oder 293 295 12345; eine PLZ mit Ort ist keine.
+_STEUERNUMMER = re.compile(r"(?<![\d/])(?:\d{2,3}\s?/\s?\d{3,4}\s?/\s?\d{4,5}|\d{3}\s\d{3,4}\s\d{4,5}|\d{10,13})(?![\d/])")
+# Gekennzeichnete Nummer außerhalb der EU, etwa GB123456789 oder CHE-123.456.789.
+_AUSLAND_UST = re.compile(r"\b[A-Z]{2,3}[ .-]?\d(?:[ .-]?\d){7,13}\b")
+# Formgültige EU-USt-IdNr. ohne Kennzeichen, nur in Großbuchstaben (Länderkürzel plus Ziffer).
+_UST_ID_START = re.compile(r"\b(?:[A-Z]{2}|ATU)(?=[ .]?\d)")
+
+
+def _ust_ids_roh(text: str):
+    """Alle formgültigen EU-USt-IdNrn. im Text. Ein Treffer wird von hinten gekürzt,
+    damit „DE814878557 BIC“ als DE814878557 zählt (easybill, 30.10.2026)."""
+    for start in _UST_ID_START.finditer(text):
+        stueck = text[start.start():start.start() + 20]
+        for ende in range(len(stueck), 9, -1):
+            if ende < len(stueck) and stueck[ende].isalnum():
+                continue
+            nummer = _ust_id(stueck[:ende])
+            if nummer:
+                yield nummer
+                break
+
+
+def _hat_lieferantensteuer(text: str, xml: dict | None, firma: dict | None = None) -> bool:
+    """Steht eine USt-IdNr. oder Steuernummer des Lieferanten auf der Rechnung?
+
+    Bis 1.14.1 zählte jedes lange Wort („Druckerei“) als EU-USt-IdNr., die Zeile
+    nach „USt-IdNr.“ als Wert („24103 Kiel“) und eine Gläubiger-ID als USt-IdNr.
+    Jetzt zählt nur eine formgültige Nummer, und nie die eigene der Firma."""
     if (xml or {}).get("verkaeufer_ust"):
         return True
-    kennzeichen = r"(?:steuer\s*(?:-| )?nr\.?|st\.?\s*-?nr\.?|stnr|ust\s*-?id\s*nr\.?|ustidnr|ust\s*-?id|umsatzsteuer\s*-?identifikationsnummer|vat\s*(?:id|no\.?)?)"
-    eu_format = r"(?:DE\s?\d{9}|ATU\s?\d{8}|[A-Z]{2}\s?[A-Z0-9]{7,14})"
-    return bool(re.search(rf"\b{eu_format}\b", text, re.I) or
-                re.search(rf"\b{kennzeichen}\s*[:#.]?\s*[A-Z0-9][A-Z0-9 ./-]{{4,}}", text, re.I))
+    if _lieferanten_ust(text, xml, firma):
+        return True
+    eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
+    if any(nummer != eigene for nummer in _ust_ids_roh(text)):
+        return True
+    zeilen = text.splitlines()
+    for zeile in zeilen:
+        # Gekennzeichnete Nummer außerhalb der EU (GB123456789, CHE-123.456.789 MWST) in derselben Zeile.
+        treffer = _UST_ID_KENNZEICHEN.search(zeile)
+        if treffer and not _EMPFÄNGER_UST_KENNZEICHEN.search(zeile) and _AUSLAND_UST.search(zeile[treffer.end():]):
+            return True
+    for nr, zeile in enumerate(zeilen):
+        treffer = _STEUERNUMMER_KENNZEICHEN.search(zeile)
+        if not treffer:
+            continue
+        # Wert in derselben Zeile hinter dem Kennzeichen, sonst in der nächsten Zeile (Tabellen).
+        if _STEUERNUMMER.search(zeile[treffer.end():]) or (nr + 1 < len(zeilen) and _STEUERNUMMER.match(zeilen[nr + 1].strip())):
+            return True
+    return False
 
 
 _UST_ID_FORMATS = {
@@ -544,7 +587,7 @@ def pruefe(e: Einordnung, text: Text, *, xml: dict | None = None, absender: str 
     # könnte auf einer abgeschnittenen letzten Seite stehen.
     if text.seiten > 2 or len(text.text) >= 5990:
         return befund
-    if "ust_id_lieferant" in regeln and not kleinbetrag and not drittland and not _hat_lieferantensteuer(inhalt, xml):
+    if "ust_id_lieferant" in regeln and not kleinbetrag and not drittland and not _hat_lieferantensteuer(inhalt, xml, firma):
         befund.append(NAMEN["ust_id_lieferant"] + " fehlt")
     if "rechnungsnummer" in regeln and not kleinbetrag and not _rechnungsnummer_vorhanden(inhalt, xml):
         befund.append(NAMEN["rechnungsnummer"] + " fehlt")

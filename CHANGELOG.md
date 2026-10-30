@@ -2,6 +2,19 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.14.2] – 30.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Die Rechnungsprüfung merkt jetzt, wenn auf einer Rechnung die USt-IdNr. oder Steuernummer des Lieferanten fehlt. Bisher hielt sie lange Wörter wie „Druckerei“, eine Gläubiger-ID oder die Zeile unter „USt-IdNr.“ („24103 Kiel“) für eine Nummer, und eine Rechnung über 480 € ganz ohne Steuernummer ging als „OK“ durch.
+- Als Nummer zählt jetzt nur, was wirklich eine ist: eine gültige EU-USt-IdNr., eine gekennzeichnete Steuernummer wie `19/295/12345` oder eine gekennzeichnete Nummer aus dem Ausland wie `GB123456789`. Deine eigene USt-IdNr. auf der Rechnung zählt nie als die des Lieferanten.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.14.1] – 29.10.2026
 
 aktion: keine
