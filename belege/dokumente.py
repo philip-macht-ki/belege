@@ -16,7 +16,7 @@ from pathlib import Path
 from . import kern
 from .ablegen import sauber
 from .einordnen import BELEGWOERTER, _belegdatum, _datum as _zeilendatum
-from .kern import ablage_ordner, ereignis, erweitert, konfig
+from .kern import ablage_ordner, datei_fehler, ereignis, erweitert, konfig
 from .kern import echt as _echt
 from .kern import jetzt, lesen, pfad, schreiben
 from .urteil import frage, vorlage
@@ -517,6 +517,11 @@ def befehl(args) -> int:
             continue
         try:
             _verarbeite_datei(datei, index, echt)
+        except OSError as fehler:
+            meldung, wartet = datei_fehler(datei.name, fehler)
+            if echt and not wartet:
+                ereignis("fehler", meldung, quelle="dokumente")
+            print(meldung)
         except Exception as fehler:  # noqa: BLE001
             meldung = f"Konnte {datei.name} nicht verarbeiten: {fehler}"
             if echt:

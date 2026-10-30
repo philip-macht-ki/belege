@@ -156,7 +156,11 @@ def _plus_aktualisieren(automatisch: bool) -> None:
     try:
         ergebnis = subprocess.run(befehl, timeout=600, capture_output=True, text=True)
         if ergebnis.returncode:
-            ereignis("update", f"Belege Plus konnte nicht aktualisiert werden: Exit-Code {ergebnis.returncode}")
+            zeilen = [z.strip() for z in (ergebnis.stderr or ergebnis.stdout or "").splitlines() if z.strip()]
+            grund = f" Grund laut Ausgabe: {zeilen[-1][:200]}" if zeilen else ""
+            ereignis("update", f"Belege Plus konnte nicht aktualisiert werden.{grund} Der nächste Update-Lauf "
+                     f"versucht es wieder; hält es an, sag deinem Claude: „Prüf das Update von Belege Plus.“ "
+                     f"(Exit-Code {ergebnis.returncode})")
     except subprocess.TimeoutExpired:
         ereignis("update", "Belege Plus konnte nicht aktualisiert werden: Zeitüberschreitung")
     except OSError as fehler:

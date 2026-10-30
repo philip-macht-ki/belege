@@ -152,7 +152,8 @@ def test_plus_fehler_rollt_basisupdate_nicht_zurueck(tmp_path, monkeypatch):
     monkeypatch.setattr(update.subprocess, "run", lauf)
     assert update.befehl(Namespace(echt=True, automatisch=False)) == 0
     assert _run("git", "rev-parse", "HEAD", cwd=kunde).stdout == _run("git", "rev-parse", "origin/main", cwd=kunde).stdout
-    assert ("update", "Belege Plus konnte nicht aktualisiert werden: Exit-Code 1") in ereignisse
+    plus = [text for art, text in ereignisse if art == "update" and text.startswith("Belege Plus konnte nicht aktualisiert werden.")]
+    assert plus and "nächste Update-Lauf versucht es wieder" in plus[0] and "(Exit-Code 1)" in plus[0]
 
 
 def test_plus_auch_ohne_basis_update_bei_gruenem_selbsttest(tmp_path, monkeypatch):

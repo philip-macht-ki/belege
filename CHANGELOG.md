@@ -2,6 +2,20 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.14.3] – 30.10.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Liegt dein Belege-Eingang in Google Drive (oder iCloud, OneDrive) und ist eine Datei dort noch nicht fertig geladen, meldet Belege das nicht mehr als Fehler mit einer technischen Nummer wie „Errno 11“. Die Datei wartet und wird beim nächsten Lauf nachgeholt. Bleibt das über Tage so, sagt dir der Bericht einmal am Tag, dass du den Ordner auf „Offline verfügbar“ stellen kannst.
+- Kann eine Datei aus einem anderen Grund nicht gelesen werden, steht im Bericht jetzt in einem Satz, warum: verschoben oder gelöscht, Zugriff verweigert (mit dem Hinweis auf den Festplattenvollzugriff) oder die Datei lässt sich nicht öffnen.
+- Scheitert das Update von Belege Plus, nennt der Bericht den Grund aus der Ausgabe und was zu tun ist, statt nur „Exit-Code 1“.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.14.2] – 30.10.2026
 
 aktion: keine
