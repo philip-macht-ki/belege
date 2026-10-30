@@ -353,7 +353,10 @@ def _anschrift(e: Einordnung, text: str, xml: dict | None) -> str | None:
     return "Anschrift fehlt"
 
 
-_STEUERNUMMER_KENNZEICHEN = re.compile(r"\b(?:steuer\s*-?\s*nr\.?|steuernummer|st\.?\s*-?\s*nr\.?|stnr)", re.I)
+_STEUERNUMMER_KENNZEICHEN = re.compile(r"\b(?:steuer\s*-?\s*nr\.?|steuernummer|st\.?\s*-?\s*nr\.?|stnr|tax\s*(?:id|no\.?|number))", re.I)
+# Was zwischen Kennzeichen und Nummer steht, darf keine andere Nummer ankündigen.
+_KEINE_STEUERNUMMER = re.compile(r"(?:kund|empf|tel|fax|iban|konto|mobil|phone)", re.I)
+_SCHWEIZ_UID = re.compile(r"\bCHE[ -]?\d{3}\.\d{3}\.\d{3}\b")
 # Steuernummer wie 19/295/12345, 2929512345 oder 293 295 12345; eine PLZ mit Ort ist keine.
 _STEUERNUMMER = re.compile(r"(?<![\d/])(?:\d{2,3}\s?/\s?\d{3,4}\s?/\s?\d{4,5}|\d{3}\s\d{3,4}\s\d{4,5}|\d{10,13})(?![\d/])")
 # Gekennzeichnete Nummer außerhalb der EU, etwa GB123456789 oder CHE-123.456.789.
@@ -382,12 +385,13 @@ def _hat_lieferantensteuer(text: str, xml: dict | None, firma: dict | None = Non
     Bis 1.14.1 zählte jedes lange Wort („Druckerei“) als EU-USt-IdNr., die Zeile
     nach „USt-IdNr.“ als Wert („24103 Kiel“) und eine Gläubiger-ID als USt-IdNr.
     Jetzt zählt nur eine formgültige Nummer, und nie die eigene der Firma."""
-    if (xml or {}).get("verkaeufer_ust"):
+    eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
+    xml_nummer = str((xml or {}).get("verkaeufer_ust", "")).strip()
+    if xml_nummer and re.sub(r"[\s.-]", "", xml_nummer.upper()) != eigene:
         return True
     if _lieferanten_ust(text, xml, firma):
         return True
-    eigene = _ust_id(str((firma or {}).get("ust_id", ""))) or ""
-    if any(nummer != eigene for nummer in _ust_ids_roh(text)):
+    if any(nummer != eigene for nummer in _ust_ids_roh(text)) or _SCHWEIZ_UID.search(text):
         return True
     zeilen = text.splitlines()
     for zeile in zeilen:
@@ -400,7 +404,9 @@ def _hat_lieferantensteuer(text: str, xml: dict | None, firma: dict | None = Non
         if not treffer:
             continue
         # Wert in derselben Zeile hinter dem Kennzeichen, sonst in der nächsten Zeile (Tabellen).
-        if _STEUERNUMMER.search(zeile[treffer.end():]) or (nr + 1 < len(zeilen) and _STEUERNUMMER.match(zeilen[nr + 1].strip())):
+        wert = _STEUERNUMMER.search(zeile[treffer.end():])
+        if (wert and not _KEINE_STEUERNUMMER.search(zeile[treffer.end():treffer.end() + wert.start()])) or \
+                (not wert and nr + 1 < len(zeilen) and _STEUERNUMMER.match(zeilen[nr + 1].strip())):
             return True
     return False
 

@@ -30,7 +30,8 @@ def test_rechnung_mit_steuernummer_ohne_befund(repo):
                  "Steuernummer: 19/295/12345\n", "St.-Nr. 2929512345\n", "Steuer-Nr.\n19/295/12345\n",
                  "Druckerei Lindenau GmbH · DE123456789 · Amtsgericht Kiel HRB 1234\n", "ATU12345678\n",
                  "VAT ID: GB123456789\n", "MWST-Nr. / VAT: CHE-123.456.789\n",
-                 "www.lieferant.example USt.-IDNr. DE123456789 BIC: DEUTDEDBDUE\n"]:
+                 "www.lieferant.example USt.-IDNr. DE123456789 BIC: DEUTDEDBDUE\n",
+                 "Tax ID: 2329312345678\n", "Lieferant AG · CHE-123.456.789 MWST\n"]:
         befund = pruefe(_einordnung(), Text(KOPF + REST + fuss, "klartext", 1))
         assert FEHLT not in befund, fuss
 
@@ -47,3 +48,12 @@ def test_eigene_ust_id_ist_keine_lieferanten_ust_id():
     assert not _hat_lieferantensteuer("Ihre USt-IdNr.: DE111111111", None, firma)
     assert not _hat_lieferantensteuer("Kunde Studio Beispiel DE 111 111 111", None, firma)
     assert _hat_lieferantensteuer("Ihre USt-IdNr.: DE111111111\nUnsere USt-IdNr.: DE123456789", None, firma)
+
+
+def test_andere_nummern_hinter_dem_kennzeichen_zaehlen_nicht():
+    firma = {"ust_id": "DE111111111"}
+    assert not _hat_lieferantensteuer("", {"verkaeufer_ust": "DE111111111"}, firma)
+    assert not _hat_lieferantensteuer("Steuernummer des Kunden: Kundennummer 1234567890", None)
+    assert not _hat_lieferantensteuer("Steuernummer: Tel. 04012345678", None)
+    assert _hat_lieferantensteuer("Steuernummer: 12/345/67890 · Tel. 040 1234567", None)
+    assert _hat_lieferantensteuer("Tel. 040 1234567 · Fax 040 1234568 · Steuernummer: 12/345/67890", None)
