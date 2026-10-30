@@ -242,6 +242,30 @@ def ereignis(art: str, text: str, **daten) -> None:
         f.write(json.dumps(zeile, ensure_ascii=False, default=str) + "\n")
 
 
+# Fehlernummern, bei denen ein Cloud-Ordner (Google Drive, iCloud, OneDrive) die
+# Datei nur noch nicht hergibt. Der nächste Lauf versucht es wieder, das ist
+# kein Fehler der Person. errno 11 heißt auf dem Mac EDEADLK.
+_DATEI_WARTET = {11, 35, 60}  # EDEADLK, EAGAIN (macOS), ETIMEDOUT
+
+
+def datei_fehler(name: str, fehler: OSError) -> tuple[str, bool]:
+    """Übersetzt einen Lesefehler in einen Satz, der Ursache und nächsten Schritt nennt.
+
+    Gibt (Meldung, wartet) zurück. ``wartet`` heißt: kein Fehler, nur später noch einmal.
+    """
+    if fehler.errno in _DATEI_WARTET:
+        return (f"{name} wartet, weil der Cloud-Ordner (etwa Google Drive) die Datei noch nicht "
+                "fertig geladen hat. Der nächste Lauf versucht es wieder.", True)
+    if isinstance(fehler, FileNotFoundError):
+        return f"{name} war beim Lesen nicht mehr da, wurde also verschoben oder gelöscht.", False
+    if isinstance(fehler, PermissionError):
+        return (f"{name} konnte nicht gelesen werden, weil dein Mac den Zugriff verweigert hat. "
+                "Meist fehlt dem Terminal der Festplattenvollzugriff (Systemeinstellungen → "
+                "Datenschutz & Sicherheit).", False)
+    grund = fehler.strerror or str(fehler)
+    return f"{name} konnte nicht gelesen werden ({grund}). Prüfe, ob die Datei noch da ist und sich öffnen lässt.", False
+
+
 def einmal_taeglich(art: str, text: str, **daten) -> bool:
     """Schreibt ein Ereignis dieser Art höchstens einmal am Tag. Gibt zurück, ob geschrieben wurde.
 

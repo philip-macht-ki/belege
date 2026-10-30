@@ -374,6 +374,17 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         if echt:
             kern.ereignis("fehler", str(fehler), quelle=fund.quelle)
         return kern.Ergebnis("fehler", str(fehler))
+    except OSError as fehler:
+        meldung, wartet = kern.datei_fehler(fund.name, fehler)
+        if wartet:
+            if echt:
+                kern.einmal_taeglich("datei_wartet", "Mindestens eine Datei war noch nicht fertig aus dem "
+                                     "Cloud-Ordner geladen und wird beim nächsten Lauf nachgeholt. Bleibt das "
+                                     "über Tage so, stell den Ordner in Google Drive auf „Offline verfügbar“.")
+            return kern.Ergebnis("spaeter", meldung)
+        if echt:
+            kern.ereignis("fehler", meldung, quelle=fund.quelle)
+        return kern.Ergebnis("fehler", meldung)
     except Exception as fehler:  # noqa: BLE001
         meldung = f"Konnte {fund.name} nicht verarbeiten: {fehler}"
         if echt:
