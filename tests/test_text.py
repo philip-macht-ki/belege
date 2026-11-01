@@ -138,7 +138,7 @@ def test_unbekannte_endung_erreicht_claude_nicht(repo, monkeypatch):
     assert auslesen(p).stufe == "leer"
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Vision gibt es nur unter macOS")
 def test_scan_nimmt_vision_wenn_verfuegbar(repo):
     pytest.importorskip("Vision")
     bild = repo / "scan.png"

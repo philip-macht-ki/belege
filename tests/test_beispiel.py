@@ -95,7 +95,7 @@ def test_bons_sind_per_vision_mit_summe_lesbar(repo):
         assert summe in erkannt.text
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Vision gibt es nur unter macOS")
 def test_pixelwerk_scan_ist_per_vision_lesbar(repo):
     pytest.importorskip("Vision")
     assert befehl(object()) == 0
