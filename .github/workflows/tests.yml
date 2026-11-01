@@ -14,4 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv run pytest -q
+      # Die plattformneutralen Regressionstests laufen auf macOS; Windows prüft
+      # die dort eigenen Scheduler-, Dialog- und Pfadzweige gezielt.
+      - run: uv run pytest -q ${{ matrix.os == 'windows-latest' && 'tests/test_windows.py' || '' }}
