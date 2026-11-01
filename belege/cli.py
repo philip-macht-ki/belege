@@ -22,6 +22,7 @@ BEFEHLE = {
     "monat": ("monat", "befehl", "Monatsabgleich und Übergabe"),
     "posten": ("posten", "befehl", "Offene Posten und Rückfragen"),
     "moneymoney": ("moneymoney", "befehl", "Optional: Kontoumsätze aus MoneyMoney als CSV holen"),
+    "hibiscus": ("hibiscus", "befehl", "Optional: Kontoumsätze aus Hibiscus/Jameica als CSV holen"),
     "anmelden": ("anmelden", "befehl", "Postfach-Zugang einrichten (App-Passwort, Google, Microsoft)"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
     "einrichten-urteil": ("einrichten", "befehl_urteil", "Starter für das eingestellte Urteil einrichten"),
@@ -49,7 +50,7 @@ BEFEHLE = {
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
 OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "ablegen", "dokumente", "jahr", "posten", "pruefung", "aufraeumen"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "hibiscus", "ablegen", "dokumente", "jahr", "posten", "pruefung", "aufraeumen"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -65,7 +66,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--konto")
     argumente.add_argument("--monat")
     argumente.add_argument("--auszug")
-    argumente.add_argument("--testordner", metavar="PFAD", help="MoneyMoney: alle CSVs in diesen Ordner statt in den Auszugsordner")
+    argumente.add_argument("--testordner", metavar="PFAD", help="MoneyMoney/Hibiscus: alle CSVs in diesen Ordner statt in den Auszugsordner")
     argumente.add_argument("--uebergabe", action="store_true")
     argumente.add_argument("--anfragen", action="store_true")
     argumente.add_argument("--zwischenstand", action="store_true")

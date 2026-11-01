@@ -8,7 +8,8 @@ mit `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1
 und Git über Git for Windows. Windows-Pfade verwenden Backslashes; App-Passwörter
 und die übrige Konfiguration bleiben gleich. `belege zeitplan an --echt` legt
 Aufgaben für den aktuellen Benutzer an und holt verpasste Läufe nach. MoneyMoney
-ist Mac-only; CSV-Auszüge werden unter Windows in den Auszugsordner gelegt.
+ist Mac-only. Unter Windows empfiehlt sich kostenloses Hibiscus/Jameica
+(`einrichten_hibiscus.md`) oder CSV-Auszüge von Hand im Auszugsordner.
 
 Deine Belege sortieren sich selbst. Rechnungen aus dem Postfach landen mit
 sauberem Namen im richtigen Monatsordner. Handy und Downloads kommen in Teil 3
@@ -49,6 +50,7 @@ Dann sag einfach deinem Claude: „Update“. Du kannst den automatischen Check 
 | `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Tagesbericht an dich |
 | `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege moneymoney` | optional: Kontoumsätze aus MoneyMoney als CSV holen (`einrichten_moneymoney.md`) |
+| `belege hibiscus` | optional: Kontoumsätze aus Hibiscus/Jameica als CSV holen (`einrichten_hibiscus.md`) |
 | `belege monat --uebergabe` | Belege des Monats an Steuerberater oder Beleg-Adresse |
 | `belege posten --mail` | zeigt die Rückfrage zu offenen Posten; mit `--echt` an die eigene erlaubte Adresse |
 | `belege suchen …` | im Postfach suchen |
