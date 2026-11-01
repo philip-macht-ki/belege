@@ -10,10 +10,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            tests: tests/test_zeitplan.py tests/test_anmelden.py tests/test_einrichten.py tests/test_windows.py
+          - os: windows-latest
+            tests: tests/test_windows.py
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      # Die plattformneutralen Regressionstests laufen auf macOS; Windows prüft
-      # die dort eigenen Scheduler-, Dialog- und Pfadzweige gezielt.
-      - run: uv run pytest -q ${{ matrix.os == 'windows-latest' && 'tests/test_windows.py' || '' }}
+      - run: uv run pytest -q ${{ matrix.tests }}
