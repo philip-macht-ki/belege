@@ -7,8 +7,9 @@ Windows: PowerShell nutzen, uv bei Bedarf mit
 `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 und Git über Git for Windows installieren. Pfade mit Backslashes schreiben,
 etwa `C:\Users\Name\Belege`. Die Mac-Anleitung darunter bleibt für macOS
-unverändert. App-Passwörter funktionieren gleich; MoneyMoney entfällt und
-Kontoauszüge werden als CSV in den Auszugsordner gelegt.
+unverändert. App-Passwörter funktionieren gleich; MoneyMoney entfällt. Claude
+empfiehlt Hibiscus/Jameica kostenlos (`einrichten_hibiscus.md`) oder
+Kontoauszüge als CSV im Auszugsordner.
 
 Texterkennung unter Windows: Die Apple-Texterkennung gibt es dort nicht. Text-PDFs
 liest belege ohne Zusatz. Für Scans und Handy-Fotos installiert Claude Tesseract
@@ -354,8 +355,10 @@ ausdrücklichen Ja mit `--echt`.
    herunter und legt sie dort ab, je Konto eine Datei, eine Jahres-CSV geht auch.
    Claude darf sich nicht bei der Bank anmelden.
    Die Kontoauszüge lädt die Person von Hand als CSV herunter. Wer möchte, holt sie
-   stattdessen automatisch aus MoneyMoney (kostenpflichtig, optional):
-   `einrichten_moneymoney.md`. Claude bietet das nur an, er drängt nicht.
+   stattdessen automatisch aus MoneyMoney (kostenpflichtig, optional,
+   Empfehlung auf dem Mac): `einrichten_moneymoney.md`. Unter Windows empfiehlt
+   Claude Hibiscus/Jameica kostenlos (`einrichten_hibiscus.md`) oder weiterhin
+   CSV von Hand. Claude bietet das nur an, er drängt nicht.
 2. **Abgleich.** `uv run belege monat --monat JJJJ-MM` zeigt, wie viele Buchungen
    einen Beleg haben. Mit `--echt` entstehen im Monatsordner `fehlt_noch.md/.csv`
    (Zahlung ohne Beleg, mit Summe), `pruefen.md`, `klaerung.md` und

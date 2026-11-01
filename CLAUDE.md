@@ -24,4 +24,6 @@ Pfade mit Backslash schreiben und uv bei Bedarf mit
 `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 installieren. Git gibt es über Git for Windows. Der Zeitplan wird dort als Aufgabe
 für den angemeldeten Benutzer eingerichtet; MoneyMoney gibt es nur auf dem Mac,
-CSV-Kontoauszüge kommen unter Windows von Hand in den Auszugsordner.
+Unter Windows empfiehlt Claude Hibiscus/Jameica kostenlos (`einrichten_hibiscus.md`)
+oder CSV-Kontoauszüge von Hand im Auszugsordner. Am Mac bleibt MoneyMoney die
+unveränderte Empfehlung.

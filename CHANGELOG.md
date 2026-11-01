@@ -2,6 +2,22 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.16.0] – 01.11.2026
+
+aktion: konfig
+
+### Was ist neu für dich
+
+- Unter Windows kannst du kostenlos Hibiscus/Jameica nutzen: belege liest die
+  bereits abgerufenen Umsätze zweimal täglich und legt CSV-Dateien für den
+  Monatsabgleich ab. Alternativ bleiben CSV-Auszüge von Hand gleichwertig.
+- Das Jameica-Master-Passwort bleibt im Schlüsselbund beziehungsweise im
+  Windows-Benutzerschutz; belege liest nur Konten und Umsätze, nie Zahlungen.
+
+### Musst du etwas tun?
+
+Nur wenn du Hibiscus nutzen möchtest: Richte es mit `einrichten_hibiscus.md` ein.
+
 ## [1.15.0] – 01.11.2026
 
 aktion: Windows-Unterstützung

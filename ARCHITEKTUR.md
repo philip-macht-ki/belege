@@ -661,6 +661,25 @@ Test „erst trocken (nichts passiert), dann echt“.
   `warnen_nach_tagen` nicht abgerufen → Ereignis `monat` für den Tagesbericht.
 - `belege moneymoney konten`: Name, Kennung, Art je Konto, ohne Kontostand.
 
+## Hibiscus (`belege hibiscus`, optional)
+
+- Optionaler kostenloser Weg unter Windows, Linux und auf Wunsch macOS. Jameica
+  muss lokal laufen; ohne Hibiscus bleiben CSV-Auszüge von Hand vollwertig.
+- Liest ausschließlich über `hibiscus.xmlrpc.konto.find` und
+  `hibiscus.xmlrpc.umsatz.list` am festen lokalen Endpunkt
+  `https://127.0.0.1:8080/xmlrpc/`. Zertifikatsprüfung ist ausschließlich für
+  diesen Loopback-Endpunkt deaktiviert. Keine Synchronisation, Überweisung oder
+  sonstige schreibende XML-RPC-Methode.
+- `konfig/hibiscus.toml`: `an`, `monate` (Standard 2), je `[[konto]]`
+  `kennung` (IBAN/Kontonummer), `name`, `format` (`bank` | `amex` =
+  `kreditkarte`) und optional `ordner`. Das Master-Passwort liegt separat im
+  Schlüsselbund (macOS) beziehungsweise DPAPI-geschützt in `arbeit/geheim/`
+  (Windows), nie in Konfiguration oder Protokoll.
+- Datei je Konto und Monat: `<JJJJ-MM>_<name>_Hibiscus.csv`, exakt die
+  MoneyMoney-CSV-Formate. `bank`: Ausgaben negativ; `amex`: Belastungen positiv.
+- Bei aktivem `an = true` läuft der Zeitplan um 07:00 und 19:00 (launchd oder
+  Windows-Aufgabenplanung). `belege pruefen` meldet dann „Hibiscus erreichbar“.
+
 ## Jahresende (`belege jahr`, Modul bh7)
 
 ```

@@ -295,7 +295,7 @@ def _konten_pruefen(monat: str, args) -> list[Path]:
         kandidaten = sorted(ordner.glob(konto.get("muster") or "*")) if ordner.exists() else []
         vorhanden = []
         for datei in kandidaten:
-            if konto.get("quelle", "csv") in {"csv", "moneymoney"}:
+            if konto.get("quelle", "csv") in {"csv", "moneymoney", "hibiscus"}:
                 try:
                     if buchungen(datei, monat):
                         vorhanden.append(datei)

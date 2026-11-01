@@ -17,17 +17,18 @@ from .kern import echt, fremder_rechner, konfig, pfad, rechner
 from .plattform import ist_windows
 
 LAEUFE = ("takt", "tag", "monat", "posten", "update")
-# Optional, nur wenn konfig/moneymoney.toml `an = true` sagt.
-ZUSATZ = ("moneymoney",)
+# Optional, nur wenn die jeweilige Konfiguration `an = true` sagt.
+ZUSATZ = ("moneymoney", "hibiscus")
 
 
 def laeufe() -> tuple[str, ...]:
     """Die Läufe, die `zeitplan an` einrichtet."""
-    from .moneymoney import einstellungen
+    from .moneymoney import einstellungen as moneymoney_einstellungen
+    from .hibiscus import einstellungen as hibiscus_einstellungen
 
     k = konfig("belege")
     basis = tuple(n for n in LAEUFE if n != "update" or k.get("update", {}).get("automatisch", True))
-    return basis + (("moneymoney",) if einstellungen().get("an") else ())
+    return basis + (("moneymoney",) if moneymoney_einstellungen().get("an") else ()) + (("hibiscus",) if hibiscus_einstellungen().get("an") else ())
 
 
 def neu_laden() -> None:
@@ -63,7 +64,7 @@ def _powershell_befehl(name: str) -> str:
     befehle = {
         "takt": "takt --echt", "tag": "tag --echt",
         "monat": "monat --uebergabe --echt", "posten": "monat --zwischenstand --echt; & '{uv}' run belege posten --mail --echt",
-        "update": "aktualisieren --automatisch --echt", "moneymoney": "moneymoney --echt",
+        "update": "aktualisieren --automatisch --echt", "moneymoney": "moneymoney --echt", "hibiscus": "hibiscus --echt",
     }
     lauf = f"& '{uv}' run belege " + befehle[name].format(uv=uv)
     if name == "monat":
@@ -83,7 +84,7 @@ def windows_xml(name: str) -> str:
         trigger = "<CalendarTrigger><StartBoundary>2020-01-01T07:00:00</StartBoundary><ScheduleByMonth><DaysOfMonth><Day>1</Day><Day>15</Day></DaysOfMonth><Months><January/><February/><March/><April/><May/><June/><July/><August/><September/><October/><November/><December/></Months></ScheduleByMonth></CalendarTrigger>"
     elif name == "update":
         trigger = "<CalendarTrigger><StartBoundary>2020-01-04T06:00:00</StartBoundary><ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Sunday/></DaysOfWeek></ScheduleByWeek></CalendarTrigger>"
-    elif name == "moneymoney":
+    elif name in {"moneymoney", "hibiscus"}:
         trigger = "<CalendarTrigger><StartBoundary>2020-01-01T07:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger><CalendarTrigger><StartBoundary>2020-01-01T19:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"
     else:  # monat
         trigger = "<CalendarTrigger><StartBoundary>2020-01-01T09:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"

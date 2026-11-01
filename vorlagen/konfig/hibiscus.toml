@@ -1,0 +1,17 @@
+# Optional: Kontoumsätze automatisch aus Hibiscus/Jameica holen (einrichten_hibiscus.md).
+# Hibiscus ist kostenlos. Wer es nicht nutzt, lädt Kontoauszüge weiter selbst als
+# CSV herunter; beides funktioniert gleich gut mit `belege monat`.
+an = false
+
+# Laufender Monat und Vormonat werden bei jedem Lauf neu geschrieben.
+monate = 2
+
+# Ein Block je Konto. `kennung` ist die IBAN oder Kontonummer aus `belege hibiscus konten`.
+# format: "bank" für Girokonten, "amex" oder "kreditkarte" für Kreditkarten.
+# ordner leer lassen für [monat] auszuege aus belege.toml.
+#
+# [[konto]]
+# kennung = "DE00 0000 0000 0000 0000 00"
+# name = "Girokonto"
+# format = "bank"
+# ordner = ""

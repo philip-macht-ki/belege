@@ -383,6 +383,21 @@ def befehl(args) -> int:
     except Exception as e:
         z("GELB", f"Quellen nicht prüfbar: {e}")
     try:
+        from .hibiscus import einstellungen as hibiscus_einstellungen, konten_hibiscus, passwort as hibiscus_passwort, HibiscusFehler
+
+        if hibiscus_einstellungen().get("an"):
+            geheim = hibiscus_passwort()
+            if not geheim:
+                z("ROT", "Hibiscus erreichbar: Master-Passwort fehlt", "belege hibiscus passwort ausführen.")
+            else:
+                try:
+                    konten_hibiscus(geheim)
+                    z("GRUEN", "Hibiscus erreichbar")
+                except HibiscusFehler as fehler:
+                    z("ROT", f"Hibiscus erreichbar: nein ({fehler})", "Jameica starten und XML-RPC prüfen.")
+    except Exception as e:
+        z("ROT", f"Hibiscus nicht prüfbar: {e}")
+    try:
         cfg = konfig("belege")
         ue = cfg.get("uebergabe", {})
         adr = ue.get("adresse", "")
