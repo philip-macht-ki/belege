@@ -1,5 +1,13 @@
 # Freiwillig: ein KI-Modell auf deinem Mac
 
+## Windows
+
+Claude prüft zuerst `uv run belege rechner`. Bei Windows in PowerShell arbeiten,
+uv bei Bedarf mit `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+installieren und Git for Windows verwenden. Windows-Pfade als `C:\Users\Name\Belege`
+angeben. Die weiteren Einstellungen und App-Passwörter sind gleich; MoneyMoney
+entfällt, Kontoauszüge werden als CSV in den Auszugsordner gelegt.
+
 Kein Workshop-Schritt. Belege funktioniert ohne. Vertrauliche Briefe (Arzt,
 Gericht, Krankenkasse, Personal, eingetragene Absender) liest belege ohnehin nie
 mit einem Cloud-Modell, sondern mit festen Regeln. Ein lokales Modell macht

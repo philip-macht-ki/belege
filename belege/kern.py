@@ -210,12 +210,30 @@ class Gesamtsperre:
         self.datei = None
 
     def __enter__(self) -> bool:
-        import fcntl
         import time
+        from .plattform import ist_windows
 
         ziel = pfad("arbeit", ".belege.lock")
         ziel.parent.mkdir(parents=True, exist_ok=True)
         self.datei = open(ziel, "a+")
+        if ist_windows():
+            # Windows hat kein fcntl. Ein Byte-Lock wird beim Prozessende ebenso
+            # freigegeben und schützt die parallelen Aufgaben der Planung.
+            import msvcrt
+            self.datei.seek(0)
+            self.datei.write("0")
+            self.datei.flush()
+            ende = time.monotonic() + self.warten
+            while True:
+                try:
+                    self.datei.seek(0)
+                    msvcrt.locking(self.datei.fileno(), msvcrt.LK_NBLCK, 1)
+                    return True
+                except OSError:
+                    if time.monotonic() >= ende:
+                        return False
+                    time.sleep(5)
+        import fcntl
         ende = time.monotonic() + self.warten
         while True:
             try:
@@ -228,6 +246,14 @@ class Gesamtsperre:
 
     def __exit__(self, *_):
         if self.datei:
+            from .plattform import ist_windows
+            if ist_windows():
+                try:
+                    import msvcrt
+                    self.datei.seek(0)
+                    msvcrt.locking(self.datei.fileno(), msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
             self.datei.close()  # gibt die Sperre frei
 
 

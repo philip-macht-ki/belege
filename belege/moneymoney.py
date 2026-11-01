@@ -25,6 +25,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from . import kern
+from .plattform import ist_windows
 
 FORMATE = ("bank", "amex", "kreditkarte")
 
@@ -202,6 +203,9 @@ def _veraltet(konto: dict, tage: int, jetzt: datetime) -> str | None:
 
 def befehl_konten() -> int:
     """Name, Kennung und Art je Konto, für die Konfig. Ohne Kontostand und Umsätze."""
+    if ist_windows():
+        print("nichts: MoneyMoney gibt es nur für den Mac; unter Windows Kontoauszüge als CSV von Hand in den Auszugsordner legen.")
+        return 0
     try:
         bekannt = konten_mm()
     except RuntimeError as fehler:
@@ -216,6 +220,9 @@ def befehl_konten() -> int:
 
 def befehl(args) -> int:
     """`belege moneymoney [konten] [--echt] [--testordner PFAD]`."""
+    if ist_windows():
+        print("nichts: MoneyMoney gibt es nur für den Mac; unter Windows Kontoauszüge als CSV von Hand in den Auszugsordner legen.")
+        return 0
     if (getattr(args, "ziel", None) or [""])[0] == "konten":
         return befehl_konten()
     cfg = einstellungen()

@@ -5,12 +5,12 @@ dort nicht steht, ist nicht passiert. Er geht als kurze Mail an dich selbst.
 """
 from __future__ import annotations
 
-import os
 import subprocess
 from collections import Counter
 from datetime import datetime
 
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
+from .plattform import ist_windows
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
          "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen")
@@ -246,7 +246,10 @@ def befehl(args) -> int:
 
 
 def zeitplan_an() -> bool:
-    """Ist der regelmäßige Lauf bei launchd angemeldet?"""
+    """Ist der regelmäßige Lauf beim jeweiligen Betriebssystem angemeldet?"""
+    if ist_windows():
+        return subprocess.run(["schtasks.exe", "/Query", "/TN", "belege takt"], capture_output=True).returncode == 0
+    import os
     r = subprocess.run(
         ["launchctl", "print", f"gui/{os.getuid()}/de.belege.takt"],
         capture_output=True,

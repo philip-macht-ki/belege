@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 
 from . import kern
+from .plattform import ist_windows
 
 RECHTE = {
     "lesen": ["https://www.googleapis.com/auth/gmail.modify"],
@@ -33,6 +35,8 @@ def _schluesselbund(name: str) -> int:
     deshalb für die sehr kurze Laufzeit dieses Unterprozesses lokal sichtbar.
     Es wird nicht ausgegeben, geloggt oder in einer Datei abgelegt.
     """
+    if ist_windows():
+        return _windows_passwort(name)
     konto = kern.konto(name)
     adresse = konto.get("adresse", name)
     script = '''tell application "System Events" to activate
@@ -61,6 +65,30 @@ display dialog "App-Passwort für %s einfügen" default answer "" with hidden an
         print("fehler: App-Passwort nicht im Schlüsselbund gespeichert.")
         return 1
     print(f"ok: App-Passwort für {adresse} im Schlüsselbund gespeichert.")
+    return 0
+
+
+def _windows_passwort(name: str) -> int:
+    """Speichert das Passwort DPAPI-verschlüsselt für den angemeldeten Windows-Nutzer."""
+    konto = kern.konto(name)
+    adresse = konto.get("adresse", name)
+    ziel = kern.pfad("arbeit", "geheim", f"{name}_app_passwort.txt")
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    # Das Kennwort wird nur über die Pipe gelesen; weder Script noch Ausgabe enthalten es.
+    script = (
+        "Add-Type -AssemblyName Microsoft.VisualBasic; "
+        "$p=[Microsoft.VisualBasic.Interaction]::InputBox('App-Passwort einfügen', 'Belege'); "
+        "if($p){$p | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString | Set-Content -LiteralPath $args[0] -NoNewline; exit 0}; exit 1"
+    )
+    try:
+        dialog = subprocess.run(["powershell.exe", "-NoProfile", "-Command", script, "--", str(ziel)], capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as fehler:
+        print(f"fehler: Passwort-Dialog nicht geöffnet: {fehler}")
+        return 1
+    if dialog.returncode:
+        print("nichts: App-Passwort-Eingabe abgebrochen.")
+        return 0
+    print(f"ok: App-Passwort für {adresse} geschützt für diesen Windows-Benutzer gespeichert.")
     return 0
 
 

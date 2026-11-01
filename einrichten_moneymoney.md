@@ -1,5 +1,11 @@
 # Kontoauszüge automatisch mit MoneyMoney (optional)
 
+## Windows
+
+Claude prüft zuerst `uv run belege rechner`. MoneyMoney gibt es nur für den Mac.
+Unter Windows Kontoauszüge als CSV bei der Bank herunterladen und in den
+Auszugsordner legen; `belege monat` verarbeitet sie wie gewohnt.
+
 Diese Anleitung ist für deinen Claude. Sag ihm: „Richte mir MoneyMoney nach
 einrichten_moneymoney.md ein.“
 

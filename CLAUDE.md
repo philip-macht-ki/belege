@@ -15,3 +15,13 @@ Vertrag zwischen den Teilen: `ARCHITEKTUR.md`. Wer ein Format ändert, ändert e
 ## Wenn etwas nicht läuft
 
 `uv run belege pruefen` → `uv run belege status` → `arbeit/logs/<datum>.log` → `arbeit/urteile.jsonl`.
+
+## Mac oder Windows
+
+Vor jeder Anleitung zuerst `uv run belege rechner` ausführen. Auf dem Mac bleiben
+alle bisherigen Befehle und Pfade unverändert. Unter Windows PowerShell benutzen,
+Pfade mit Backslash schreiben und uv bei Bedarf mit
+`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+installieren. Git gibt es über Git for Windows. Der Zeitplan wird dort als Aufgabe
+für den angemeldeten Benutzer eingerichtet; MoneyMoney gibt es nur auf dem Mac,
+CSV-Kontoauszüge kommen unter Windows von Hand in den Auszugsordner.

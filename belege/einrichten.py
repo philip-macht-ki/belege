@@ -4,13 +4,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .plattform import ist_windows
+
 
 MARKER = "# belege-claude-starter-v1"
 CODEX_MARKER = "# belege-codex-starter-v1"
 
 
 def starter_pfad(backend: str = "claude") -> Path:
-    return Path.home() / ".local" / "bin" / backend
+    suffix = ".cmd" if ist_windows() else ""
+    return Path.home() / ".local" / "bin" / f"{backend}{suffix}"
 
 
 def starter_text() -> str:
@@ -56,18 +59,37 @@ exit 127
 '''
 
 
+def windows_starter_text(backend: str) -> str:
+    """CMD-Starter für die Aufgabenplanung; npm- und lokale Standardpfade zuerst."""
+    marker = MARKER if backend == "claude" else CODEX_MARKER
+    name = backend + ".cmd"
+    kandidaten = (r'"%USERPROFILE%\.claude\local\claude.exe" "%APPDATA%\npm\claude.cmd"'
+                  if backend == "claude" else r'"%APPDATA%\npm\codex.cmd" "%USERPROFILE%\.npm-global\bin\codex.cmd"')
+    return f'''@echo off
+REM {marker}
+set "SELF=%~f0"
+for %%F in ({kandidaten}) do (
+  if exist "%%~fF" if /I not "%%~fF"=="%SELF%" call "%%~fF" %*
+  if exist "%%~fF" if /I not "%%~fF"=="%SELF%" exit /b %ERRORLEVEL%
+)
+echo {backend.capitalize()} wurde nicht gefunden. Installiere die CLI oder öffne die App einmal. 1>&2
+exit /b 127
+'''
+
+
 def anlegen(backend: str = "claude") -> tuple[bool, str]:
     """Legt ausschließlich unseren markierten Starter an oder aktualisiert ihn."""
     if backend not in {"claude", "codex"}:
         return False, f"Für Urteil-Backend {backend} ist kein Starter nötig."
     ziel = starter_pfad(backend)
     marker = MARKER if backend == "claude" else CODEX_MARKER
-    text = starter_text() if backend == "claude" else codex_starter_text()
+    text = windows_starter_text(backend) if ist_windows() else (starter_text() if backend == "claude" else codex_starter_text())
     if ziel.exists() and marker not in ziel.read_text(encoding="utf-8", errors="replace"):
         return False, f"{ziel} gehört nicht zu belege und wurde nicht verändert."
     ziel.parent.mkdir(parents=True, exist_ok=True)
     ziel.write_text(text, encoding="utf-8")
-    os.chmod(ziel, 0o755)
+    if not ist_windows():
+        os.chmod(ziel, 0o755)
     return True, str(ziel)
 
 
@@ -78,7 +100,7 @@ def auffrischen() -> bool:
     eigenen Schritt ankommen. Fremde oder fehlende Dateien bleiben unberührt.
     """
     geaendert = False
-    for backend, marker, text in (("claude", MARKER, starter_text), ("codex", CODEX_MARKER, codex_starter_text)):
+    for backend, marker, text in (("claude", MARKER, lambda: windows_starter_text("claude") if ist_windows() else starter_text()), ("codex", CODEX_MARKER, lambda: windows_starter_text("codex") if ist_windows() else codex_starter_text())):
         ziel = starter_pfad(backend)
         try:
             alt = ziel.read_text(encoding="utf-8", errors="replace")

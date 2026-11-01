@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 from .kern import (ablage_ordner, jetzt, konfig, konten, pfad, rechner, firmen,
                    hat_stammdatenblatt, stammdaten_beispiel, stammdaten_firmen)
+from .plattform import ist_windows
 
 SYNC = (
     "Library/CloudStorage",
@@ -115,10 +116,12 @@ def befehl(args) -> int:
         backend, urteil_cfg = "", {}
         z("ROT", f"Urteil nicht prüfbar: {e}")
     zeitplan_path = f"/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:{Path.home()}/.local/bin"
+    zeitplan_umgebung = (os.environ | {"PATH": os.environ.get("PATH", "") + os.pathsep + str(Path.home() / ".local" / "bin")}) if ist_windows() else None
     if backend == "claude":
         try:
             claude = subprocess.run(
-                ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "claude", "--version"],
+                ["claude", "--version"] if ist_windows() else ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "claude", "--version"],
+                env=zeitplan_umgebung,
                 capture_output=True, text=True, timeout=15,
             )
             z("GRUEN" if claude.returncode == 0 else "GELB",
@@ -129,7 +132,8 @@ def befehl(args) -> int:
     elif backend == "codex":
         try:
             codex = subprocess.run(
-                ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "codex", "login", "status"],
+                ["codex", "login", "status"] if ist_windows() else ["/usr/bin/env", "-i", f"HOME={Path.home()}", f"PATH={zeitplan_path}", "codex", "login", "status"],
+                env=zeitplan_umgebung,
                 capture_output=True, text=True, timeout=15,
             )
             z("GRUEN" if codex.returncode == 0 else "GELB",
@@ -411,7 +415,7 @@ def befehl(args) -> int:
         z("GELB", f"Senden nicht prüfbar: {e}")
     try:
         r = subprocess.run(
-            ["launchctl", "print", f"gui/{os.getuid()}/de.belege.takt"],
+            ["schtasks.exe", "/Query", "/TN", "belege takt"] if ist_windows() else ["launchctl", "print", f"gui/{os.getuid()}/de.belege.takt"],
             capture_output=True,
             timeout=5,
         )

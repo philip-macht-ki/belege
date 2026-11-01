@@ -13,8 +13,11 @@ import json
 import re
 import shutil
 import subprocess
+import platform
+import sys
 
 from . import kern
+from .plattform import ist_windows, ist_mac
 
 
 def _aus(cmd: list[str]) -> str:
@@ -55,6 +58,12 @@ def erkennen() -> dict:
 
 
 def befehl(args) -> int:
+    if ist_windows():
+        print(f"Rechner: windows, {platform.system()} {platform.release()}, Python {platform.python_version()}")
+        return 0
+    if not ist_mac():
+        print(f"Rechner: linux, {platform.system()} {platform.release()}, Python {platform.python_version()}")
+        return 0
     daten = erkennen()
     print(json.dumps(daten, ensure_ascii=False, indent=2))
     if kern.echt(args):

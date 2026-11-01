@@ -13,7 +13,7 @@ BEFEHLE = {
     "status": ("bericht", "befehl_status", "Kurzübersicht"),
     "beispiel": ("beispiel", "befehl", "Musterbetrieb anlegen"),
     "takt": ("takt", "befehl", "Postfach, Handy und Wächter abarbeiten"),
-    "rechner": ("rechner", "befehl", "Zeigen, welcher Mac das ist (MacBook oder Dauerrechner)"),
+    "rechner": ("rechner", "befehl", "Zeigen, welches Betriebssystem und welcher Rechner das ist"),
     "tag": ("takt", "befehl_tag", "Downloads und Tagesbericht abarbeiten"),
     "postfach": ("takt", "befehl_postfach", "Nur das Postfach abarbeiten"),
     "handy": ("takt", "befehl_handy", "Nur den Handy-Ordner abarbeiten"),
@@ -76,7 +76,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--vorschau", metavar="DATEI")
     argumente.add_argument("--seit", help="Postfach-Agent: ab JJJJ-MM-TT zurückholen")
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
-    argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt im macOS-Schlüsselbund speichern")
+    argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt speichern (macOS-Schlüsselbund / Windows-Benutzerschutz)")
     argumente.add_argument("--microsoft", metavar="NAME", help="Microsoft-Postfach im Browser anmelden")
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
