@@ -58,20 +58,17 @@ def _task_name(name: str) -> str:
 
 
 def _powershell_befehl(name: str) -> str:
-    uv = shutil.which("uv") or "uv"
+    uv = (shutil.which("uv") or "uv").replace("'", "''")
+    ordner = str(pfad()).replace("'", "''")
     befehle = {
         "takt": "takt --echt", "tag": "tag --echt",
         "monat": "monat --uebergabe --echt", "posten": "monat --zwischenstand --echt; & '{uv}' run belege posten --mail --echt",
         "update": "aktualisieren --automatisch --echt", "moneymoney": "moneymoney --echt",
     }
-    lauf = befehle[name].format(uv=uv.replace("'", "''"))
+    lauf = f"& '{uv}' run belege " + befehle[name].format(uv=uv)
     if name == "monat":
-        lauf = f"if ((Get-Date).Day -ge 3) {{ & '{uv.replace("'", "''")}' run belege {lauf} }}"
-    elif name == "posten":
-        lauf = f"& '{uv.replace("'", "''")}' run belege {lauf}"
-    else:
-        lauf = f"& '{uv.replace("'", "''")}' run belege {lauf}"
-    return f"Set-Location -LiteralPath '{str(pfad()).replace("'", "''")}'; {lauf}"
+        lauf = "if ((Get-Date).Day -ge 3) { " + lauf + " }"
+    return f"Set-Location -LiteralPath '{ordner}'; {lauf}"
 
 
 def windows_xml(name: str) -> str:
