@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 from types import SimpleNamespace
 
 from fpdf import FPDF
@@ -36,7 +37,7 @@ def test_pypdf_liest_text_pdf_ohne_poppler(repo, monkeypatch):
     assert "Rechnung" in erkannt.text
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Quartz und Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Quartz und Vision gibt es nur unter macOS")
 def test_quartz_scan_wird_ohne_poppler_aufrecht_mit_vision_gelesen(repo, monkeypatch):
     pytest.importorskip("Vision")
     png = repo / "bekannter-text.png"
@@ -137,7 +138,7 @@ def test_unbekannte_endung_erreicht_claude_nicht(repo, monkeypatch):
     assert auslesen(p).stufe == "leer"
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Vision gibt es nur unter macOS")
 def test_scan_nimmt_vision_wenn_verfuegbar(repo):
     pytest.importorskip("Vision")
     bild = repo / "scan.png"

@@ -2,6 +2,7 @@ import csv
 import email.policy
 import os
 import sys
+import sys
 from email.parser import BytesParser
 
 import pytest
@@ -83,7 +84,7 @@ def test_kein_beleg_braucht_die_claude_stufe(repo, monkeypatch):
         assert ergebnisse[name].stufe == erwartete_stufe, name
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Vision gibt es nur unter macOS")
 def test_bons_sind_per_vision_mit_summe_lesbar(repo):
     pytest.importorskip("Vision")
     assert befehl(object()) == 0
@@ -94,7 +95,7 @@ def test_bons_sind_per_vision_mit_summe_lesbar(repo):
         assert summe in erkannt.text
 
 
-@pytest.mark.skipif(os.uname().sysname != "Darwin", reason="Vision gibt es nur unter macOS")
+@pytest.mark.skipif(sys.platform != "darwin", reason="Vision gibt es nur unter macOS")
 def test_pixelwerk_scan_ist_per_vision_lesbar(repo):
     pytest.importorskip("Vision")
     assert befehl(object()) == 0

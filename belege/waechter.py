@@ -7,6 +7,7 @@ from email.utils import parseaddr
 from datetime import datetime, timedelta
 
 from . import kern
+from .plattform import ist_windows
 
 
 def regeln() -> list[dict]:
@@ -69,6 +70,10 @@ def _mitteilung(satz: str) -> None:
     Der Satz wird als Argument übergeben, nie in den AppleScript-Text eingesetzt:
     Er stammt mittelbar aus fremden Mails und darf kein Skript werden können.
     """
+    if ist_windows():
+        # Der Text bleibt ein Argument und wird nicht als PowerShell-Code eingesetzt.
+        subprocess.run(["powershell.exe", "-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show($args[0], 'Belege-Wächter')", "--", satz[:200]], capture_output=True)
+        return
     subprocess.run(
         [
             "osascript",

@@ -2,6 +2,16 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.15.0] – 01.11.2026
+
+aktion: Windows-Unterstützung
+
+### Was ist neu für dich
+
+- belege läuft jetzt auch unter Windows: Zeitplan, Statusprüfung, Passwortdialog und die Einrichtung kennen Windows.
+- Verpasste geplante Läufe werden nachgeholt, sobald du dich wieder anmeldest.
+- MoneyMoney bleibt ein Mac-Programm. Unter Windows legst du Kontoauszüge als CSV in den Auszugsordner.
+
 ## [1.14.2] – 30.10.2026
 
 aktion: keine

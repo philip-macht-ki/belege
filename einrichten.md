@@ -1,5 +1,15 @@
 # Belege einrichten Teil 1
 
+## Windows
+
+Claude prüft zuerst `uv run belege rechner`. Dieser Abschnitt gilt nur bei
+Windows: PowerShell nutzen, uv bei Bedarf mit
+`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+und Git über Git for Windows installieren. Pfade mit Backslashes schreiben,
+etwa `C:\Users\Name\Belege`. Die Mac-Anleitung darunter bleibt für macOS
+unverändert. App-Passwörter funktionieren gleich; MoneyMoney entfällt und
+Kontoauszüge werden als CSV in den Auszugsordner gelegt.
+
 Hallo. Heute richten wir nur das Postfach ein: Rechnungen landen danach von
 allein in `~/Belege`. Das kurze Video aus Lektion 0-1 ist freiwillig.
 

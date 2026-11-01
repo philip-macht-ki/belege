@@ -1,5 +1,13 @@
 # Weg B einrichten: eigenes Google-Projekt
 
+## Windows
+
+Claude prüft zuerst `uv run belege rechner`. Die Google-Schritte dieses Dokuments
+sind auf Windows gleich. In PowerShell Pfade mit Backslashes angeben; statt
+`chmod` schützt Windows den Ordner des angemeldeten Benutzers. uv wird bei Bedarf
+mit `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+installiert.
+
 **Nur abarbeiten, wenn die Person ausdrücklich Weg B verlangt hat.** Weg A
 (App-Passwort) ist der Standard und reicht für das Belegsystem. Sag vorher
 einmal: „Weg B dauert 20 bis 30 Minuten und hat mehrere Bestätigungen im

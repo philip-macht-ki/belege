@@ -40,10 +40,11 @@ def repo(tmp_path, monkeypatch):
         (tmp_path / ordner).mkdir(parents=True, exist_ok=True)
     toml = tmp_path / "konfig" / "belege.toml"
     t = toml.read_text(encoding="utf-8")
-    t = t.replace('ordner = "~/Belege"', f'ordner = "{tmp_path / "ablage"}"')
-    t = t.replace('handy_ordner = "~/Belege/Eingang"', f'handy_ordner = "{tmp_path / "handy"}"')
-    t = t.replace('downloads = "~/Downloads"', f'downloads = "{tmp_path / "downloads"}"')
-    t = t.replace('auszuege = "~/Belege/Kontoauszuege"', f'auszuege = "{tmp_path / "auszuege"}"')
+    # TOML benutzt Backslash als Escape; auch unter Windows deshalb Posix-Pfade.
+    t = t.replace('ordner = "~/Belege"', f'ordner = "{(tmp_path / "ablage").as_posix()}"')
+    t = t.replace('handy_ordner = "~/Belege/Eingang"', f'handy_ordner = "{(tmp_path / "handy").as_posix()}"')
+    t = t.replace('downloads = "~/Downloads"', f'downloads = "{(tmp_path / "downloads").as_posix()}"')
+    t = t.replace('auszuege = "~/Belege/Kontoauszuege"', f'auszuege = "{(tmp_path / "auszuege").as_posix()}"')
     # Ab Werk aus (erst Teil 3); die Tests spielen eine fertige Einrichtung durch.
     t = t.replace("downloads_an = false", "downloads_an = true")
     toml.write_text(t, encoding="utf-8")

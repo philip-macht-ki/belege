@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            tests: tests/test_zeitplan.py tests/test_anmelden.py tests/test_einrichten.py tests/test_windows.py
+          - os: windows-latest
+            tests: tests/test_windows.py
+          - os: macos-latest
+            python: "3.11"
+            tests: tests/test_zeitplan.py tests/test_anmelden.py tests/test_einrichten.py tests/test_windows.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python || '3.12' }}
+      - run: python -m compileall -q belege
+        shell: bash
+      - run: uv run pytest -q ${{ matrix.tests }}

@@ -12,6 +12,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .kern import jetzt, konfig, log, pfad
+from .plattform import ist_mac
 from .typen import Text
 
 METAANFAENGE = ("ich kann", "ich benötige", "es wurde kein", "i can't", "i need")
@@ -220,7 +221,7 @@ def _vision_bild(datei: Path) -> str:
 
 def _vision(datei: Path) -> str:
     """Rendert PDF-Seiten und liest sie mit Vision, sonst direkt das Bild."""
-    if os.uname().sysname != "Darwin":
+    if not ist_mac():
         return ""
     with tempfile.TemporaryDirectory() as tmp:
         ordner = Path(tmp)
@@ -342,7 +343,7 @@ def stufen_verfuegbar() -> dict[str, bool]:
     try:
         import Vision  # noqa: F401
 
-        vision = os.uname().sysname == "Darwin"
+        vision = ist_mac()
     except ImportError:
         vision = False
     nicht_ausgeschaltet = os.environ.get("URTEIL_BACKEND") != "ohne"

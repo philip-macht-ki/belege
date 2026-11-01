@@ -53,6 +53,19 @@ def schluesselbund_passwort(name: str) -> str | None:
     `security -w` schreibt das Geheimnis nur in den von uns aufgefangenen
     Standardausgang. Es wird weder protokolliert noch an Aufrufer ausgegeben.
     """
+    from .plattform import ist_windows
+    if ist_windows():
+        datei = kern.pfad("arbeit", "geheim", f"{name}_app_passwort.txt")
+        if not datei.exists():
+            return None
+        try:
+            r = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", "$s=Get-Content -LiteralPath $args[0] | ConvertTo-SecureString; $b=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)}", "--", str(datei)],
+                capture_output=True, text=True, timeout=10,
+            )
+            return r.stdout.rstrip("\n") if r.returncode == 0 and r.stdout else None
+        except (OSError, subprocess.SubprocessError):
+            return None
     try:
         ergebnis = subprocess.run(
             ["security", "find-generic-password", "-s", "belege-postfach", "-a", name, "-w"],

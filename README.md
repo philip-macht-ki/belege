@@ -1,5 +1,15 @@
 # belege
 
+## Mac oder Windows
+
+Starte mit `uv run belege rechner`. Auf macOS folgt die Einrichtung den unten
+stehenden Mac-Schritten. Unter Windows öffne PowerShell, installiere uv bei Bedarf
+mit `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+und Git über Git for Windows. Windows-Pfade verwenden Backslashes; App-Passwörter
+und die übrige Konfiguration bleiben gleich. `belege zeitplan an --echt` legt
+Aufgaben für den aktuellen Benutzer an und holt verpasste Läufe nach. MoneyMoney
+ist Mac-only; CSV-Auszüge werden unter Windows in den Auszugsordner gelegt.
+
 Deine Belege sortieren sich selbst. Rechnungen aus dem Postfach landen mit
 sauberem Namen im richtigen Monatsordner. Handy und Downloads kommen in Teil 3
 dazu. Am Monatsende gleicht das System den Kontoauszug ab, schreibt dir
