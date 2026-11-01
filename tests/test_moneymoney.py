@@ -1,6 +1,7 @@
 """MoneyMoney-Export ohne MoneyMoney: osascript wird ersetzt, `belege monat` liest das Ergebnis."""
 import plistlib
 import shutil
+import pytest
 from argparse import Namespace
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -8,6 +9,12 @@ from pathlib import Path
 from belege import kern, moneymoney, monat, zeitplan
 
 ECHT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _moneymoney_simulation(monkeypatch):
+    """Die Exportlogik wird hier simuliert, auch wenn die Suite auf Windows läuft."""
+    monkeypatch.setattr(moneymoney, "ist_windows", lambda: False)
 
 
 def _args(**werte):

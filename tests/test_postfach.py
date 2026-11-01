@@ -67,6 +67,7 @@ def test_schluesselbund_vor_umgebung(monkeypatch):
     class Antwort:
         returncode = 0
         stdout = "geheim\n"
+    monkeypatch.setattr("belege.plattform.ist_windows", lambda: False)
     monkeypatch.setattr("belege.postfach.subprocess.run", lambda *a, **k: Antwort())
     monkeypatch.setenv("PASSWORT_TEST", "alt")
     assert schluesselbund_passwort("test") == "geheim"
