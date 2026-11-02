@@ -13,7 +13,7 @@ import traceback
 from collections import Counter
 
 from .einrichten import auffrischen as _starter_auffrischen
-from .kern import Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
+from .kern import CloudGesperrt, Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
 
 
 def _weiterreichen(args) -> argparse.Namespace:
@@ -51,7 +51,15 @@ def quelle_abarbeiten(name: str, args) -> list[Ergebnis]:
     """
     verarbeiten = importlib.import_module("belege.verarbeiten")
     funde = _funde(name, args)
-    ergebnisse = [verarbeiten.verarbeite(fund, echt(args)) for fund in funde]
+    ergebnisse = []
+    for fund in funde:
+        try:
+            ergebnisse.append(verarbeiten.verarbeite(fund, echt(args)))
+        except CloudGesperrt as fehler:
+            meldung = str(fehler)
+            log(meldung)
+            ereignis("cloud_gesperrt", meldung, quelle=fund.quelle, datei=fund.name)
+            ergebnisse.append(Ergebnis("cloud_gesperrt", meldung, {"quelle": fund.quelle}))
 
     if name == "postfach":
         quellen = importlib.import_module("belege.quellen")

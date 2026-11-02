@@ -334,7 +334,7 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
             )
             return
         handy.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(datei), str(ziel_pfad))
+        kern.cloud_verschieben(datei, ziel_pfad, beschreibung=f"{datei.name} ablegen")
         ereignis(
             "abgelegt", f"{datei.name} ist ein Beleg und liegt jetzt in {handy}.",
             quelle="dokumente",
@@ -353,7 +353,7 @@ def _verarbeite_datei(datei: Path, index: dict, echt: bool) -> None:
         return
     ziel_pfad = kern.freier_name(ziel_pfad)
     ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(datei, ziel_pfad)
+    kern.cloud_sicher(lambda: shutil.copy2(datei, ziel_pfad), beschreibung=f"{datei.name} ablegen")
     gespeichert = {
         "pfad": str(ziel_pfad.relative_to(ablage_ordner())),
         "art": eintrag["art"],
@@ -448,9 +448,9 @@ def _ablegen_und_merken(fund, ziel_pfad: Path, sha: str, eintrag: dict, text: st
     _speichere(index)
     try:
         if fund.verschieben:
-            shutil.move(str(fund.datei), str(ziel_pfad))
+            kern.cloud_verschieben(fund.datei, ziel_pfad, beschreibung=f"{fund.name} ablegen")
         else:
-            shutil.copy2(fund.datei, ziel_pfad)
+            kern.cloud_sicher(lambda: shutil.copy2(fund.datei, ziel_pfad), beschreibung=f"{fund.name} ablegen")
     except OSError:
         index.pop(sha, None)
         _speichere(index)
@@ -479,6 +479,8 @@ def automatisch(fund, text, sha: str, vertraulich: bool, echt: bool) -> kern.Erg
                              {"pfad": str(ziel_pfad), "status": "dokument"})
     try:
         ziel_pfad = _ablegen_und_merken(fund, ziel_pfad, sha, eintrag, text.text, vertraulich)
+    except kern.CloudGesperrt:
+        raise
     except Exception:
         if vertraulich:
             # Die allgemeine Fehlermeldung nennt den Dateinamen; der bleibt hier draußen.

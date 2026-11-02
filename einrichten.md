@@ -242,6 +242,13 @@ einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die
 Anmeldung läuft immer im Browser dieses Macs; eine Anmeldung per Code auf einer
 fremden Seite gibt es bewusst nicht, das ist ein bekannter Phishing-Weg.
 
+### Wenn der Cloud-Ordner gerade synchronisiert
+
+Die Meldung „Resource deadlock avoided“ oder „Cloud-Ordner gesperrt“ heißt,
+dass Google Drive, iCloud, Dropbox oder OneDrive die Datei gerade abgleicht.
+Du musst nichts tun: Die Datei bleibt erhalten und belege versucht sie beim
+nächsten Lauf erneut abzulegen.
+
 Klappt keiner der beiden Wege (etwa weil niemand Admin-Rechte hat), nimm den
 Rückfall:
 

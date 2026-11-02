@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.16.1] – 02.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Liegt deine Ablage in Google Drive, iCloud, Dropbox oder OneDrive und der Ordner synchronisiert gerade, bricht belege nicht mehr ab. Die Datei wird beim nächsten Lauf abgelegt.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.16.0] – 01.11.2026
 
 aktion: konfig

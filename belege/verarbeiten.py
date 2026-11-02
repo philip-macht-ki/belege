@@ -374,6 +374,11 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         if echt:
             kern.ereignis("fehler", str(fehler), quelle=fund.quelle)
         return kern.Ergebnis("fehler", str(fehler))
+    except kern.CloudGesperrt as fehler:
+        # Sync des Cloud-Ordners hält die Datei fest: kein Fehler, nichts als erledigt merken.
+        if echt:
+            kern.ereignis("cloud_gesperrt", str(fehler), quelle=fund.quelle, datei=fund.name)
+        return kern.Ergebnis("spaeter", str(fehler))
     except Exception as fehler:  # noqa: BLE001
         meldung = f"Konnte {fund.name} nicht verarbeiten: {fehler}"
         if echt:

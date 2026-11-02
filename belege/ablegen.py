@@ -7,6 +7,7 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
+from . import kern
 from .kern import Ergebnis, ablage_ordner, konfig, firma
 from .typen import Einordnung, Fund, Text
 
@@ -83,9 +84,9 @@ def abofalle_ablegen(fund: Fund, grund: str, echt: bool, *, ordner: str = "Vorsi
         return Ergebnis("befund", f"{ordner}: würde unter {pfad} ablegen.", daten)
     pfad.parent.mkdir(parents=True, exist_ok=True)
     if fund.verschieben:
-        shutil.move(str(fund.datei), str(pfad))
+        kern.cloud_verschieben(fund.datei, pfad, beschreibung=f"{fund.name} ablegen")
     else:
-        shutil.copy2(fund.datei, pfad)
+        kern.cloud_sicher(lambda: shutil.copy2(fund.datei, pfad), beschreibung=f"{fund.name} ablegen")
     return Ergebnis("befund", f"{ordner}: unter {pfad} abgelegt. {hinweis}", daten)
 
 
@@ -115,9 +116,9 @@ def ablegen(fund: Fund, e: Einordnung, text: Text, echt: bool) -> Ergebnis:
         return Ergebnis("nichts", f"Würde unter {pfad} ablegen.", daten)
     pfad.parent.mkdir(parents=True, exist_ok=True)
     if fund.verschieben:
-        shutil.move(str(fund.datei), str(pfad))
+        kern.cloud_verschieben(fund.datei, pfad, beschreibung=f"{fund.name} ablegen")
     else:
-        shutil.copy2(fund.datei, pfad)
+        kern.cloud_sicher(lambda: shutil.copy2(fund.datei, pfad), beschreibung=f"{fund.name} ablegen")
     if erechnung:
         sicht_pdf(lesen(pfad), pfad, pfad.with_suffix(".pdf"))
         daten["xml"] = str(pfad)
@@ -144,9 +145,9 @@ def ablegen_befund(fund: Fund, e: Einordnung, punkte: list[str], echt: bool) -> 
         return Ergebnis("befund", f"Befund: würde unter {pfad} ablegen.", daten)
     pfad.parent.mkdir(parents=True, exist_ok=True)
     if fund.verschieben:
-        shutil.move(str(fund.datei), str(pfad))
+        kern.cloud_verschieben(fund.datei, pfad, beschreibung=f"{fund.name} ablegen")
     else:
-        shutil.copy2(fund.datei, pfad)
+        kern.cloud_sicher(lambda: shutil.copy2(fund.datei, pfad), beschreibung=f"{fund.name} ablegen")
     if erechnung:
         from .xrechnung import lesen, sicht_pdf
         sicht_pdf(lesen(pfad), pfad, pfad.with_suffix(".pdf"))

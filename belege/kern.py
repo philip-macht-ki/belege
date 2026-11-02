@@ -7,17 +7,66 @@ from __future__ import annotations
 
 import json
 import os
+import errno
 import socket
 import subprocess
 import tomllib
 import shutil
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path(os.environ.get("BELEGE_ROOT", Path(__file__).resolve().parents[1]))
+
+
+class CloudGesperrt(OSError):
+    """Eine Cloud-Synchronisation hält eine Datei vorübergehend fest."""
+
+    def __init__(self, beschreibung: str, ursache: OSError):
+        self.ursache = ursache
+        super().__init__(f"{beschreibung}: Der Cloud-Ordner hat die Datei gerade gesperrt "
+                         "(Sync läuft). Nichts verloren, der nächste Lauf versucht es erneut.")
+
+
+_CLOUD_SPERREN = {errno.EDEADLK, errno.EAGAIN, errno.EBUSY, errno.ETIMEDOUT}
+
+
+def cloud_sicher(aktion, *, beschreibung: str, versuche: int = 3):
+    """Führt eine Dateioperation trotz kurzzeitiger Cloud-Sperre zuverlässig aus."""
+    letzter_fehler = None
+    for versuch in range(versuche):
+        try:
+            return aktion()
+        except OSError as fehler:
+            if fehler.errno not in _CLOUD_SPERREN:
+                raise
+            letzter_fehler = fehler
+            if versuch + 1 < versuche:
+                time.sleep((1, 3)[min(versuch, 1)])
+    raise CloudGesperrt(beschreibung, letzter_fehler)
+
+
+def cloud_verschieben(quelle: Path, ziel: Path, *, beschreibung: str) -> None:
+    """Verschiebt erst nach vollständiger Kopie, damit die Quelle nicht halb verloren geht."""
+    temporaer = ziel.with_name(f".{ziel.name}.belege-verschieben")
+
+    def kopieren_und_ersetzen() -> None:
+        shutil.copy2(quelle, temporaer)
+        if quelle.stat().st_size != temporaer.stat().st_size:
+            raise OSError(errno.EIO, "Kopie ist unvollständig")
+        os.replace(temporaer, ziel)
+
+    try:
+        cloud_sicher(kopieren_und_ersetzen, beschreibung=beschreibung)
+    finally:
+        try:
+            temporaer.unlink(missing_ok=True)
+        except OSError:
+            pass
+    cloud_sicher(lambda: quelle.unlink(), beschreibung=beschreibung)
 
 
 def _env_laden() -> None:
@@ -164,11 +213,15 @@ def lauf(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 
 def log(zeile: str) -> None:
     """Eine Zeile ins Tagesprotokoll arbeit/logs/<datum>.log und auf den Bildschirm."""
-    t = jetzt()
-    ziel = pfad("arbeit", "logs", f"{t:%Y-%m-%d}.log")
-    ziel.parent.mkdir(parents=True, exist_ok=True)
-    with open(ziel, "a", encoding="utf-8") as f:
-        f.write(f"{t:%H:%M:%S} {zeile}\n")
+    try:
+        t = jetzt()
+        ziel = pfad("arbeit", "logs", f"{t:%Y-%m-%d}.log")
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        with open(ziel, "a", encoding="utf-8") as f:
+            f.write(f"{t:%H:%M:%S} {zeile}\n")
+    except OSError:
+        print(zeile, file=__import__("sys").stderr, flush=True)
+        return
     print(zeile, flush=True)
 
 
