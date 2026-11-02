@@ -59,7 +59,13 @@ def cloud_verschieben(quelle: Path, ziel: Path, *, beschreibung: str) -> None:
             raise OSError(errno.EIO, "Kopie ist unvollständig")
         os.replace(temporaer, ziel)
 
-    cloud_sicher(kopieren_und_ersetzen, beschreibung=beschreibung)
+    try:
+        cloud_sicher(kopieren_und_ersetzen, beschreibung=beschreibung)
+    finally:
+        try:
+            temporaer.unlink(missing_ok=True)
+        except OSError:
+            pass
     cloud_sicher(lambda: quelle.unlink(), beschreibung=beschreibung)
 
 

@@ -84,3 +84,23 @@ def test_takt_macht_nach_cloud_sperre_mit_naechstem_fund_weiter(repo, monkeypatc
     assert not (repo / "arbeit" / "index.json").exists()
     ereignisse = kern.ereignisse()
     assert any(e["art"] == "cloud_gesperrt" for e in ereignisse)
+
+
+
+def test_verarbeite_meldet_cloud_sperre_als_spaeter(monkeypatch, tmp_path):
+    """verarbeite() fängt sonst jede Ausnahme als Fehler ab; die Sperre muss als „später“ durchkommen."""
+    from belege import verarbeiten
+
+    ereignisse = []
+    monkeypatch.setattr(kern, "ereignis", lambda art, text, **daten: ereignisse.append(art))
+
+    def gesperrt(_datei):
+        raise kern.CloudGesperrt("Test ablegen", OSError(errno.EDEADLK, "gesperrt"))
+
+    monkeypatch.setattr(verarbeiten, "_sha", gesperrt)
+    datei = tmp_path / "r.pdf"
+    datei.write_bytes(b"%PDF")
+    fund = Fund(quelle="test", datei=datei, name="r.pdf", eingang=date(2026, 11, 2))
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "spaeter"
+    assert ereignisse == ["cloud_gesperrt"]
