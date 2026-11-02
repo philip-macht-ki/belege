@@ -235,7 +235,7 @@ def test_vertraulich_gescheitert_ohne_dateinamen(repo, weg, monkeypatch):
     def kaputt(*_a, **_k):
         raise OSError("Platte voll")
 
-    monkeypatch.setattr("belege.dokumente.shutil.move", kaputt)
+    monkeypatch.setattr("belege.kern.shutil.copy2", kaputt)
     datei = repo / "handy" / "Befund_Dr_Mueller.pdf"
     datei.write_bytes(b"geheim")
     ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 28), verschieben=True), True)
@@ -251,7 +251,7 @@ def test_scheitert_das_verschieben_bleibt_nichts_im_verzeichnis(repo, weg, monke
     def kaputt(*_a, **_k):
         raise OSError("Platte voll")
 
-    monkeypatch.setattr("belege.dokumente.shutil.move", kaputt)
+    monkeypatch.setattr("belege.kern.shutil.copy2", kaputt)
     datei = repo / "handy" / "vertrag.pdf"
     datei.write_bytes(b"voll")
     ergebnis = verarbeiten.verarbeite(Fund(datei, "handy", datei.name, date(2026, 10, 28), verschieben=True), True)
