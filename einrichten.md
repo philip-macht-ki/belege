@@ -505,3 +505,15 @@ die Konten einzutragen.
 
 Eigene Google-Projekte, weitere Konten und der Postfach-Assistent gehören zu
 Teil 4.
+
+## Drei neue Alltagsbefehle
+
+`uv run belege anfrage DATEI` gleicht eine Mail oder Liste des Steuerbüros trocken mit der Ablage ab. Mit `--echt` kopiert es Treffer in `Anfragen/` und schreibt nur einen Antwortentwurf. `uv run belege regel "Katzenfutter" --privat --echt` merkt eine Stichwortregel; Stichwörter gehen Absenderregeln vor. `uv run belege verfahrensdoku --echt` legt einen unverbindlichen Markdown-Entwurf ab, der mit dem Steuerberater abgestimmt werden muss.
+
+## Intel-Mac
+
+Claude- oder ChatGPT-Abo, IMAP und die Zeitpläne funktionieren auf Intel-Macs. Lokale Modelle sind dort oft langsam; nutze dann Claude oder Codex. Der Agent erkennt den Rechner und schlägt nötige Anpassungen selbst vor.
+
+## Umzug auf einen neuen Rechner
+
+Nimm Ablageordner und `konfig/` mit oder nutze den Migrationsassistenten. App-Passwort beziehungsweise Browser-Anmeldung werden neu eingerichtet, `[rechner] erlaubt` wird auf den neuen Rechner gesetzt, der Zeitplan neu aktiviert und anschließend `uv run belege pruefen` ausgeführt.

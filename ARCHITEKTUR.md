@@ -111,6 +111,7 @@ Personenname bleibt einem Einzelunternehmen zugeordnet.
 <ablage>/<Bereich>/Manuell prüfen/<JJJJ>/<MM>/<JJJJ-MM-TT>_<Lieferant>_<Beschreibung>.<ext>
 <ablage>/Unsortiert/<JJJJ-MM-TT>_<ursprünglicher Name>
 <ablage>/Vorsicht Abofalle/<JJJJ-MM-TT>_<ursprünglicher Name>
+<ablage>/Anfragen/<JJJJ-MM-TT>/                 Kopien für eine Steuerbüro-Nachfrage
 ```
 
 - `<Bereich>` = bei mehreren `[[firma]]` deren dateisicherer `bereich`
@@ -138,6 +139,17 @@ Personenname bleibt einem Einzelunternehmen zugeordnet.
   „zahlbar bis“) sind nie Belegdatum. Liegt das Belegdatum mehr als 90 Tage
   nach dem Eingang (Mail/Datei) oder vor 2000: Eingangsdatum nehmen und
   `sicherheit` höchstens `mittel`.
+- Anfragen des Steuerbüros vergleichen Betrag (±0,01) und Datum (±7 Tage) mit
+  dem Index; Lieferant und Beschreibung entscheiden bei mehreren Kandidaten.
+  Mit `--echt` werden ausschließlich Kopien nach `Anfragen/` gelegt und ein
+  Antwortentwurf geschrieben, niemals eine Mail versandt.
+
+## Feste Stichwortregeln
+
+`[[stichwort]]` in `konfig/regeln.toml` hat `wort`, `bereich` und optional
+`ordner`. Das Wort wird ohne Groß-/Kleinschreibung im Dateinamen und gelesenen
+Belegtext gesucht und hat Vorrang vor `[[absender]]`. Die Vertraulichkeitsweiche
+bleibt davon unberührt.
 
 ## Datentypen (belege/typen.py)
 
