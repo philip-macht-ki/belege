@@ -1,5 +1,6 @@
 """Kleine, nachvollziehbare Stichwortregeln für die Einordnung."""
 from __future__ import annotations
+import json
 from . import kern
 
 
@@ -9,7 +10,8 @@ def befehl(args) -> int:
         print("fehler: Nutze: belege regel STICHWORT --privat|--betrieb [--echt]")
         return 2
     bereich = "privat" if args.privat else "betrieb"
-    eintrag = f'[[stichwort]]\nwort = {wort!r}\nbereich = "{bereich}"\n'
+    # JSON-Zeichenketten sind gültige TOML-Basiszeichenketten, auch mit Anführungszeichen im Wort.
+    eintrag = f'[[stichwort]]\nwort = {json.dumps(wort, ensure_ascii=False)}\nbereich = "{bereich}"\n'
     if not kern.echt(args):
         print("trocken: würde folgende Regel eintragen:\n" + eintrag, end="")
         return 0

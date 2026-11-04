@@ -66,3 +66,15 @@ def test_verfahrensdoku_ohne_geheimnisse(repo):
     text = entwurf()
     assert "Entwurf, keine Rechts- oder Steuerberatung" in text
     assert "nie-ausgeben" not in text
+
+
+def test_anfrage_ganze_betraege_vorjahr_und_kein_blinder_datumstreffer():
+    from datetime import date
+    from belege import anfrage
+    zeilen = anfrage.lesen("Adobe 120 € vom 03.12.\nRechnung 4711\nEUR 80 Hosting")
+    assert [z.betrag for z in zeilen] == [120.0, 80.0]
+    assert anfrage._datum("03.12.", heute=date(2027, 1, 10)) == date(2026, 12, 3)
+    assert anfrage._datum("03.01.", heute=date(2027, 1, 10)) == date(2027, 1, 3)
+    index = {"a": {"pfad": "x.pdf", "datum": "2026-12-04", "betrag": 55.0, "lieferant": "Netzfunk", "beschreibung": ""}}
+    nur_datum = anfrage.Anfrage("03.12.2026 Adobe", date(2026, 12, 3), None, "Adobe")
+    assert anfrage.zuordnen(nur_datum, index)[0] is None

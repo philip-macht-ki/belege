@@ -24,7 +24,9 @@ def _betrag(text: str) -> float | None:
     text = re.sub(r"\b20\d{2}-\d{1,2}-\d{1,2}\b|\b\d{1,2}\.\d{1,2}\.(?:20\d{2})?", "", text)
     treffer = re.search(r"(?<!\d)(?:\d{1,3}(?:\.\d{3})+|\d+)(?:[,.]\d{2})(?!\d)", text)
     if not treffer:
-        return None
+        # Ganze Beträge nur mit Währungszeichen, sonst wäre jede Rechnungsnummer ein Betrag.
+        ganz = re.search(r"(?<!\d)(\d{1,3}(?:\.\d{3})+|\d+)\s*(?:€|EUR)|(?:€|EUR)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?!\d)", text)
+        return float((ganz[1] or ganz[2]).replace(".", "")) if ganz else None
     wert = treffer.group(0)
     return float(wert.replace(".", "").replace(",", ".")) if "," in wert else float(wert)
 
@@ -40,7 +42,9 @@ def _datum(text: str, heute: date | None = None) -> date | None:
         if de:
             return date(int(de[3]), int(de[2]), int(de[1]))
         if kurz:
-            return date(heute.year, int(kurz[2]), int(kurz[1]))
+            # Im Januar fragt das Büro meist nach dem Dezember: ein Datum weit in der Zukunft gehört ins Vorjahr.
+            tag = date(heute.year, int(kurz[2]), int(kurz[1]))
+            return tag.replace(year=heute.year - 1) if tag > heute + timedelta(days=31) else tag
     except ValueError:
         return None
     return None
@@ -75,7 +79,11 @@ def zuordnen(anfrage: Anfrage, index: dict) -> tuple[dict | None, list[dict]]:
         if anfrage.datum and (tag is None or abs((tag - anfrage.datum).days) > 7):
             continue
         namen = " ".join(str(eintrag.get(k, "")) for k in ("lieferant", "beschreibung")).lower()
-        score = sum(w in namen for w in woerter) * 100
+        namenstreffer = sum(w in namen for w in woerter)
+        # Ohne Betrag reicht ein Datum allein nie: im Umkreis von 7 Tagen liegen fast immer fremde Belege.
+        if anfrage.betrag is None and not namenstreffer:
+            continue
+        score = namenstreffer * 100
         score -= abs((tag - anfrage.datum).days) if tag and anfrage.datum else 0
         kandidaten.append((score, eintrag))
     kandidaten.sort(key=lambda paar: paar[0], reverse=True)
