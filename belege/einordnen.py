@@ -124,9 +124,14 @@ def _mailtext(fund: Fund) -> str:
     )
 
 
-def _regel(fund: Fund) -> dict | None:
-    """Findet die erste passende feste Absenderregel."""
+def _regel(fund: Fund, belegtext: str = "") -> dict | None:
+    """Findet zuerst eine Stichwort-, dann eine Absenderregel."""
     suchraum = f"{_mailtext(fund)} {fund.name}".lower()
+    text_und_name = f"{belegtext} {fund.name}".lower()
+    for regel in konfig("regeln").get("stichwort", []):
+        wort = str(regel.get("wort", "")).strip().lower()
+        if wort and wort in text_und_name:
+            return regel
     for regel in konfig("regeln").get("absender", []):
         if str(regel.get("muster", "")).lower() in suchraum:
             return regel
@@ -486,7 +491,7 @@ def einordnen(fund: Fund, text: Text, nur_lokal: bool = False) -> Einordnung:
     Ohne Modell liefert die Rückfallregel immer ein nachvollziehbares, vorsichtiges
     Ergebnis. So bleiben Tests und der lokale Betrieb unabhängig von einem Konto.
     """
-    regel = _regel(fund)
+    regel = _regel(fund, text.text)
     zahlungsname = _zahlungsabwickler(fund)
     firmen_treffer = _firmen_im_text(text.text)
     xml = _aus_xml(fund)

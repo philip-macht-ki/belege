@@ -10,6 +10,11 @@ ausschluss = []
 # art = "eingang"                 # optional: eingang | ausgang | sonstige
 # beschreibung = "Software-Abo"   # optional
 
+# [[stichwort]]
+# wort = "Katzenfutter"           # im Dateinamen oder gelesenen Belegtext
+# bereich = "privat"              # optional: betrieb | privat; vor Absenderregeln
+# ordner = ""                     # optionaler künftiger Hinweis für die Ablage
+
 [zahlungsabwickler]
 # Bei diesen Absendern steht der eigentliche Anbieter im Anzeigenamen.
 domains = ["stripe.com", "paypal.com", "paypal.de", "paddle.com", "lemonsqueezy.com", "fastspring.com", "gumroad.com"]

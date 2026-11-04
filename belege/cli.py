@@ -44,13 +44,16 @@ BEFEHLE = {
     "notfall": ("notfall", "befehl", "Notfallordner erstellen"),
     "aktualisieren": ("update", "befehl", "Verbesserungen sicher einspielen"),
     "aufraeumen": ("postfach_agent", "befehl", "Posteingang nach deinen Regeln aufräumen"),
+    "anfrage": ("anfrage", "befehl", "Nachfrage des Steuerbüros gegen abgelegte Belege prüfen"),
+    "regel": ("regel", "befehl", "Feste Privat- oder Firmenregel nach Stichwort merken"),
+    "verfahrensdoku": ("verfahrensdoku", "befehl", "Entwurf der Verfahrensdokumentation erstellen"),
 }
 
 
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
 OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "hibiscus", "ablegen", "dokumente", "jahr", "posten", "pruefung", "aufraeumen"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "hibiscus", "ablegen", "dokumente", "jahr", "posten", "pruefung", "aufraeumen", "anfrage", "regel", "verfahrensdoku"}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -82,6 +85,9 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
     argumente.add_argument("--automatisch", action="store_true", help="Nur Updates ohne eigenen Schritt einspielen")
+    argumente.add_argument("--postfach", action="store_true", help="Bei fehlenden Belegen auf die Postfach-Nachsuche hinweisen")
+    argumente.add_argument("--privat", action="store_true", help="Stichwort als privat merken")
+    argumente.add_argument("--betrieb", action="store_true", help="Stichwort als Betriebsausgabe merken")
     return argumente
 
 

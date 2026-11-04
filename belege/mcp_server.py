@@ -132,6 +132,29 @@ def belege_suchen(
     return {"anzahl": len(treffer), "summe": summe, "treffer": treffer[: min(max, 50)]}
 
 
+def belege_anfrage(text: str) -> dict:
+    """Prüft einen kopierten Text vom Steuerbüro trocken gegen abgelegte Belege."""
+    from .anfrage import bericht
+    zeilen, markdown = bericht(text)
+    return {"bericht": markdown, "gefunden": sum(fund is not None for _, fund, _ in zeilen), "anzahl": len(zeilen)}
+
+
+def stichwort_regel(wort: str, bereich: str = "privat", echt: bool = False) -> dict:
+    """Merkt eine Stichwortregel nur mit echt=true, sonst zeigt sie den Entwurf."""
+    if bereich not in {"privat", "betrieb"}:
+        raise ValueError("bereich muss privat oder betrieb sein")
+    if not echt:
+        return {"trocken": True, "hinweis": f"Zum Merken: stichwort_regel(wort={wort!r}, bereich={bereich!r}, echt=true)"}
+    from types import SimpleNamespace
+    from .regel import befehl
+    import io
+    from contextlib import redirect_stdout
+    ausgabe = io.StringIO()
+    with redirect_stdout(ausgabe):
+        code = befehl(SimpleNamespace(ziel=[wort], privat=bereich == "privat", betrieb=bereich == "betrieb", echt=True))
+    return {"trocken": False, "status": "ok" if code == 0 else "fehler", "meldung": ausgabe.getvalue().strip()}
+
+
 def fristen(tage: int = 365) -> dict:
     """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
     from .dokumente import fristen_liste
@@ -246,6 +269,8 @@ def befehl(args) -> int:
             "betrag_ab, betrag_bis, max (höchstens 50). Gibt Anzahl, Summe aller Treffer "
             "und Pfade zurück. Beispiel: belege_suchen(abfrage='Telekom', von='2026-01-01').",
         ),
+        (belege_anfrage, "Prüft einen kopierten Text mit Belegnachfragen trocken. Parameter: text."),
+        (stichwort_regel, "Erstellt den Entwurf einer Stichwortregel. Parameter: wort, bereich."),
         (
             fristen,
             "Zeigt kommende Fristen aus Verträgen und Versicherungen sowie alle, die "

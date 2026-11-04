@@ -57,8 +57,19 @@ Dann sag einfach deinem Claude: „Update“. Du kannst den automatischen Check 
 | `belege mcp` | Postfach-Server, damit Claude in deinen Mails und abgelegten Belegen suchen und Entwürfe schreiben kann |
 | `belege pruefen` | Selbsttest mit Ampel |
 | `belege aktualisieren` | zeigt neue Verbesserungen; mit `--echt` spielt es sie ein |
+| `belege anfrage DATEI` | gleicht eine Nachfrage des Steuerbüros trocken mit abgelegten Belegen ab; mit `--echt` kopiert es Treffer und schreibt einen Antwortentwurf |
+| `belege regel "Katzenfutter" --privat` | zeigt eine Stichwortregel; erst `--echt` merkt sie sich |
+| `belege verfahrensdoku` | zeigt einen unverbindlichen Entwurf; mit `--echt` wird er in der Ablage gespeichert |
 
 Ohne `--echt` zeigt jeder Befehl nur, was er täte.
+
+## Intel-Mac
+
+Claude- oder ChatGPT-Abo, IMAP und der Zeitplan funktionieren auch auf Intel-Macs. Lokale Modelle sind dort meist langsam oder nicht sinnvoll; nutze dafür Claude oder Codex. Der Agent prüft den Rechner und schlägt passende Anpassungen selbst vor.
+
+## Umzug auf einen neuen Rechner
+
+Nimm Ablageordner und `konfig/` mit oder nutze den Migrationsassistenten. Richte App-Passwort oder Browser-Anmeldung erneut ein, passe `[rechner] erlaubt` an, aktiviere den Zeitplan erneut und führe `uv run belege pruefen` aus.
 
 ## Offene Posten und Konten
 

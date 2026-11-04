@@ -2,6 +2,16 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.17.0] – 04.11.2026
+
+### Was ist neu für dich
+
+- Nachfragen des Steuerbüros abgleichen, Stichwortregeln und einen Entwurf der Verfahrensdokumentation ergänzt.
+
+### Musst du etwas tun?
+
+Nein. Neue Regeln und Dokumente entstehen nur nach deinem ausdrücklichen Befehl mit `--echt`.
+
 ## [1.16.2] – 04.11.2026
 
 aktion: keine
