@@ -2,6 +2,21 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.16.2] – 04.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Eingescannte Rechnungen werden jetzt in voller Schärfe gelesen. Vorher hat belege auf neueren Macs nur ein kleines, unscharfes Bild der Seite an die Texterkennung gegeben; solche Scans landeten dann ohne Datum in „Unsortiert“.
+- Steht das Datum auf einem Scan als „12. 10. 2026“ mit Leerzeichen, wird es trotzdem erkannt.
+- belege legt jetzt selbst fest, mit welcher Python-Version es läuft. Die Einrichtung hängt nicht mehr, wenn auf deinem Mac eine sehr neue Python-Version installiert ist.
+- Im Fehlerbericht steht die Versionsnummer wieder lesbar da.
+
+### Musst du etwas tun?
+
+Nein. Beim nächsten Update richtet belege seine Umgebung einmal neu ein, das dauert ein paar Sekunden länger als sonst.
+
 ## [1.16.1] – 02.11.2026
 
 aktion: keine

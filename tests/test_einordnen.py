@@ -105,3 +105,10 @@ def test_beschreibung_mit_akzenten_wird_bereinigt_statt_verworfen():
     assert pruefe(antwort) is None and antwort["beschreibung"] == "Büro-Möbel"
     antwort["beschreibung"] = "  ---  "
     assert pruefe(antwort) is not None
+
+
+def test_datum_mit_leerzeichen_aus_texterkennung(repo):
+    fund = _fund(repo)
+    text = "Pixelwerk Software GmbH\nRechnungsdatum\n12. 10. 2026\nZahlbar bis 26.10.2026\nBrutto: 59,50 €"
+    ergebnis = einordnen(fund, _text(text))
+    assert ergebnis.datum == date(2026, 10, 12)

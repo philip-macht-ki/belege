@@ -153,3 +153,20 @@ def test_scan_nimmt_vision_wenn_verfuegbar(repo):
     doc.image(str(bild), x=10, y=10, w=190)
     doc.output(str(pdf))
     assert auslesen(pdf).stufe == "vision"
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Quartz gibt es nur unter macOS")
+def test_quartz_rendert_die_seite_in_voller_aufloesung(repo):
+    """Die Seite muss den ganzen 200-dpi-Puffer füllen, nicht nur die 72-dpi-Ecke."""
+    pytest.importorskip("Quartz")
+    pdf = repo / "voll.pdf"
+    doc = FPDF(unit="pt", format=(360, 360))
+    doc.add_page()
+    doc.set_fill_color(0, 0, 0)
+    doc.rect(0, 0, 360, 360, style="F")
+    doc.output(str(pdf))
+    bilder = text._pdf_bilder_quartz(pdf, repo)
+    seite = Image.open(bilder[0]).convert("L")
+    assert seite.size == (1000, 1000)
+    # Vorher blieb alles außer einer 360-Pixel-Ecke weiß.
+    assert seite.getpixel((900, 900)) < 50 and seite.getpixel((100, 100)) < 50

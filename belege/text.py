@@ -183,8 +183,11 @@ def _pdf_bilder_quartz(datei: Path, ordner: Path, dpi: int = 200, seiten: int = 
             # Der Bitmap-Puffer wird von Pillow zeilenweise von oben gelesen.
             # Die frühere eigene Umkehrung der Y-Achse drehte ihn dadurch auf den
             # Kopf. Quartz bildet MediaBox und den /Rotate-Eintrag korrekt ab.
+            # CGPDFPageGetDrawingTransform verkleinert nur und vergrößert nie: Ohne
+            # eigene Skalierung landet die Seite in 72 dpi in der Ecke des Puffers.
+            Quartz.CGContextScaleCTM(kontext, breite / seitenbreite, hoehe / seitenhoehe)
             transformation = Quartz.CGPDFPageGetDrawingTransform(
-                seite, Quartz.kCGPDFMediaBox, Quartz.CGRectMake(0, 0, breite, hoehe), 0, True,
+                seite, Quartz.kCGPDFMediaBox, Quartz.CGRectMake(0, 0, seitenbreite, seitenhoehe), 0, True,
             )
             Quartz.CGContextConcatCTM(kontext, transformation)
             Quartz.CGContextDrawPDFPage(kontext, seite)
