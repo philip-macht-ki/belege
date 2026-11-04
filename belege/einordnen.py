@@ -138,7 +138,8 @@ def _datum(wert: str) -> date | None:
     wert = wert.strip()
     for muster, gruppe in (
         (r"(20\d{2})-(\d{2})-(\d{2})", "iso"),
-        (r"(\d{1,2})\.(\d{1,2})\.(20\d{2})", "de"),
+        # Texterkennung aus Scans setzt gern Leerzeichen um die Punkte: "12. 10. 2026".
+        (r"(?<!\d)(\d{1,2}) ?\. ?(\d{1,2}) ?\. ?(20\d{2})(?!\d)", "de"),
     ):
         treffer = re.search(muster, wert)
         if not treffer:

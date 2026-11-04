@@ -77,11 +77,13 @@ def befehl(args) -> int:
     # Kein Aufruf von pruefen: Dieser Bericht darf weder Netz noch Token oder Geheimnisse berühren.
     logauszug = _letzte_datei("logs", "*.log")
     status = _letzte_datei("", "status*.txt")
-    text = (f"# Fehlerbericht\n\nBelege-Version: {__version__}\n\nSystem: {_system()}\n\n"
+    # Die Versionsnummer kommt erst nach dem Schwärzen hinein: "1.16.1" sähe sonst wie ein Betrag aus.
+    text = ("# Fehlerbericht\n\nBelege-Version: @@VERSION@@\n\n"
+            f"System: {_system()}\n\n"
             f"Konten: {_konfig_struktur()}\n\n## Letzter gespeicherter Status\n\n{status}\n\n"
             f"## Letzte Logzeilen\n\n{logauszug}\n\n"
             f"Schick diesen Text an {SUPPORT_ADRESSE}.")
-    text = schwaerzen(text)
+    text = schwaerzen(text).replace("@@VERSION@@", __version__)
     ziel = kern.pfad("arbeit", f"fehlerbericht-{kern.jetzt():%Y-%m-%d-%H%M}.md")
     ziel.parent.mkdir(parents=True, exist_ok=True)
     ziel.write_text(text, encoding="utf-8")

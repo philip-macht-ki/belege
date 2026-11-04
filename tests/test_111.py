@@ -123,3 +123,11 @@ def test_schwaerzen_oauth_werte_als_json():
 
     text = schwaerzen('{"code": "4/0AQlEd8", \'state\': \'k9Lm2\', "id_token": "eyJhbGciOi"}')
     assert "0AQlEd8" not in text and "k9Lm2" not in text and "eyJhbGciOi" not in text
+
+
+def test_fehlerbericht_zeigt_die_versionsnummer_ungeschwaerzt(repo, monkeypatch, capsys):
+    from belege import __version__, fehlerbericht
+
+    monkeypatch.setattr(fehlerbericht, "_system", lambda: "Testsystem")
+    fehlerbericht.befehl(None)
+    assert f"Belege-Version: {__version__}\n" in capsys.readouterr().out
