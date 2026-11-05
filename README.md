@@ -47,7 +47,8 @@ Dann sag einfach deinem Claude: „Update“. Du kannst den automatischen Check 
 | Befehl | Was passiert |
 |---|---|
 | `belege takt` | Postfach abarbeiten, Wächter über neue Mails |
-| `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Tagesbericht an dich |
+| `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Unsortiert nachsortieren, Tagesbericht an dich |
+| `belege nachsortieren` | Unsortiert ein zweites Mal ansehen: Logos und Werbung nach `Unsortiert/Zu löschen`, Sicheres ablegen |
 | `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege moneymoney` | optional: Kontoumsätze aus MoneyMoney als CSV holen (`einrichten_moneymoney.md`) |
 | `belege hibiscus` | optional: Kontoumsätze aus Hibiscus/Jameica als CSV holen (`einrichten_hibiscus.md`) |

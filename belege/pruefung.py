@@ -114,7 +114,8 @@ def _rechnungsnummer_vorhanden(text: str, xml: dict | None) -> bool:
     if str((xml or {}).get("nummer", "")).strip():
         return True
     # Manche Layouts nennen nur den Titel und setzen die Nummer direkt dahinter oder darunter.
-    titel_nummer = re.compile(r"\b(?:rechnung|invoice|receipt|quittung|beleg)\b[ \t:#.]*"
+    # Ausländische Rechnungstitel (Philips Belegcheck, 05.11.2026: litauisch „Sąskaita“).
+    titel_nummer = re.compile(r"\b(?:rechnung|invoice|receipt|quittung|beleg|s[aą]skaita|faktura|factura|fattura|facture)\b[ \t:#.]*"
                               r"(?:\n[ \t]*)?([A-Z0-9][A-Z0-9./-]*)", re.I)
     datum = re.compile(r"(?:\d{1,2}[./-]\d{1,2}[./-](?:\d{2}|\d{4})|"
                        r"\d{4}[./-]\d{1,2}[./-]\d{1,2})$")

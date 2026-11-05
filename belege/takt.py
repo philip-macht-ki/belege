@@ -135,6 +135,9 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
                 return "aus", []
             code = importlib.import_module("belege.postfach_agent").laufen(_weiterreichen(args), nur_faellig=True)
             return ("ok" if not code else f"Exit {code}"), []
+        if name == "nachsortieren":
+            ergebnisse = importlib.import_module("belege.nachsortieren").lauf(echt(args))
+            return _zusammenfassung(ergebnisse), ergebnisse
         if name == "bericht":
             code = importlib.import_module("belege.bericht").befehl(_weiterreichen(args))
             return ("ok" if not code else f"Exit {code}"), []
@@ -218,6 +221,6 @@ def befehl(args) -> int:
 
 
 def befehl_tag(args) -> int:
-    """`belege tag`: Downloads-Ordner, dann Tagesbericht."""
-    _lauf(args, ("downloads", "bericht"), "tag")
+    """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, dann Tagesbericht."""
+    _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
     return 0

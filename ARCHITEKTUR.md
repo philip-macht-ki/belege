@@ -277,7 +277,7 @@ Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger(
 | `posten.py` | `belege posten [--mail [--echt] | --antworten]` |
 | `waechter.py` | `belege waechter` |
 | `bericht.py` | `belege bericht` (Tagesbericht per Mail an sich selbst), `belege status` |
-| `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Bericht) |
+| `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Nachsortieren + Bericht) |
 | `mcp_server.py` | `belege mcp` (lokaler Postfach-Server über stdio) |
 | `zeitplan.py` | `belege zeitplan [an|aus|zeigen]` |
 | `moneymoney.py` | optional: `belege moneymoney [konten] [--echt] [--testordner PFAD]`, Konfig `konfig/moneymoney.toml` |
@@ -587,7 +587,25 @@ Konsole plus Zähler aus dem Index.
   Dauerrechner, Modell, Chip, RAM, freien Platz, Netzteil; `--echt` schreibt
   `arbeit/rechner.json`. Die Rechner-Sperre vergleicht mit `hostname -s` und
   `scutil --get LocalHostName` (der Hostname wechselt je nach WLAN).
-- `belege tag --echt`: Downloads, Bericht.
+- `belege tag --echt`: Downloads, Nachsortieren, Bericht.
+- **Nachsortieren** (`belege nachsortieren [--echt]`, belege/nachsortieren.py, ab 1.19.0,
+  Schalter `[nachsortieren].an`, Standard `true`): je Datei direkt in
+  `<ablage>/Unsortiert/` und `<ablage>/<Dokumente>/Unsortiert/` (Unterordner bleiben draußen):
+  1. Bild unter 20 KB oder Bild mit weniger als 25 echten Wörtern und ohne Belegwort
+     (Texterkennung nur lokal, Vision/Tesseract, nie die Claude-Stufe) → `Mailbild`;
+     Text mit mindestens zwei Werbezeichen und ohne Rechnungs-/Kunden-/Vertragsnummer,
+     IBAN, „zu zahlen“, „fällig“ → `Werbung`. Beides wird nach
+     `<ablage>/Unsortiert/Zu löschen/` **verschoben**, nie gelöscht; Ereignis `aussortiert`,
+     der Tagesbericht listet es und bittet, den Ordner selbst zu leeren.
+  2. Sonst `verarbeite(fund, echt=False, nachsortieren=True)` mit Quelle `handy`
+     (Datum und Name aus dem Vorsatz `<JJJJ-MM-TT>_`). `nachsortieren=True` heißt: ein
+     Indexeintrag mit `status="unsortiert"` bzw. ein Dokument mit `abgelegt=false` zählt
+     nicht als Dublette, und bei `firma="unklar"` gewinnt die Firma, bei der derselbe
+     Lieferant (über `sauber()`) bisher ausschließlich abgelegt ist; zwei Firmen → bleibt unklar.
+  3. Läge das Ziel außerhalb von Unsortiert, folgt derselbe Aufruf mit `echt=True`
+     (Urteil aus dem Cache). Sonst bleibt die Datei liegen; Ereignis `unsortiert`
+     („Wohin gehört es?“) genau einmal je Fingerabdruck (`gesehen.json`
+     `nachsortieren_gemeldet`).
 - `belege monat --uebergabe --echt`: täglich ab dem 3. um 09:00 für den
   Vormonat; die Übergabe-Sperre lässt sie je Monat nur einmal zu.
 - launchd: `de.belege.takt` (alle `[takt].minuten` × 60 s, Standard 15),

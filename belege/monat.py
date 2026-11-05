@@ -169,10 +169,24 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
                     "originalbetrag": _betrag(zeile[spalten["originalbetrag"]])
                     if spalten.get("originalbetrag") and zeile.get(spalten["originalbetrag"], "").strip() else None,
                 }
+            if buchung["originalbetrag"] is None:
+                buchung["originalbetrag"] = _originalbetrag_aus_text(f'{buchung["name"]} {buchung["zweck"]}')
             if konto_spalte and zeile.get(konto_spalte, "").strip():
                 buchung["konto"] = zeile[konto_spalte].strip()
             ergebnis.append(buchung)
     return ergebnis, karte
+
+
+ORIGINAL_IM_TEXT = re.compile(r"(?:originalbetrag|original amount|betrag in fremdw(?:ä|ae)hrung)\s*:?\s*"
+                              r"(-?\s*\d[\d.,]*)\s*([A-Z]{3})\b", re.I)
+
+
+def _originalbetrag_aus_text(text: str) -> float | None:
+    """Fremdwährung ohne eigene Spalte: Banken schreiben „Originalbetrag: -25,00 USD“ in den Buchungstext."""
+    treffer = ORIGINAL_IM_TEXT.search(text)
+    if not treffer or treffer.group(2).upper() == "EUR":
+        return None
+    return _betrag(treffer.group(1))
 
 
 def _kreditkarte(kopf: list[str], spalten: dict) -> bool:
