@@ -67,7 +67,7 @@ arbeit/                   Laufzeit, nie im Git
   postfach-vorschlag.md   trocken erzeugte Gruppen und Regelvorschläge
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600
   ereignisse/<datum>.jsonl  eine Zeile je Ereignis, siehe unten
-  monat/<JJJJ-MM>/        abgleich.json, fehlt_noch.csv, fehlt_noch.md, pruefen.md, klaerung.md, paket/
+  monat/<JJJJ-MM>/        abgleich.json, fehlt_noch.csv, fehlt_noch.md, pruefen.md, klaerung.md, belegcheck.txt, paket/
   logs/<datum>.log
   urteile.jsonl, cache/urteile/<hash>.json
   pruefung_anbieter.json  Stand der Aufräumliste: erste_liste und Anbieter mit Status, Weg, Problemen, Zähler, Daten und Entwurfsmerker
@@ -518,6 +518,16 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   vermuteter Lieferant), `fehlt_noch.md`, `pruefen.md`, `klaerung.md` (je
   offene Buchung eine Zeile „Was ist das?“ zum Ausfüllen, für den
   Steuerberater), `abgleich.json`.
+- Monatsmail (`belege/monatsmail.py`): Jeder Lauf schreibt
+  `arbeit/monat/<JJJJ-MM>/belegcheck.txt`, eine lesbare Zusammenfassung aller
+  Firmen: Titel „Belegcheck <Monat> <Jahr>“, Stand und Zahl fehlender Belege,
+  je Firma „FIRMA (n fehlen)“ mit einer Zeile je Lieferant (Name gekürzt, Summe,
+  Datum oder „n Abbuchungen von bis“, wer den Beleg holt), dann „Liegt im
+  falschen Monatsordner“, „Fehlende Kontoauszüge“ (aus `arbeit/konten.json`),
+  „Was zu tun ist“ und klein „Für Claude/Technik“ mit dem Pfad der Dateien.
+  Keine Tabellen. Gesendet wird sie nur im geplanten Lauf
+  (`--uebergabe --echt`, nie mit `--zwischenstand`) an `[bericht].an`, einmal
+  je Monat (`gesehen["monatsmail"][<JJJJ-MM>]`).
 - `--uebergabe`: Paket aus allen Belegen des Monats (Betrieb), Bilder zu PDF
   umgewandelt, XML dazu, plus `fehlt_noch.md` und `klaerung.md`.
   `[uebergabe].weg = "mail"` → `senden()` an `[uebergabe].adresse`;

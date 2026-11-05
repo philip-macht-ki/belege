@@ -372,6 +372,9 @@ ausdrücklichen Ja mit `--echt`.
    `mahnungen.md`. Fehlende Belege sucht `monat` selbst in Postfach, Downloads,
    Eingängen und Scan-Ordner. Die Klärungsliste geht Claude Zeile für Zeile mit
    der Person durch und trägt ihre Antworten ein.
+   Daneben entsteht `belegcheck.txt`, die lesbare Monatsmail. Sie geht im
+   geplanten Monatslauf einmal je Monat an `[bericht].an`. Fragt die Person nach
+   dem Monat, zeigt Claude diese Datei statt der Tabellen.
    **Zahlt die Person über PayPal**, fragt Claude das früh: Viele Anbieter
    (Canva, Dropbox, Google, Patreon, HP …) schicken dann keine eigene Rechnung,
    im Postfach landet nur „Beleg für Ihre Zahlung an …“ von PayPal. Die

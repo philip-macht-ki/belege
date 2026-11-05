@@ -6,7 +6,7 @@ import csv
 import os
 from datetime import datetime, timedelta
 
-from belege import kern, monat
+from belege import kern, monat, monatsmail
 
 
 def _args(**werte):
@@ -377,3 +377,58 @@ def test_nachsuche_liest_jede_datei_nur_einmal_je_lauf(repo, monkeypatch):
     assert sorted(gelesen) == ["scan-1.pdf", "scan-2.pdf"]
     monat._nachsuche(daten, _args())
     assert len(gelesen) == 4  # ein neuer Lauf liest frisch
+
+
+
+def test_text_gruppiert_nach_lieferant_und_nennt_den_weg(repo):
+    daten = [
+        {"datum": "2026-10-02", "betrag": -12.5, "name": "Pixelwerk GmbH  DE12 3456 7890 1234 5678 90", "status": "fehlt"},
+        {"datum": "2026-10-20", "betrag": -7.5, "name": "Pixelwerk GmbH", "status": "fehlt"},
+        {"datum": "2026-10-05", "betrag": -1234.0, "name": "Stadtwerke", "status": "abschlag"},
+        {"datum": "2026-10-07", "betrag": -40.0, "name": "Druckerei", "status": "gefunden"},
+        {"datum": "2026-10-09", "betrag": -9.9, "name": "Zwei", "status": "pruefen", "hinweis": "Nachsuche mehrdeutig: mehrere passende Funde"},
+        {"datum": "2026-10-09", "betrag": -50.0, "name": "Bank", "status": "zugeordnet"},
+    ]
+    index = {"x": {"datum": "2026-10-30", "status": "abgelegt", "pfad": "Betrieb/2026/11/Eingang/beleg.pdf"}}
+    text = monatsmail.text("2026-10", [("Muster GmbH", daten)], index)
+    zeilen = text.splitlines()
+    assert zeilen[0] == "Belegcheck Oktober 2026"
+    assert "Es fehlen 5 Belege." in zeilen[2]
+    assert "MUSTER GMBH (5 fehlen)" in text
+    assert "• Pixelwerk GmbH: 20,00 €, 2 Abbuchungen 02.10. bis 20.10. · nicht im Postfach gefunden" in text
+    assert "• Stadtwerke: 1.234,00 €, 05.10. · kommt vom Versorger (Abschlagsplan oder Jahresrechnung fehlt)" in text
+    assert "Claude legt ihn ab" in text and "mehrere passende Funde (Bitte prüfen)" in text
+    assert "Liegt im falschen Monatsordner" in text and "beleg.pdf (Belegdatum 30.10.2026, liegt in 2026/11)" in text
+    assert "Fehlende Kontoauszüge: keine" in text
+    assert "„Hol die fehlenden Belege“" in text
+    assert text.rstrip().endswith("abgleich.json)")
+    assert "|" not in text and "DE12" not in text
+
+
+def test_ohne_offene_posten_kurz(repo):
+    text = monatsmail.text("2026-10", [("Muster GmbH", [])], {})
+    assert "Zu allen Abbuchungen liegt ein Beleg vor." in text
+    assert "MUSTER GMBH" not in text
+
+
+def test_monatslauf_schreibt_datei_und_sendet_einmal(repo, monkeypatch):
+    monat_wert = _monat_mit_belegen(repo)
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden",
+                        lambda an, betreff, text, *a, **k: gesendet.append((an, betreff, text)) or kern.Ergebnis("ok"))
+    monkeypatch.setattr("belege.posten._zieladresse", lambda: "ich@example.com")
+
+    monat.befehl(_args(monat=monat_wert, uebergabe=True))
+    assert (repo / "arbeit" / "monat" / monat_wert / "belegcheck.txt").exists()
+    assert not [g for g in gesendet if g[1].startswith("Belegcheck")]
+
+    monat.befehl(_args(monat=monat_wert, echt=True))
+    assert not [g for g in gesendet if g[1].startswith("Belegcheck")]
+
+    monat.befehl(_args(monat=monat_wert, uebergabe=True, echt=True))
+    mails = [g for g in gesendet if g[1].startswith("Belegcheck")]
+    assert len(mails) == 1 and mails[0][0] == "ich@example.com"
+    assert "Kopierzentrum Schnell & Co. KG: 34,00 €" in mails[0][2]
+
+    monat.befehl(_args(monat=monat_wert, uebergabe=True, echt=True))
+    assert len([g for g in gesendet if g[1].startswith("Belegcheck")]) == 1

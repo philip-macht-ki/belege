@@ -12,6 +12,15 @@ Vertrag zwischen den Teilen: `ARCHITEKTUR.md`. Wer ein Format ändert, ändert e
 - `.env` und `arbeit/geheim/` nie lesen, ausgeben oder kopieren.
 - Nach jeder Änderung: `uv run pytest -q`.
 
+## Monatsbericht
+
+Fragt die Person nach dem Monat oder fehlenden Belegen, zeig ihr
+`arbeit/monat/<JJJJ-MM>/belegcheck.txt` (dieselbe Fassung wie die Monatsmail),
+nicht `abgleich.json` oder Tabellen. Sagt sie „Hol die fehlenden Belege“:
+`uv run belege monat --monat JJJJ-MM --anfragen --echt` legt eindeutige Funde ab
+und schreibt Anfragen an Lieferanten nur als Entwurf. Danach in zwei, drei
+Sätzen sagen, was jetzt da ist und was offen bleibt.
+
 ## Wenn etwas nicht läuft
 
 `uv run belege pruefen` → `uv run belege status` → `arbeit/logs/<datum>.log` → `arbeit/urteile.jsonl`.
