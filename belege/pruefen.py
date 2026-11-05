@@ -1,7 +1,7 @@
 """Ampeltest für die Belegablage."""
 
 from __future__ import annotations
-import json, os, re, shutil, stat, subprocess, sys
+import json, os, platform, re, shutil, stat, subprocess, sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
@@ -36,6 +36,13 @@ def _doppelordner(wurzel: Path) -> list[str]:
         if ordner.is_dir() and m and (ordner.parent / m.group(1)).is_dir():
             funde.append(str(ordner.relative_to(wurzel)))
     return sorted(funde)
+
+
+def _poppler_hinweis() -> str:
+    """Nennt für Intel-Macs den Paketweg ohne Homebrew-Abhängigkeit."""
+    if sys.platform == "darwin" and platform.machine() == "x86_64":
+        return "Sag deinem Claude: Installiere poppler über pixi (conda-forge)."
+    return "Sag deinem Claude: Installiere poppler mit Homebrew."
 
 
 def _imap(k):
@@ -145,11 +152,12 @@ def befehl(args) -> int:
         z("GRUEN", f"Urteil {backend}: keine Zeitplan-CLI nötig")
     elif backend == "lokal":
         z("GRUEN", "Ollama läuft im Zeitplan über HTTP")
+    poppler_hinweis = _poppler_hinweis()
     for tool in ("pdftotext", "pdftoppm"):
         z(
             "GRUEN" if shutil.which(tool) else "GELB",
             f"{tool} verfügbar" if shutil.which(tool) else f"{tool} fehlt",
-            "brew install poppler, sag deinem Claude: Installiere poppler",
+            poppler_hinweis,
         )
     try:
         from .text import stufen_verfuegbar

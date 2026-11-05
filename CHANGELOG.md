@@ -1,7 +1,5 @@
 # Änderungen für dich
 
-Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
-
 ## [1.19.0] – 05.11.2026
 
 aktion: keine
@@ -17,6 +15,14 @@ aktion: keine
 ### Musst du etwas tun?
 
 Nein. Abschalten mit `[nachsortieren] an = false` in `konfig/belege.toml`. Von Hand: `uv run belege nachsortieren` zeigt, was passieren würde.
+
+## [1.18.1] – 05.11.2026
+
+### Was ist neu für dich
+
+- Intel-Macs bekommen bei fehlendem Poppler einen passenden Hinweis, und Papier-Scans bleiben nach einem Trockenlauf für den echten Lauf erhalten. Eigene Belege-Berichte werden nicht mehr als Rechnung gelesen. Danke an einen Kunden für die Hinweise.
+
+Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
 ## [1.18.0] – 05.11.2026
 
