@@ -14,7 +14,8 @@ Läuft täglich im Lauf `belege tag` vor dem Bericht und von Hand als
 3. Was unsicher bleibt, bleibt liegen und steht einmal im Tagesbericht unter
    „Bitte ansehen“.
 
-Bilder werden nur lokal gelesen (Apple Vision, Tesseract), nie in der Cloud.
+Die Prüfung auf Mailbild und Werbung liest Bilder nur lokal (Apple Vision,
+Tesseract), nie über die Claude-Stufe. Danach gelten die Regeln des Belegwegs.
 """
 from __future__ import annotations
 
@@ -71,11 +72,15 @@ def _bildtext(datei: Path) -> str:
     return gelesen
 
 
-def mailbild(datei: Path, text: str | None = None) -> str:
-    """Grund, wenn die Datei ein Bild ohne eigenen Inhalt ist, sonst ''."""
+def _ist_bild(datei: Path) -> bool:
     from .text import BILDENDUNGEN
 
-    if datei.suffix.lower() not in BILDENDUNGEN | {".gif", ".webp"}:
+    return datei.suffix.lower() in BILDENDUNGEN | {".gif", ".webp"}
+
+
+def mailbild(datei: Path, text: str | None = None) -> str:
+    """Grund, wenn die Datei ein Bild ohne eigenen Inhalt ist, sonst ''."""
+    if not _ist_bild(datei):
         return ""
     if datei.stat().st_size < 20 * 1024:
         return "Bild unter 20 KB (Signatur oder Logo)"
@@ -142,13 +147,17 @@ def eine(datei: Path, echt: bool) -> Ergebnis:
     """Eine Datei aus Unsortiert nachsortieren."""
     from . import verarbeiten
 
-    grund = mailbild(datei)
+    bildtext = _bildtext(datei) if _ist_bild(datei) and datei.stat().st_size >= 20 * 1024 else ""
+    grund = mailbild(datei, bildtext if _ist_bild(datei) else None)
     if grund:
         return _weg(datei, grund, echt)
-    from .text import auslesen
+    if _ist_bild(datei):
+        text = bildtext
+    else:
+        from .text import auslesen
 
-    text = auslesen(datei)
-    grund = werbung(text.text)
+        text = auslesen(datei).text
+    grund = werbung(text)
     if grund:
         return _weg(datei, grund, echt)
     fund = _fund(datei)
@@ -183,7 +192,13 @@ def lauf(echt: bool) -> list[Ergebnis]:
             try:
                 ergebnisse.append(eine(datei, echt))
             except kern.CloudGesperrt as fehler:
+                # Der Cloud-Ordner synchronisiert gerade: kein Fehler, der nächste Lauf versucht es wieder.
+                if echt:
+                    kern.ereignis("cloud_gesperrt", str(fehler), quelle="nachsortieren", datei=datei.name)
                 ergebnisse.append(Ergebnis("cloud_gesperrt", str(fehler)))
+            except OSError as fehler:
+                kern.log(f"nachsortieren: {datei.name} gerade nicht lesbar: {fehler}")
+                ergebnisse.append(Ergebnis("spaeter", f"{datei.name} gerade nicht lesbar."))
     return ergebnisse
 
 

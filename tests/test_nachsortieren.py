@@ -137,3 +137,30 @@ def test_bericht_nennt_aussortiertes():
     text, _ = bericht.text_und_betreff([{"art": "aussortiert", "text": "image001.png: Bild unter 20 KB", "daten": {}}])
     assert "Zu löschen" in text and "image001.png" in text
 
+
+
+def test_bild_wird_fuer_die_werbepruefung_nur_lokal_gelesen(repo, monkeypatch):
+    bild = _unsortiert(repo, "2026-10-08_banner.png", PNG + b"\0" * 30_000)
+    werbetext = " ".join(["Sommer"] * 30) + " Gutschein Rabatt jetzt bestellen"
+    monkeypatch.setattr(nachsortieren, "_bildtext", lambda _d: werbetext)
+
+    def keine_cloud(*_a, **_k):
+        raise AssertionError("Bild darf hier nicht über auslesen (Claude-Stufe) laufen")
+
+    monkeypatch.setattr("belege.text.auslesen", keine_cloud)
+    nachsortieren.lauf(True)
+    assert (repo / "ablage" / "Unsortiert" / "Zu löschen" / bild.name).exists()
+
+
+def test_cloud_sperre_haelt_den_lauf_nicht_an(repo, monkeypatch):
+    from belege import kern
+
+    _unsortiert(repo, "2026-10-08_image001.png", PNG)
+    _unsortiert(repo, "2026-10-09_image002.png", PNG)
+
+    def gesperrt(*_a, **_k):
+        raise kern.CloudGesperrt("image ablegen", OSError(35, "Resource deadlock avoided"))
+
+    monkeypatch.setattr(kern, "cloud_verschieben", gesperrt)
+    ergebnisse = nachsortieren.lauf(True)
+    assert [e.status for e in ergebnisse] == ["cloud_gesperrt", "cloud_gesperrt"]
