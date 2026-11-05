@@ -709,7 +709,7 @@ def _nachsuche(daten: list[dict], args) -> None:
     from . import quellen
     _FUND_TEXTE.clear()  # je Lauf frisch lesen; innerhalb des Laufs jede Datei nur einmal
     cfg = kern.konfig("belege")
-    funde = list(quellen.downloads_funde() or []) + list(quellen.handy_funde() or []) + list(quellen.scan_funde() or [])
+    funde = list(quellen.downloads_funde() or []) + list(quellen.handy_funde() or []) + list(quellen.scan_funde(echt=kern.echt(args)) or [])
     eingang_wert = str(cfg.get("dokumente", {}).get("eingang", "")).strip()
     eingang = kern.erweitert(eingang_wert) if eingang_wert else None
     if eingang and eingang.is_dir():

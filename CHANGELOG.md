@@ -1,5 +1,11 @@
 # Änderungen für dich
 
+## [1.18.1] – 05.11.2026
+
+### Was ist neu für dich
+
+- Intel-Macs bekommen bei fehlendem Poppler einen passenden Hinweis, und Papier-Scans bleiben nach einem Trockenlauf für den echten Lauf erhalten. Eigene Belege-Berichte werden nicht mehr als Rechnung gelesen. Danke an einen Kunden für die Hinweise.
+
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
 ## [1.18.0] – 05.11.2026

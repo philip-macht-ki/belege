@@ -9,9 +9,11 @@ aussehen, nicht wie ein Platzhalter.
 from __future__ import annotations
 
 import csv
+import platform
 import random
 import shutil
 import subprocess
+import sys
 import tempfile
 import warnings
 from dataclasses import dataclass, field
@@ -397,9 +399,14 @@ def _erste_seite_png(quelle_pdf: Path, ordner: Path, dpi: int) -> Path:
 
     bilder = _pdf_bilder_quartz(quelle_pdf, ordner, dpi=dpi, seiten=1)
     if not bilder:
+        hinweis = (
+            "Sag deinem Claude: Installiere poppler über pixi (conda-forge)."
+            if sys.platform == "darwin" and platform.machine() == "x86_64"
+            else "Sag deinem Claude: Installiere poppler mit Homebrew."
+        )
         raise RuntimeError(
             "Die PDF-Seite ließ sich nicht als Bild erzeugen. Auf dem Mac geht das ohne "
-            "Zusatzprogramm; sonst hilft `brew install poppler`."
+            f"Zusatzprogramm; {hinweis}"
         )
     return bilder[0]
 

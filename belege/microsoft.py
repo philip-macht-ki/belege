@@ -25,6 +25,7 @@ from .postfach import (
     Postfach,
     _anhaenge,
     _anhaenge_speichern,
+    _eigene_belege_mail,
     _inhalt,
     _kopf,
     _links,
@@ -283,6 +284,8 @@ class MicrosoftPostfach(Postfach):
                 if mail.get("parentFolderId") in ausgelassen:
                     continue
                 eintrag = self._eintrag(mail)
+                if _eigene_belege_mail(eintrag):
+                    continue
                 if nur_anhang and not mail.get("hasAttachments"):
                     continue
                 if seit and eintrag["datum"] < seit.isoformat():
