@@ -54,6 +54,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Danach führt Claude `uv sync`, `uv run belege einrichten-urteil` und
 `uv run belege pruefen` aus. Homebrew ist nicht nötig.
 
+Python bringt uv selbst mit. `uv run python --version` muss 3.11 oder neuer
+zeigen. Zeigt es etwas Älteres oder einen Fehler, führt Claude
+`uv python install 3.12` und danach `uv sync` aus und prüft noch einmal.
+belege startet Claude immer mit `uv run belege …`, nie mit `python3` oder
+`/usr/bin/python3`. Das ist auf dem Mac oft Apples altes Python 3.9, damit
+bricht belege ab.
+
 ## Welcher Mac ist das?
 
 Frag nicht, sondern sieh nach: `uv run belege rechner --echt`. Sag der Person in

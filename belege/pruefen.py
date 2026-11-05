@@ -105,7 +105,7 @@ def befehl(args) -> int:
         z(
             "GRUEN" if sys.version_info >= (3, 11) else "ROT",
             f"Python {sys.version.split()[0]}",
-            "Python 3.11 oder neuer installieren.",
+            "Sag deinem Claude: „Richte Python für belege ein“. Claude führt dann `uv python install 3.12` und `uv sync` aus.",
         )
     except Exception as e:
         z("ROT", f"Python nicht prüfbar: {e}")
