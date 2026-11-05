@@ -129,7 +129,15 @@ def befehl(args) -> int:
             continue
         from .vertraulich import pruefen
 
-        voll = {m["id"]: postfach.lesen(m["id"]).get("text", "") for m in neue}
+        voll = {}
+        for m in list(neue):
+            try:
+                voll[m["id"]] = postfach.lesen(m["id"]).get("text", "")
+            except Exception as fehler:  # eine unlesbare Mail soll den Wächter nicht anhalten
+                kern.log(f"Wächter {konto['name']}: Mail übersprungen ({fehler})")
+                neue.remove(m)
+        if not neue:
+            continue
         alle_mails = [{**m, "text": voll[m["id"]][:1500]} for m in neue]
         # Vertrauliche Mails (Arzt, Gericht, Personal …) sieht kein Cloud-Modell; für sie
         # gilt nur die Wortregel des Wächters. Geprüft wird der ganze Text, nicht der Anfang.

@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.19.2] – 05.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- `belege uebung --echt` funktioniert jetzt auch, wenn du deine eigene Firma schon eingetragen hast. Die Übung nimmt dafür immer die Musterfirma „Studio Beispiel“ samt passenden Regeln. Vorher landeten alle fünf Übungsrechnungen in Unsortiert. Welches Abo einordnet (Claude oder ChatGPT), übernimmt die Übung von dir.
+- Der Wächter bleibt nicht mehr stehen, wenn eine einzelne Mail inzwischen verschoben oder gelöscht wurde (etwa bei iCloud). Er überspringt sie, schreibt es ins Protokoll und prüft die übrigen Mails weiter.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.1] – 05.11.2026
 
 aktion: keine

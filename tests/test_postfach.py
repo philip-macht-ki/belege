@@ -189,3 +189,27 @@ def test_ispdb_liest_ssl_server(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: Antwort())
     assert _ispdb("x.example") == ("imap.x.example:993", "smtp.x.example:465")
+
+
+def test_imap_mail_ohne_daten_meldet_klartext(monkeypatch):
+    """iCloud liefert für eine verschobene Mail [None]; das ist kein TypeError mehr."""
+    from belege import postfach
+
+    class Verbindung:
+        def select(self, *a, **k):
+            return "OK", [b"1"]
+
+        def uid(self, *a):
+            return "OK", [None]
+
+        def logout(self):
+            pass
+
+    p = postfach.ImapPostfach.__new__(postfach.ImapPostfach)
+    monkeypatch.setattr(p, "_imap", lambda: Verbindung(), raising=False)
+    try:
+        p._fetch_mail("INBOX:42")
+    except RuntimeError as fehler:
+        assert "nicht mehr im Postfach" in str(fehler)
+    else:
+        raise AssertionError("RuntimeError erwartet")
