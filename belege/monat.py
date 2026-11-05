@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import kern
+from . import kern, monatsmail
 
 
 def _monatsname(monat: str) -> str:
@@ -971,6 +971,7 @@ def befehl(args) -> int:
     if len(alle_firmen) > 1:
         buchungen = buchungen_aus(auszuege, monat)
         alle_daten: list[dict] = []
+        je_firma: list[tuple[str, list[dict]]] = []
         for einzelfirma in alle_firmen:
             hinweis = None
             if not einzelfirma.get("konten") and einzelfirma["name"] != alle_firmen[0]["name"]:
@@ -984,12 +985,14 @@ def befehl(args) -> int:
             fehlt = [x for x in daten_firma if x["status"] == "fehlt"]
             zusatz = f" – {hinweis}" if hinweis else ""
             print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
+            je_firma.append((einzelfirma["name"], daten_firma))
             if getattr(args, "uebergabe", False):
                 _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
             if getattr(args, "anfragen", False):
                 _anfragen(daten_firma, kern.echt(args))
         from .posten import fortschreiben
         fortschreiben(alle_daten)
+        monatsmail.senden(monat, monatsmail.text(monat, je_firma, index, mehrere=True), args)
         return 0
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
@@ -1009,6 +1012,8 @@ def befehl(args) -> int:
         f"{len(fehlt)} fehlen noch ({fehlbetrag} €), {privat} privat bezahlt, {ohne_beleg} ohne Beleg nötig"
     )
     kern.ereignis("monat", f"{_monatsname(monat)}: {zugeordnet} Abbuchungen zugeordnet, {len(fehlt)} fehlen noch ({fehlbetrag} €). Die Liste kommt am 1. und 15. per Mail.")
+    betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+    monatsmail.senden(monat, monatsmail.text(monat, [(betrieb, daten)], index), args)
     if getattr(args, "uebergabe", False):
         _uebergabe(monat, ziel, index, daten, args)
     if getattr(args, "anfragen", False):

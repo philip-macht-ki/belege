@@ -2,6 +2,18 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.18.0] – 05.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Nach dem Monatsabgleich bekommst du eine lesbare Mail „Belegcheck <Monat>“: je Firma, welche Belege fehlen, nach Lieferant zusammengefasst, mit Summe, Datum und wer den Beleg holt. Dazu Belege im falschen Monatsordner, fehlende Kontoauszüge und was du jetzt sagst. Die technischen Listen bleiben im Monatsordner.
+
+### Musst du etwas tun?
+
+Nein. Die Mail kommt einmal im Monat an deine Berichtsadresse, sobald der Kontoauszug da ist.
+
 ## [1.17.0] – 04.11.2026
 
 ### Was ist neu für dich
