@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -119,11 +120,29 @@ def _original_erledigt(fund: Fund) -> None:
         shutil.move(str(original), str(kern.freier_name(erledigt / Path(original).name)))
 
 
-def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
+def _firma_aus_lieferant(einordnung: Einordnung, index: dict) -> Einordnung:
+    """Nachsortieren: unklare Firma, wenn der Lieferant bisher nur bei einer Firma abgelegt ist."""
+    if einordnung.firma != "unklar" or not einordnung.ist_beleg or not einordnung.lieferant:
+        return einordnung
+    from .ablegen import sauber
+
+    schluessel = sauber(einordnung.lieferant).casefold()
+    firmen = {e.get("firma") for e in index.values()
+              if e.get("status") == "abgelegt" and e.get("firma") not in {None, "", "unklar"}
+              and sauber(str(e.get("lieferant") or "")).casefold() == schluessel}
+    if len(firmen) != 1 or kern.firma(next(iter(firmen))) is None:
+        return einordnung
+    firma = next(iter(firmen))
+    return replace(einordnung, firma=firma, grund=f"{einordnung.grund} Lieferant bisher nur bei {firma}.".strip())
+
+
+def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Ergebnis:
     """Verarbeitet einen Fund vom Fingerabdruck bis zum Indexeintrag.
 
     Unsichere Downloads bleiben liegen, und alle echten Erfolge werden sofort
     im Index gespeichert, damit ein Abbruch keinen bereits bearbeiteten Fund verliert.
+    ``nachsortieren`` (belege/nachsortieren.py): ein Fund aus Unsortiert zählt nicht
+    als Dublette seiner selbst, und eine unklare Firma entscheidet der Lieferant.
     """
     try:
         if fund.datei.stat().st_size > MAX_MB * 1024 * 1024:
@@ -139,6 +158,13 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
         from .dokumente import schon_abgelegt
 
         dokument = schon_abgelegt(fingerabdruck)
+        if nachsortieren:
+            from .dokumente import _index as dokument_index
+
+            if index.get(fingerabdruck, {}).get("status") == "unsortiert":
+                index.pop(fingerabdruck)
+            if dokument and dokument_index().get(fingerabdruck, {}).get("abgelegt") is False:
+                dokument = None
         if fingerabdruck in index or dokument:
             pfad = dokument[0] if dokument else index[fingerabdruck].get("pfad", "der Ablage")
             abgelegte_firma = kern.firma_von(index[fingerabdruck]) if fingerabdruck in index else None
@@ -238,6 +264,8 @@ def verarbeite(fund: Fund, echt: bool) -> kern.Ergebnis:
             return ergebnis
         from .ablegen import ablegen
 
+        if nachsortieren:
+            einordnung = _firma_aus_lieferant(einordnung, index)
         pruefung = kern.konfig("belege").get("pruefung", {})
         firma_eindeutig = (
             einordnung.firma not in {"", "unklar"}

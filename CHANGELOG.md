@@ -2,6 +2,20 @@
 
 Git-Tags tragen bei jeder Veröffentlichung die Versionsnummer, zum Beispiel `v1.4.0`.
 
+## [1.19.0] – 05.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Jeden Abend schaut belege noch einmal in deinen Ordner Unsortiert. Logos, Banner und Siegel aus Mails und eindeutige Werbung wandern nach `Unsortiert/Zu löschen`. Gelöscht wird nichts, den Ordner leerst du selbst, wenn du kurz drübergeschaut hast.
+- Was beim ersten Mal unsicher war und jetzt sicher ist, wird abgelegt. Hast du mehrere Firmen und war die Firma unklar, entscheidet der Lieferant, wenn er bisher nur bei einer deiner Firmen vorkam.
+- Was weiter unsicher bleibt, steht einmal im Tagesbericht unter „Bitte ansehen“, mit der Frage, wohin es gehört.
+
+### Musst du etwas tun?
+
+Nein. Abschalten mit `[nachsortieren] an = false` in `konfig/belege.toml`. Von Hand: `uv run belege nachsortieren` zeigt, was passieren würde.
+
 ## [1.18.0] – 05.11.2026
 
 aktion: keine

@@ -187,3 +187,10 @@ erinnern_tage = 28
 # Scan oder in Downloads kommen, legt belege selbst unter Dokumente ab, wenn
 # es sich sicher ist. Unsicheres bleibt wie bisher. false = nur von Hand.
 automatisch = true
+
+[nachsortieren]
+# Jeden Tag vor dem Tagesbericht schaut belege noch einmal in Unsortiert:
+# Logos, Banner und eindeutige Werbung wandern nach Unsortiert/Zu löschen
+# (verschoben, nie gelöscht), was jetzt sicher ist, wird abgelegt, der Rest
+# steht einmal im Tagesbericht. false = aus.
+an = true
