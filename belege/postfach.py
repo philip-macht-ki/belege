@@ -498,7 +498,11 @@ class ImapPostfach(Postfach):
             _, daten = verbindung.uid("fetch", uid, "(BODY.PEEK[])")
         finally:
             verbindung.logout()
-        return email.message_from_bytes(daten[0][1], policy=policy.default)
+        # Ist die Mail inzwischen verschoben oder gelöscht, liefert etwa iCloud nur [None].
+        roh = next((teil[1] for teil in daten or [] if isinstance(teil, tuple) and len(teil) > 1), None)
+        if not isinstance(roh, (bytes, bytearray)):
+            raise RuntimeError(f"Mail {ident} ist nicht mehr im Postfach (verschoben oder gelöscht).")
+        return email.message_from_bytes(roh, policy=policy.default)
 
     def _ordner(self, flag: str, namen: list[str]) -> str:
         """Findet einen Special-Use-Ordner oder nutzt einen verständlichen Ersatznamen."""

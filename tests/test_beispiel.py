@@ -147,3 +147,26 @@ def test_abgebrochenes_muster_wird_neu_erzeugt(repo, monkeypatch):
     assert aufrufe == [1]
     assert (halb / beispiel.FERTIG).exists()
     assert len(list((repo / "uebung" / "Eingang").iterdir())) == 5
+
+
+def test_uebung_nimmt_musterfirma_statt_eigener_einstellungen(repo):
+    """Eigene Stammdaten und Regeln gehören nicht in die Übung, die Abo-Wahl schon."""
+    from belege import beispiel
+
+    eigene = repo / "konfig" / "belege.toml"
+    t = eigene.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Malerbetrieb März"')
+    t = t.replace('backend = "claude"', 'backend = "codex"')
+    eigene.write_text(t, encoding="utf-8")
+    (repo / "konfig" / "stammdaten.toml").write_text('[[firma]]\nname = "Malerbetrieb März"\n', encoding="utf-8")
+    (repo / "konfig" / "regeln.toml").write_text("# eigene Regeln\n", encoding="utf-8")
+
+    beispiel.einrichten_beispiel(repo / "uebung")
+    konfig = repo / "uebung" / ".system" / "konfig"
+    uebung = (konfig / "belege.toml").read_text(encoding="utf-8")
+    assert 'name = "Studio Beispiel"' in uebung
+    assert "Malerbetrieb" not in uebung
+    assert 'backend = "codex"' in uebung
+    assert not (konfig / "stammdaten.toml").exists()
+    assert (konfig / "regeln.toml").read_text(encoding="utf-8") == (
+        repo / "vorlagen" / "konfig" / "regeln.toml").read_text(encoding="utf-8")
+    assert str(repo / "uebung" / "Ablage") in uebung

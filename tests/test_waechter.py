@@ -114,3 +114,23 @@ def test_ausschlussliste_gilt_auch_fuer_den_waechter(repo, monkeypatch):
     assert gelesen == []
     assert "waechter" not in _ereignisse(repo)
     assert gesendet == []
+
+
+def test_unlesbare_mail_haelt_den_waechter_nicht_an(repo, monkeypatch):
+    """Liefert der Server für eine Mail nichts (iCloud, inzwischen verschoben), läuft der Rest weiter."""
+    from belege import postfach
+
+    gesendet, _ = _ohne_mitteilung_und_senden(monkeypatch)
+    _mail(repo / "beispiel/erzeugt/postfach/a-weg.eml", "Mahnung alt", "Bitte zahlen Sie.")
+    _mail(repo / "beispiel/erzeugt/postfach/b-mahnung.eml", "Mahnung", "Bitte zahlen Sie.")
+    original = postfach.OrdnerPostfach.lesen
+
+    def lesen(self, ident):
+        if "a-weg" in ident:
+            raise RuntimeError("Mail ist nicht mehr im Postfach (verschoben oder gelöscht).")
+        return original(self, ident)
+
+    monkeypatch.setattr(postfach.OrdnerPostfach, "lesen", lesen)
+    assert waechter.befehl(argparse.Namespace(echt=True)) == 0
+    assert _ereignisse(repo).count("waechter_sofort") == 1
+    assert len(gesendet) == 1

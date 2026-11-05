@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import platform
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -941,6 +942,16 @@ UEBUNG_DATEIEN = {
 }
 
 
+def _abschnitt_uebernehmen(text: str, quelle: str, name: str) -> str:
+    """Ersetzt den TOML-Abschnitt [name] in text durch den aus quelle, falls quelle ihn hat."""
+    muster = re.compile(rf"(?ms)^\[{re.escape(name)}\][^\n]*\n.*?(?=^\[|\Z)")
+    neu = muster.search(quelle)
+    if not neu or not muster.search(text):
+        return text
+    abschnitt = neu.group(0) if neu.group(0).endswith("\n") else neu.group(0) + "\n"
+    return muster.sub(lambda _: abschnitt, text, count=1)
+
+
 def einrichten_beispiel(ziel: Path) -> Path:
     """Legt den Übungsordner an: Eingang/ mit fünf Chaosnamen, Handy/ und Downloads/
     mit dem ganzen Musterbetrieb, und ein eigenes Übungssystem in .system/.
@@ -966,11 +977,20 @@ def einrichten_beispiel(ziel: Path) -> Path:
         shutil.copy2(datei, ziel / "Downloads" / datei.name)
 
     system = ziel / ".system"
-    shutil.copytree(pfad("konfig"), system / "konfig")
+    # Die Übung braucht die Musterfirma „Studio Beispiel“ aus den Vorlagen. Mit den
+    # eigenen Stammdaten und Regeln landeten alle fünf Übungsrechnungen in Unsortiert.
+    vorlage = pfad("vorlagen", "konfig")
+    shutil.copytree(vorlage if vorlage.exists() else pfad("konfig"), system / "konfig")
     if pfad("vorlagen").exists():
         shutil.copytree(pfad("vorlagen"), system / "vorlagen")
     toml = system / "konfig" / "belege.toml"
     text = toml.read_text(encoding="utf-8")
+    if vorlage.exists():
+        # Welches Abo einordnet und liest, gilt auch in der Übung (etwa Codex statt Claude).
+        eigene = pfad("konfig", "belege.toml")
+        eigen = eigene.read_text(encoding="utf-8") if eigene.exists() else ""
+        for abschnitt in ("urteil", "texterkennung"):
+            text = _abschnitt_uebernehmen(text, eigen, abschnitt)
     text = text.replace('ordner = "~/Belege"', f'ordner = "{ziel / "Ablage"}"')
     text = text.replace('handy_ordner = "~/Belege/Eingang"', f'handy_ordner = "{ziel / "Handy"}"')
     text = text.replace('downloads = "~/Downloads"', f'downloads = "{ziel / "Downloads"}"')
