@@ -345,13 +345,14 @@ def handy_funde():
         yield fund
 
 
-def scan_funde():
+def scan_funde(echt: bool = False):
     """Liefert Papierpost aus einem Scan-Ordner als Kopie, nie als Verschiebung.
 
     Scan-Dienste verwalten ihre Originale selbst. Die Kopie im Arbeitsordner hat
     denselben SHA-Fingerabdruck; dadurch merkt der normale Ablageweg Dubletten.
     Unterordner zählen mit (bis drei Ebenen): Dropscan legt je Scanbox und Tag
-    einen eigenen Ordner an (Philip, 28.10.2026).
+    einen eigenen Ordner an (Philip, 28.10.2026). Den Fingerabdruck merkt sich
+    erst der echte Lauf, damit ein Trockenlauf den Scan nicht verbraucht.
     """
     wert = str(kern.konfig("belege").get("quellen", {}).get("scan_ordner", "")).strip()
     if not wert:
@@ -369,9 +370,10 @@ def scan_funde():
         ziel.parent.mkdir(parents=True, exist_ok=True)
         if not ziel.exists():
             ziel.write_bytes(datei.read_bytes())
-        bekannte.add(sha)
-        gesehen["scan_sha"] = sorted(bekannte)
-        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+        if echt:
+            bekannte.add(sha)
+            gesehen["scan_sha"] = sorted(bekannte)
+            kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
         yield Fund(ziel, "scan", datei.name, date.fromtimestamp(datei.stat().st_mtime))
 
 

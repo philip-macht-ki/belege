@@ -301,7 +301,7 @@ def _namensrang(treffer: set[str]) -> set[str]:
     eintraege = {eintrag["name"]: eintrag for eintrag in firmen()}
     gesellschaften = {name for name in treffer if _gesellschaft(eintraege[name])}
     if gesellschaften:
-        return gesellschaften
+        treffer = gesellschaften
     # Ist eine natürliche Person nur als Geschäftsführer einer ebenfalls
     # genannten Firma hinterlegt, ist sie dort Ansprechpartner, nicht Empfänger.
     ohne_geschaeftsfuehrer = set(treffer)
@@ -312,7 +312,15 @@ def _namensrang(treffer: set[str]) -> set[str]:
             if any(str(wert).casefold().strip() == name.casefold() for wert in werte):
                 ohne_geschaeftsfuehrer.discard(name)
                 break
-    return ohne_geschaeftsfuehrer
+    # Enthält ein Firmenname einen anderen vollständig, gehört der längere Name
+    # zur genaueren Gesellschaft (etwa GmbH & Co. KG statt GmbH).
+    laengste = {
+        name for name in ohne_geschaeftsfuehrer
+        if not any(name.casefold() != anderer.casefold()
+                   and name.casefold() in anderer.casefold()
+                   for anderer in ohne_geschaeftsfuehrer)
+    }
+    return laengste
 
 
 def _firmen_im_text(text: str) -> set[str]:

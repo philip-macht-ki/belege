@@ -36,7 +36,8 @@ def _funde(name: str, args) -> list:
     """Sammelt die Funde einer Quelle (postfach, handy oder downloads)."""
     quellen = importlib.import_module("belege.quellen")
     if name != "postfach":
-        return list(getattr(quellen, f"{name}_funde")())
+        quelle = getattr(quellen, f"{name}_funde")
+        return list(quelle(echt=echt(args))) if name == "scan" else list(quelle())
     funde = []
     for konto in _postfach_konten(args):
         funde.extend(quellen.postfach_funde(konto, getattr(args, "tage", None), echt(args)))

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import smtplib
+import socket
 import subprocess
 import urllib.parse
 from datetime import date, timedelta
@@ -210,6 +211,7 @@ def _nachricht(
     nachricht["From"] = von
     nachricht["To"] = an
     nachricht["Subject"] = betreff
+    nachricht["X-Belege"] = "1"
     nachricht.set_content(text)
     for anhang in anhaenge:
         datei = Path(anhang)
@@ -220,6 +222,21 @@ def _nachricht(
             filename=datei.name,
         )
     return nachricht
+
+
+def _eigene_belege_mail(kopf: dict, nachricht=None) -> bool:
+    """Erkennt Berichte und Hinweise, die belege selbst an das eigene Postfach sandte."""
+    absender = parseaddr(str(kopf.get("von", "")))[1].casefold()
+    eigene = {
+        parseaddr(str(konto.get("adresse", "")))[1].casefold()
+        for konto in kern.konten()
+    }
+    if not absender or absender not in eigene:
+        return False
+    hat_header = nachricht is not None and str(nachricht.get("X-Belege", "")).strip() == "1"
+    if hat_header or str(kopf.get("x_belege", "")).strip() == "1":
+        return True
+    return str(kopf.get("betreff", "")).casefold().startswith(("belege: ", "belegcheck ", "fehlerbericht"))
 
 
 def _anhaenge(nachricht) -> list[dict]:
@@ -330,6 +347,8 @@ class OrdnerPostfach(Postfach):
         treffer = []
         for datei, nachricht in self._alle():
             kopf = _kopf(nachricht, datei.name)
+            if _eigene_belege_mail(kopf, nachricht):
+                continue
             if not _passt(kopf, _inhalt(nachricht), abfrage, seit, nur_anhang):
                 continue
             kopf["auszug"] = _inhalt(nachricht)[:300]
@@ -589,6 +608,8 @@ class ImapPostfach(Postfach):
                     if kennung and kennung in schon:
                         continue
                     kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
+                    if _eigene_belege_mail(kopf, nachricht):
+                        continue
                     # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
                     kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
                     if nur_anhang and not kopf["anhaenge"]:
@@ -1103,6 +1124,15 @@ def _mx(domain: str) -> list[str]:
     ]
 
 
+def _namensaufloesung_da() -> bool:
+    """Prüft vor der Servererkennung, ob DNS grundsätzlich antwortet."""
+    try:
+        socket.getaddrinfo("example.com", 443)
+    except socket.gaierror:
+        return False
+    return True
+
+
 def _ispdb(domain: str) -> tuple[str, str]:
     """Fragt die öffentliche Anbieterliste von Thunderbird nach IMAP und SMTP."""
     import urllib.request
@@ -1134,6 +1164,8 @@ def server_erkennen(domain: str) -> tuple[str, str]:
     Gibt ("", "") zurück, wenn nichts sicher erkannt ist. Microsoft 365 bricht ab,
     weil es kein App-Passwort mehr annimmt.
     """
+    if not _namensaufloesung_da():
+        raise RuntimeError("Gerade keine Internetverbindung, der nächste Lauf versucht es wieder.")
     mx_liste = _mx(domain)
     for mx in mx_liste:
         if mx.endswith(("protection.outlook.com", "outlook.com")):
@@ -1201,15 +1233,17 @@ class GmailPostfach(Postfach):
             .list(userId="me", q=query, maxResults=max)
             .execute()
         )
-        return [
-            _gmail_metadata(
+        treffer = []
+        for eintrag in antwort.get("messages", []):
+            kopf = _gmail_metadata(
                 dienst.users()
                 .messages()
                 .get(userId="me", id=eintrag["id"], format="metadata")
                 .execute()
             )
-            for eintrag in antwort.get("messages", [])
-        ]
+            if not _eigene_belege_mail(kopf):
+                treffer.append(kopf)
+        return treffer
 
     def posteingang(self, seit: date | None = None, max: int = 20, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
         """Liest den Gmail-Posteingang seitenweise, höchstens ``max`` Nachrichten."""
@@ -1423,6 +1457,7 @@ def _gmail_metadata(mail: dict) -> dict:
     for name, wert in headers.items():
         nachricht[name] = wert
     daten = _kopf(nachricht, mail["id"])
+    daten["x_belege"] = headers.get("x-belege", "")
     daten["anhaenge"] = _gmail_anhaenge(mail.get("payload", {}))
     daten["auszug"] = str(mail.get("snippet", ""))[:300]
     return daten
