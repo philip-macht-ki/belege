@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.19.1] – 05.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Startet jemand belege aus Versehen mit Apples altem Python 3.9 (`python3 …` oder `/usr/bin/python3 …` statt `uv run belege …`), startet belege sich jetzt selbst mit dem richtigen Python neu. Geht das nicht, steht da auf Deutsch, was zu tun ist, statt einer langen Fehlermeldung.
+- Bei der Einrichtung prüft Claude jetzt auch, dass Python 3.11 oder neuer bereitsteht, und holt es bei Bedarf über uv.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.0] – 05.11.2026
 
 aktion: keine
