@@ -11,6 +11,8 @@ aktion: keine
 - Jeden Abend schaut belege noch einmal in deinen Ordner Unsortiert. Logos, Banner und Siegel aus Mails und eindeutige Werbung wandern nach `Unsortiert/Zu löschen`. Gelöscht wird nichts, den Ordner leerst du selbst, wenn du kurz drübergeschaut hast.
 - Was beim ersten Mal unsicher war und jetzt sicher ist, wird abgelegt. Hast du mehrere Firmen und war die Firma unklar, entscheidet der Lieferant, wenn er bisher nur bei einer deiner Firmen vorkam.
 - Was weiter unsicher bleibt, steht einmal im Tagesbericht unter „Bitte ansehen“, mit der Frage, wohin es gehört.
+- Zahlungen in Fremdwährung finden ihren Beleg jetzt auch, wenn deine Bank den Originalbetrag nur in den Buchungstext schreibt („Originalbetrag: -25,00 USD“).
+- Ausländische Rechnungen mit Titeln wie „Sąskaita“, „Faktura“ oder „Fattura“ gelten bei der Rechnungsprüfung nicht mehr als „ohne Rechnungsnummer“.
 
 ### Musst du etwas tun?
 
