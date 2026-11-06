@@ -642,7 +642,8 @@ Wie social-pipeline: `claude -p --output-format json --model <modell>` mit
 `--tools "" --strict-mcp-config --setting-sources "" --system-prompt …`,
 Cache 7 Tage, `urteile.jsonl`, zwei Versuche mit Mangeltext, Backends
 `claude | codex | lokal | anthropic | ohne` (Env `URTEIL_BACKEND` hat Vorrang).
-Standardmodell `[urteil].modell` = "sonnet".
+Standardmodell `[urteil].modell` = "sonnet". Beim Backend `anthropic` wird der Alias zu
+`claude-sonnet-5-5` aufgelöst; ein ausdrücklich eingetragenes `claude-…`-Modell bleibt unverändert.
 
 - `Unerreichbar(KeinUrteil)`: Backend nicht erreichbar (kein Netz, Zeitüberschreitung,
   CLI-Fehler, 429/5xx, Ollama aus). Dann **keine** Rückfallregel: Die Ausnahme geht an
