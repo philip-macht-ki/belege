@@ -81,6 +81,14 @@ def _protokoll(repo):
     return _jsonl(repo / "arbeit" / "aufraeumen.jsonl")
 
 
+@pytest.fixture(autouse=True)
+def _feste_uhr(monkeypatch):
+    """Die Testmails tragen feste Daten (26. und 29.10.2026), und der Agent sieht beim ersten
+    Lauf nur `erste_tage = 7` zurück. Ohne feste Uhr liefen diese Tests ab dem 06.11.2026 rot
+    („nichts: keine passenden Mails“). Tests, die eine andere Uhrzeit brauchen, setzen sie selbst."""
+    monkeypatch.setattr(kern, "jetzt", lambda: datetime(2026, 10, 30, 8, 0, tzinfo=BERLIN))
+
+
 @pytest.fixture
 def still(monkeypatch):
     """Keine macOS-Mitteilung, kein Versand; beides wird mitgeschrieben."""
