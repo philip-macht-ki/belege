@@ -169,7 +169,9 @@ def _anthropic_post(schluessel: str, auftrag: str, modell: str):
             "content-type": "application/json",
         },
         json={
-            "model": modell if modell.startswith("claude-") else "claude-sonnet-5",
+            # Alias "sonnet" (und jeder Wert ohne "claude-") wird zum aktuellen Sonnet. Wer in seiner Konfig
+            # ausdrücklich "claude-sonnet-5" eingetragen hat, behält es.
+            "model": modell if modell.startswith("claude-") else "claude-sonnet-5-5",
             "max_tokens": 4000,
             "messages": [{"role": "user", "content": auftrag}],
         },

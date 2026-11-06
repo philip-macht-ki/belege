@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.19.3] – 06.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Genauere Belegprüfung mit dem neuen Modell: Wer Belege über die Anthropic-Schnittstelle einordnen lässt (Backend `anthropic`) und in der Konfiguration bei `modell` das Kürzel „sonnet“ stehen hat, bekommt ab jetzt Claude Sonnet 5.5 statt Sonnet 5. Es kostet dasselbe. Steht bei dir ausdrücklich ein Modellname wie `claude-sonnet-5`, bleibt der so.
+- Wer über das Claude-Abo einordnet (Standard), merkt nichts: Dort entscheidet dein Claude selbst, welches Sonnet hinter dem Kürzel steckt.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.2] – 05.11.2026
 
 aktion: keine
