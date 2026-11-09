@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.19.5] – 09.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Der Takt ist bei Postfächern mit vielen Ordnern deutlich schneller. Bisher ging belege für die Suche nach Rechnungen, die nur als Link in einer Mail stehen, fünfmal durch alle Ordner, einmal je Suchwort. Jetzt ist es ein Durchgang, und Ordner ohne neue Post sind mit einer einzigen Abfrage erledigt. Bei iCloud mit mehreren hundert Ordnern spart das den größten Teil der Laufzeit, und die Verbindung bleibt kürzer offen.
+- belege erkennt jetzt auch ausgeschriebene deutsche Monatsnamen im Rechnungsdatum, etwa „13. Oktober 2026“ oder „3. März 2026“. Vorher klappte das nur mit englischen Namen wie „October 13, 2026“.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.4] – 09.11.2026
 
 aktion: keine

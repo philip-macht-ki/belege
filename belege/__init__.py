@@ -1,5 +1,5 @@
 """Belege."""
 
-__version__ = "1.19.4"
+__version__ = "1.19.5"
 
 from . import _python_waechter  # noqa: E402,F401  startet bei Python < 3.11 passend neu

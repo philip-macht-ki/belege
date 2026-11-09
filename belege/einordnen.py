@@ -155,11 +155,15 @@ def _datum(wert: str) -> date | None:
             return date(int(treffer[3]), int(treffer[2]), int(treffer[1]))
         except ValueError:
             return None
-    # Englische Belege (Stripe & Co.): "August 13, 2026" oder "13 August 2026"
+    # Ausgeschriebene Monate, englisch (Stripe & Co.: "August 13, 2026", "13 August 2026")
+    # und deutsch ("13. Oktober 2026", auch "Oktober 13, 2026" bei deutscher Spracheinstellung).
     monate = {name: nr for nr, name in enumerate(
         ("january", "february", "march", "april", "may", "june", "july", "august",
          "september", "october", "november", "december"), start=1)}
-    muster = r"(?:([a-z]+)\.? (\d{1,2}),? (20\d{2}))|(?:(\d{1,2}) ([a-z]+)\.? (20\d{2}))"
+    monate.update({name: nr for nr, name in enumerate(
+        ("januar", "februar", "märz", "april", "mai", "juni", "juli", "august",
+         "september", "oktober", "november", "dezember"), start=1)})
+    muster = r"(?:([a-zäöü]+)\.? (\d{1,2}),? (20\d{2}))|(?:(\d{1,2})\.? ?([a-zäöü]+)\.? (20\d{2}))"
     for treffer in re.finditer(muster, wert.lower()):
         name, tag, jahr = (treffer[1], treffer[2], treffer[3]) if treffer[1] else (
             treffer[5], treffer[4], treffer[6])
