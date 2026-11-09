@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
+import signal
+import threading
+import time
 import traceback
 from collections import Counter
+from contextlib import contextmanager
 
 from .einrichten import auffrischen as _starter_auffrischen
 from .kern import CloudGesperrt, Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
@@ -163,25 +168,106 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
         return f"fehler: {meldung}", []
 
 
+# Ein Lauf darf höchstens so lange dauern (`[takt].max_minuten`), dann wird er beendet.
+MAX_MINUTEN = 120
+# Ab dieser Dauer steht ein Hinweis im Tagesbericht.
+WARNEN_AB_MINUTEN = 60
+# Bleibt der Lauf trotz Grenze stehen (etwa in C-Code ohne Signal), beendet die Wache
+# den Prozess so viele Sekunden später hart. launchd startet dann wieder normal.
+NOTAUS_NACH = 300
+
+
+class LaufZuLang(BaseException):
+    """Die Laufzeitgrenze ist erreicht.
+
+    Bewusst keine ``Exception``: Die Schritte fangen ``Exception`` ab und liefen
+    sonst einfach weiter. So endet der ganze Lauf, Sperren werden aber freigegeben.
+    """
+
+
+def _max_minuten() -> float:
+    try:
+        wert = float(konfig("belege").get("takt", {}).get("max_minuten", MAX_MINUTEN))
+    except (TypeError, ValueError):
+        return MAX_MINUTEN
+    return wert if wert > 0 else MAX_MINUTEN
+
+
+@contextmanager
+def _zeitgrenze(sekunden: float, name: str, echt_lauf: bool):
+    """Beendet einen Lauf nach `sekunden` mit ``LaufZuLang`` statt ihn hängen zu lassen.
+
+    Auf dem Mac per SIGALRM im Hauptfaden; das unterbricht auch einen blockierten
+    Socket. Unter Windows (kein SIGALRM) und als letzte Rettung beendet eine Wache
+    den Prozess hart, nachdem sie den Fehler ins Protokoll geschrieben hat.
+    """
+    alarm = hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread()
+    minuten = round(sekunden / 60)
+
+    def notaus():
+        meldung = f"{name}: Lauf hing länger als {minuten} Minuten und wurde hart beendet."
+        try:
+            log(meldung)
+            if echt_lauf:
+                ereignis("fehler", meldung)
+        finally:
+            os._exit(3)
+
+    wache = threading.Timer(sekunden + (NOTAUS_NACH if alarm else 0), notaus)
+    wache.daemon = True
+    wache.start()
+    alt = None
+    if alarm:
+        def ausloesen(_signum, _frame):
+            raise LaufZuLang(f"{name}: Lauf nach {minuten} Minuten abgebrochen (Grenze [takt].max_minuten).")
+
+        alt = signal.signal(signal.SIGALRM, ausloesen)
+        signal.setitimer(signal.ITIMER_REAL, sekunden)
+    try:
+        yield
+    finally:
+        if alarm:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, alt)
+        wache.cancel()
+
+
 def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
     """Führt mehrere Schritte nacheinander aus, jeden für sich abgesichert.
 
-    Gibt zurück, ob alle Schritte ohne Fehler durchliefen.
+    Gibt zurück, ob alle Schritte ohne Fehler durchliefen. Der ganze Lauf hat eine
+    harte Zeitgrenze; ein Lauf über einer Stunde steht als Hinweis im Tagesbericht.
     """
     fehlerfrei = True
+    beginn = time.monotonic()
     try:
         if _starter_auffrischen():
             log("Modell-Starter in ~/.local/bin auf den neuen Stand gebracht.")
     except Exception as fehler:  # noqa: BLE001 – der Lauf selbst geht vor
         log(f"Modell-Starter nicht aufgefrischt: {fehler}")
+    aktiv = None
     try:
-        with Sperre(sperre):
+        with _zeitgrenze(_max_minuten() * 60, sperre, echt(args)), Sperre(sperre):
             for name in schritte:
+                aktiv = name
                 zustand, _ = _schritt(name, args)
                 print(f"{name}: {zustand}")
                 fehlerfrei = fehlerfrei and not zustand.startswith(("fehler", "Exit"))
     except RuntimeError:
         print("nichts: Ein Lauf ist schon aktiv.")
+    except LaufZuLang as grenze:
+        fehlerfrei = False
+        meldung = f"{grenze} Zuletzt lief der Schritt {aktiv}."
+        log(f"fehler in {sperre}: {meldung}\n{traceback.format_exc(limit=6)}")
+        print(f"fehler: {meldung}")
+        if echt(args):
+            ereignis("fehler", meldung, schritt=aktiv)
+    minuten = (time.monotonic() - beginn) / 60
+    if minuten > WARNEN_AB_MINUTEN:
+        log(f"{sperre}: Lauf dauerte {minuten:.0f} Minuten.")
+        if echt(args):
+            ereignis("langsam", f"Ein Lauf ({sperre}) dauerte {minuten:.0f} Minuten.",
+                     lauf=sperre, minuten=round(minuten), schritt=aktiv)
     return fehlerfrei
 
 

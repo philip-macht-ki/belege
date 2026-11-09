@@ -1,5 +1,19 @@
 # Änderungen für dich
 
+## [1.19.4] – 09.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Der Takt bleibt nicht mehr stehen, wenn dein Postfach die Verbindung kappt. Vor allem bei iCloud mit vielen Ordnern kam es vor, dass die Verbindung mitten in der Suche abbrach und belege danach stundenlang wartete. Bis du den Vorgang von Hand beendet hast, wurden keine Mails mehr gelesen.
+- Jetzt hat jede Verbindung zum Postfach ein Zeitlimit. Bricht sie ab, verbindet sich belege neu und sucht im nächsten Ordner weiter. Bricht sie immer wieder ab, endet der Takt mit einem Fehler im Tagesbericht, und der nächste Takt startet wie gewohnt.
+- Ein Takt läuft höchstens zwei Stunden. Braucht er länger als eine Stunde, steht im Tagesbericht ein Hinweis „Langsamer Takt“.
+
+### Musst du etwas tun?
+
+Nein. Hängt bei dir gerade ein Takt seit Stunden, sag deinem Claude nach dem Update einmal: Beende den hängenden Belege-Takt. Danach läuft alles von selbst.
+
 ## [1.19.3] – 06.11.2026
 
 aktion: keine

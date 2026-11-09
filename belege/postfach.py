@@ -29,6 +29,37 @@ ANMELDE_HINWEIS = (
     "App-Passwörter gesperrt."
 )
 
+# Sekunden, die ein einzelner Lese- oder Schreibvorgang auf IMAP/SMTP warten darf.
+# Ohne Grenze wartet ein Aufruf auf einer toten Verbindung ewig (iCloud, Fehlerbericht 09.11.2026).
+ZEITLIMIT = 60
+# So oft verbindet `suchen` nach einem Verbindungsabbruch neu, dann gibt es auf.
+NEUVERBINDUNGEN = 3
+
+
+class PostfachAbbruch(RuntimeError):
+    """Die Verbindung zum Postfach bricht trotz Neuverbinden immer wieder ab."""
+
+
+def _verbindungsfehler(fehler: BaseException) -> bool:
+    """Ist die Verbindung selbst kaputt (SSL-Abbruch, Zeitüberschreitung, Socket zu)?
+
+    ``imaplib.IMAP4.abort`` ist eine Unterklasse von ``IMAP4.error``; nach ihr ist die
+    Verbindung unbrauchbar, anders als nach einem abgelehnten Befehl.
+    """
+    return isinstance(fehler, (imaplib.IMAP4.abort, OSError, EOFError))
+
+
+def _abmelden(verbindung) -> None:
+    """Meldet ab, ohne zu werfen. Auf einer toten Verbindung schlägt LOGOUT selbst fehl
+    und würde sonst den eigentlichen Fehler überdecken."""
+    try:
+        verbindung.logout()
+    except Exception:  # noqa: BLE001
+        try:
+            verbindung.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+
 
 def imap_ablage_ordner_gueltig(ordner: str) -> bool:
     """Erlaubt nur sichere, einzelne IMAP-Ordnernamen für CREATE/MOVE."""
@@ -484,7 +515,7 @@ class ImapPostfach(Postfach):
 
     def _imap(self):
         try:
-            verbindung = imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
+            verbindung = imaplib.IMAP4_SSL(self.imap_host, self.imap_port, timeout=ZEITLIMIT)
             verbindung.login(self.adresse, self.passwort)
             return verbindung
         except Exception as fehler:
@@ -497,7 +528,7 @@ class ImapPostfach(Postfach):
             verbindung.select(_imap_quote(ordner), readonly=True)
             _, daten = verbindung.uid("fetch", uid, "(BODY.PEEK[])")
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
         # Ist die Mail inzwischen verschoben oder gelöscht, liefert etwa iCloud nur [None].
         roh = next((teil[1] for teil in daten or [] if isinstance(teil, tuple) and len(teil) > 1), None)
         if not isinstance(roh, (bytes, bytearray)):
@@ -510,7 +541,7 @@ class ImapPostfach(Postfach):
         try:
             _, zeilen = verbindung.list()
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
         for zeile in zeilen or []:
             teile = _imap_list_zeile(zeile)
             if teile and flag.lower() in teile[0]:
@@ -558,6 +589,8 @@ class ImapPostfach(Postfach):
             teile = ["ALL"]
         try:
             return verbindung.uid("search", "CHARSET", "UTF-8", *teile)
+        except imaplib.IMAP4.abort:
+            raise  # tote Verbindung: kein zweiter Versuch auf ihr, `suchen` verbindet neu
         except imaplib.IMAP4.error as fehler:
             ascii_teile = [teil.encode("ascii", "ignore").decode() for teil in teile]
             if ascii_teile == teile:
@@ -584,51 +617,85 @@ class ImapPostfach(Postfach):
                 ordnerliste = _imap_ordnerliste(self.konto)
             else:
                 ordnerliste = _imap_alle_ordner(verbindung)
-            for ordner in ordnerliste:
+            neu_verbunden = 0
+            warteschlange = list(ordnerliste)
+            nochmal: set[str] = set()  # Ordner, die nach einem Abbruch schon einmal wiederholt wurden
+            while warteschlange:
+                ordner = warteschlange.pop(0)
                 try:
-                    if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
-                        kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+                    funde = self._ordner_durchsuchen(verbindung, ordner, abfrage, seit, nur_anhang, grenze, schon)
+                except Exception as fehler:  # noqa: BLE001 – sortiert unten nach Art
+                    if not _verbindungsfehler(fehler):
+                        if ordner == "INBOX" or not isinstance(fehler, (imaplib.IMAP4.error, RuntimeError)):
+                            raise
+                        # Ein einzelner sperriger Ordner hält die übrige Suche nicht auf.
+                        kern.log(f"IMAP-Ordner {ordner} übersprungen: {fehler}")
                         continue
-                    _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
-                except (imaplib.IMAP4.error, RuntimeError) as fehler:
-                    if ordner == "INBOX":
-                        raise
-                    # Ein einzelner sperriger Ordner hält die übrige Suche nicht auf.
-                    kern.log(f"IMAP-Ordner {ordner} übersprungen: {fehler}")
+                    # Die Verbindung ist tot. Weiter auf ihr zu senden, ließ früher jeden
+                    # folgenden Ordner scheitern und den Takt am Ende hängen.
+                    _abmelden(verbindung)
+                    neu_verbunden += 1
+                    if neu_verbunden > NEUVERBINDUNGEN:
+                        raise PostfachAbbruch(
+                            f"Verbindung zu {self.imap_host} bricht immer wieder ab "
+                            f"({NEUVERBINDUNGEN}× neu verbunden, zuletzt bei Ordner {ordner}: {fehler})"
+                        ) from fehler
+                    kern.log(f"IMAP-Verbindung bei Ordner {ordner} abgebrochen ({fehler}), verbinde neu.")
+                    verbindung = self._imap()
+                    if ordner in nochmal:
+                        kern.log(f"IMAP-Ordner {ordner} übersprungen: bricht auch nach Neuverbinden ab.")
+                    else:
+                        nochmal.add(ordner)
+                        warteschlange.insert(0, ordner)
                     continue
-                alle = daten[0].split() if daten and daten[0] else []
-                uids = alle[-grenze:][::-1]
-                gefunden = 0
-                for uid in uids:
-                    _, roh = verbindung.uid(
-                        "fetch",
-                        uid,
-                        "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
-                    )
-                    nachricht = _imap_nachricht(roh)
-                    if nachricht is None:
-                        continue
-                    kennung = str(nachricht.get("Message-ID") or "").strip()
-                    if kennung and kennung in schon:
-                        continue
-                    kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
-                    if _eigene_belege_mail(kopf, nachricht):
-                        continue
-                    # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
-                    kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
-                    if nur_anhang and not kopf["anhaenge"]:
-                        continue
-                    kopf["auszug"] = _inhalt(nachricht)[:300]
-                    treffer.append(kopf)
+                for kopf, kennung in funde:
                     if kennung:
+                        if kennung in schon:
+                            continue
                         schon.add(kennung)
-                    gefunden += 1
-                    if gefunden >= grenze:
-                        break
+                    treffer.append(kopf)
             treffer.sort(key=lambda kopf: kopf.get("datum", ""), reverse=True)
             return treffer[:grenze]
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
+
+    def _ordner_durchsuchen(self, verbindung, ordner, abfrage, seit, nur_anhang, grenze, schon) -> list[tuple[dict, str]]:
+        """Treffer eines Ordners. Erst nach vollständigem Durchlauf übernommen, damit ein
+        Abbruch mitten im Ordner beim Wiederholen nichts doppelt liefert."""
+        if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
+            kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+            return []
+        _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
+        alle = daten[0].split() if daten and daten[0] else []
+        uids = alle[-grenze:][::-1]
+        funde: list[tuple[dict, str]] = []
+        hier: set[str] = set()
+        for uid in uids:
+            _, roh = verbindung.uid(
+                "fetch",
+                uid,
+                "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
+            )
+            nachricht = _imap_nachricht(roh)
+            if nachricht is None:
+                continue
+            kennung = str(nachricht.get("Message-ID") or "").strip()
+            if kennung and (kennung in schon or kennung in hier):
+                continue
+            kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
+            if _eigene_belege_mail(kopf, nachricht):
+                continue
+            # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
+            kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
+            if nur_anhang and not kopf["anhaenge"]:
+                continue
+            kopf["auszug"] = _inhalt(nachricht)[:300]
+            funde.append((kopf, kennung))
+            if kennung:
+                hier.add(kennung)
+            if len(funde) >= grenze:
+                break
+        return funde
 
     def posteingang(self, seit: date | None = None, max: int = 20, text: bool = False, zustand: bool = False, beantwortet: bool = False) -> list[dict]:
         """Liest nur INBOX per PEEK und liefert die neuesten Nachrichten zuerst."""
@@ -674,7 +741,7 @@ class ImapPostfach(Postfach):
                 treffer.append(kopf)
             return treffer
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
 
     def ordnung(self) -> dict:
         """Liest IMAP-Ordner und mögliche Keywords nur lesend."""
@@ -699,7 +766,7 @@ class ImapPostfach(Postfach):
             labels = [x for x in werte if not x.startswith("\\")]
             return {"ordner": ordner, "labels": labels, "labels_sichtbar": False, "keywords_erlaubt": "\\*" in werte, "hinweis": "Thunderbird zeigt eigene Labels als Schlagwörter; Apple Mail, iPhone und die meisten Webmailer zeigen sie nicht. Nimm dort lieber ordner:."}
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
 
     def aufraeumen(self, ident: str, aktion: str, name: str = "") -> str:
         """Verschiebt nur bei IMAP-MOVE; Labels setzen ein harmloses Keyword."""
@@ -734,7 +801,7 @@ class ImapPostfach(Postfach):
                 neue_uid = self._ziel_uid_nach_message_id(verbindung, ziel, ident)
             return AktionErgebnis(f"nach {_mutf7(ziel)} verschoben", f"{_mutf7(ziel)}:{neue_uid}" if neue_uid else "")
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
 
     def zurueckholen(self, eintrag: dict) -> str:
         if eintrag.get("aktion") == "label":
@@ -748,7 +815,7 @@ class ImapPostfach(Postfach):
                 typ, _ = verbindung.uid("store", uid, "-FLAGS", f"({keyword})")
                 return f"Label {eintrag.get('ziel', '')} entfernt" if typ == "OK" else "nicht zurückgeholt (IMAP STORE fehlgeschlagen)"
             finally:
-                verbindung.logout()
+                _abmelden(verbindung)
         ident = str(eintrag.get("neue_id") or "")
         if ":" not in ident:
             return "nicht zurückgeholt (Zielkennung fehlt)"
@@ -760,7 +827,7 @@ class ImapPostfach(Postfach):
             typ, _ = verbindung.uid("move", uid, "INBOX")
             return "in Posteingang zurückgeholt" if typ == "OK" else "nicht zurückgeholt (IMAP MOVE fehlgeschlagen)"
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
 
     def zuordnung(self, tage: int = 90, je_ordner: int = 200) -> dict:
         """Liest Absender aus bis zu 30 IMAP-Ordnern mit gemeinsamem Mailbudget."""
@@ -783,7 +850,7 @@ class ImapPostfach(Postfach):
                 rest -= len(uids)
                 ergebnis[sichtbar.get(ordner, _mutf7(ordner))] = [x for x in absender if x]
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
         return {"ordner": ergebnis, "labels": {}}
 
     def lesen(self, ident: str) -> dict:
@@ -825,7 +892,7 @@ class ImapPostfach(Postfach):
                 return "nur markiert (IMAP MOVE fehlgeschlagen)"
             return f"nach {ordner} verschoben"
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
 
     def _ziel_uid_nach_message_id(self, verbindung, ziel: str, ident: str) -> str:
         nachricht = self._fetch_mail(ident)
@@ -854,18 +921,18 @@ class ImapPostfach(Postfach):
                 nachricht.as_bytes(),
             )
         finally:
-            verbindung.logout()
+            _abmelden(verbindung)
         return ordner
 
     def _senden(self, an, betreff, text, anhaenge):
         """Versendet eine Mail per SMTP; nur senden.py ruft diese Methode auf."""
         nachricht = _nachricht(an, betreff, text, anhaenge, self.adresse)
         if self.smtp_port == 465:
-            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as server:
+            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=ZEITLIMIT) as server:
                 server.login(self.adresse, self.passwort)
                 server.send_message(nachricht)
         else:
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=ZEITLIMIT) as server:
                 server.starttls()
                 server.login(self.adresse, self.passwort)
                 server.send_message(nachricht)

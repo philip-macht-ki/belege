@@ -13,7 +13,7 @@ from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreibe
 from .plattform import ist_windows
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen", "aussortiert")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen", "aussortiert", "langsam")
 
 
 def _gesehen() -> dict:
@@ -147,6 +147,15 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
     if gruppen["offline"]:
         absaetze.append("Ohne Netz\n- " + gruppen["offline"][-1].get("text", "")
                         + "\nDas ist kein Fehler. Du musst nichts tun.")
+
+    if gruppen["langsam"]:
+        laengster = max(int(e.get("daten", {}).get("minuten") or 0) for e in gruppen["langsam"])
+        anzahl = len(gruppen["langsam"])
+        wie_oft = "Ein Lauf hat" if anzahl == 1 else f"{anzahl} Läufe haben"
+        absaetze.append(
+            f"Langsamer Takt\n- {wie_oft} heute länger als eine Stunde gebraucht, der längste {laengster} Minuten. "
+            "Normal sind wenige Minuten.\nSag deinem Claude: Prüfe, warum der Belege-Takt so lange braucht."
+        )
 
     if gruppen["update"]:
         absaetze.append("Belege-Update\n" + "\n".join("- " + e.get("text", "") for e in gruppen["update"]))

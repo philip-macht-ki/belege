@@ -207,9 +207,10 @@ erste `[[firma]]`).
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
 Eine Zeile JSON: `{"zeit","art","text","daten"}` mit `art` aus
-`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline | dokument`.
+`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline | dokument | aufraeumen | aussortiert | langsam`.
 `vertraulich`: ein Fund wurde nur lokal gelesen und steht im Bericht unter „Bitte ansehen“.
 `offline`: kein Netz; höchstens einmal am Tag (`kern.einmal_taeglich`), kein Fehler.
+`langsam`: ein Takt- oder Tageslauf dauerte über 60 Minuten (`daten.minuten`, `daten.lauf`); der Bericht nennt Anzahl und längsten Lauf.
 Nur `belege.kern.ereignis(art, text, **daten)` schreibt diese Datei.
 
 ## Modulvertrag
@@ -573,6 +574,14 @@ Konsole plus Zähler aus dem Index.
   `[takt].lebenszeichen` mit `?art=wach&geraet=macbook|dauerrechner` auf, nach
   fehlerfreiem Lauf ohne Zusatz (leer = aus). Der Dienst unterscheidet daraus
   „Mac war zu“ von „Mac ist an, Lauf scheitert“ (cashflow-site `lib/lebenszeichen`).
+- **Zeitgrenzen:** Jeder IMAP- und SMTP-Aufruf hat `postfach.ZEITLIMIT` (60 s)
+  je Lese-/Schreibvorgang. Bricht die Verbindung in `ImapPostfach.suchen` ab
+  (`IMAP4.abort`, SSL-Fehler, Zeitüberschreitung), wird neu verbunden, der Ordner
+  einmal wiederholt und dann übersprungen; nach `postfach.NEUVERBINDUNGEN` (3)
+  Abbrüchen wirft sie `PostfachAbbruch` (ein `fehler`, kein `offline`). `takt`
+  und `tag` laufen unter `[takt].max_minuten` (Standard 120): danach endet der
+  Lauf mit `fehler` (SIGALRM), hängt er trotzdem, beendet eine Wache den Prozess
+  5 Minuten später hart. Läufe über 60 Minuten schreiben `langsam`.
 - **Gesamtsperre:** Jeder schreibende Befehl mit `--echt` läuft unter
   `kern.Gesamtsperre` (flock auf `arbeit/.belege.lock`). Takt, Postfach, Handy
   und Downloads überspringen, wenn belegt; alle anderen warten bis 30 Minuten.
