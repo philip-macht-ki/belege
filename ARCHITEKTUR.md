@@ -294,6 +294,10 @@ class Postfach:
     def suchen(self, abfrage: str = "", max: int = 20, seit: date | None = None, nur_anhang: bool = False) -> list[dict]
         # je Mail: {"id","von","von_name","an","betreff","datum" (iso),"anhaenge": [name…],"auszug" (≤300 Zeichen)}
         # abfrage: Weg B = Gmail-Suchsyntax; Weg A/ordner = einfache Wörter, "von:x", "betreff:x", "seit:JJJJ-MM-TT"
+    # nur Weg A (ImapPostfach): alle Wörter in einem Durchlauf, je Wort die max neuesten, vereinigt
+    def suchen_woerter(self, woerter: list[str], seit: date | None = None, max: int = 20) -> list[dict]
+        # je Ordner ein SELECT, eine OR-Vorprüfung, nur bei Treffern je Wort ein SEARCH; jede Mail einmal geholt.
+        # quellen._link_funde nutzt es, wenn vorhanden, sonst suchen() Wort für Wort.
     def lesen(self, id: str) -> dict             # Kopf + "text" (≤20.000 Zeichen, Klartext) + "anhaenge": [{"name","groesse"}]
         # + "links": [https-URL…] aus Text und HTML-href, eindeutig, höchstens 50 (nur https)
     def anhaenge(self, id: str, ziel: Path) -> list[Path]   # speichert Anhänge, gibt Pfade zurück

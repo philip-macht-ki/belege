@@ -607,12 +607,106 @@ class ImapPostfach(Postfach):
         und Entwürfen: Mailprogramme mit Filtern verschieben Rechnungen sofort in
         Unterordner. Mit `imap_ordner` nur INBOX und die genannten Ordner.
         """
-        verbindung = self._imap()
         # Mit nur_anhang zählt max die Treffer je Ordner; zusammen höchstens 500.
         grenze = 500 if nur_anhang else max
+        treffer = []
+        schon: set[str] = set()  # Gmail zeigt Labels als Ordner: dieselbe Mail nur einmal
+
+        def arbeit(verbindung, ordner):
+            return self._ordner_durchsuchen(verbindung, ordner, abfrage, seit, nur_anhang, grenze, schon)
+
+        def aufnehmen(_ordner, funde):
+            for kopf, kennung in funde:
+                if kennung:
+                    if kennung in schon:
+                        continue
+                    schon.add(kennung)
+                treffer.append(kopf)
+
+        self._je_ordner(arbeit, aufnehmen)
+        treffer.sort(key=lambda kopf: kopf.get("datum", ""), reverse=True)
+        return treffer[:grenze]
+
+    def suchen_woerter(self, woerter, seit=None, max=20) -> list[dict]:
+        """Wie `suchen(abfrage=wort, max=max)` für jedes Wort, aber in einem Durchlauf.
+
+        Je Ordner ein SELECT und je Wort ein SEARCH auf derselben Verbindung, jede
+        Mail wird nur einmal geholt. Vorher lief jedes Wort einzeln über alle
+        Ordner; bei mehreren hundert Ordnern (iCloud) kostete das den Großteil des
+        Takts. Ergebnis wie vorher: je Wort die `max` neuesten Treffer, vereinigt.
+        """
+        woerter = [w for w in woerter if str(w).strip()]
+        if not woerter:
+            return []
+        gesammelt: dict[str, tuple[dict, set]] = {}  # Message-ID oder Ident → (Kopf, Wörter)
+        schon: set[str] = set()
+
+        def arbeit(verbindung, ordner):
+            if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
+                kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
+                return []
+            if len(woerter) > 1:
+                # Vorprüfung: eine OR-Suche über alle Wörter. Die meisten Ordner haben im
+                # Zeitfenster keinen Treffer; dann bleibt es bei SELECT und einem SEARCH.
+                oder = ["OR"] * (len(woerter) - 1)
+                for wort in woerter:
+                    oder.extend(["TEXT", str(wort)])
+                if seit:
+                    oder.extend(["SINCE", seit.strftime("%d-%b-%Y")])
+                try:
+                    _, daten = self._suche(verbindung, oder)
+                    if not (daten and daten[0] and daten[0].split()):
+                        return []
+                except Exception as fehler:  # noqa: BLE001 – dann eben Wort für Wort
+                    if _verbindungsfehler(fehler) or not isinstance(fehler, (imaplib.IMAP4.error, RuntimeError)):
+                        raise
+            je_uid: dict[bytes, set] = {}
+            for wort in woerter:
+                try:
+                    _, daten = self._suche(verbindung, _imap_kriterien(str(wort), seit))
+                except Exception as fehler:  # noqa: BLE001
+                    if _verbindungsfehler(fehler) or not isinstance(fehler, (imaplib.IMAP4.error, RuntimeError)):
+                        raise
+                    kern.log(f"IMAP-Ordner {ordner}: Suche nach {wort} übersprungen: {fehler}")
+                    continue
+                for uid in (daten[0].split() if daten and daten[0] else [])[-max:]:
+                    je_uid.setdefault(uid, set()).add(wort)
+            funde = []
+            for uid in sorted(je_uid, key=lambda u: int(u), reverse=True):
+                gefunden = self._kopf_holen(verbindung, ordner, uid, schon)
+                if gefunden:
+                    funde.append((*gefunden, je_uid[uid]))
+            return funde
+
+        def aufnehmen(_ordner, funde):
+            for kopf, kennung, passend in funde:
+                schluessel = kennung or kopf["id"]
+                if schluessel in gesammelt:
+                    gesammelt[schluessel][1].update(passend)
+                    continue
+                gesammelt[schluessel] = (kopf, set(passend))
+                if kennung:
+                    schon.add(kennung)
+
+        self._je_ordner(arbeit, aufnehmen)
+        ergebnis: dict[str, dict] = {}
+        for wort in woerter:
+            passend = [kopf for kopf, w in gesammelt.values() if wort in w]
+            passend.sort(key=lambda kopf: kopf.get("datum", ""), reverse=True)
+            for kopf in passend[:max]:
+                ergebnis.setdefault(kopf["id"], kopf)
+        return list(ergebnis.values())
+
+    def _je_ordner(self, arbeit, aufnehmen) -> None:
+        """Ruft `arbeit(verbindung, ordner)` für jeden Suchordner auf einer Verbindung.
+
+        `aufnehmen(ordner, ergebnis)` bekommt nur vollständig durchlaufene Ordner, damit
+        ein Abbruch mitten im Ordner beim Wiederholen nichts doppelt liefert. Bricht die
+        Verbindung ab, wird neu verbunden, der Ordner einmal wiederholt und sonst
+        übersprungen; nach `NEUVERBINDUNGEN` Abbrüchen `PostfachAbbruch`.
+        """
+        verbindung = self._imap()
         try:
-            treffer = []
-            schon = set()  # Gmail zeigt Labels als Ordner: dieselbe Mail nur einmal
             if "imap_ordner" in self.konto:
                 ordnerliste = _imap_ordnerliste(self.konto)
             else:
@@ -623,7 +717,7 @@ class ImapPostfach(Postfach):
             while warteschlange:
                 ordner = warteschlange.pop(0)
                 try:
-                    funde = self._ordner_durchsuchen(verbindung, ordner, abfrage, seit, nur_anhang, grenze, schon)
+                    ergebnis = arbeit(verbindung, ordner)
                 except Exception as fehler:  # noqa: BLE001 – sortiert unten nach Art
                     if not _verbindungsfehler(fehler):
                         if ordner == "INBOX" or not isinstance(fehler, (imaplib.IMAP4.error, RuntimeError)):
@@ -648,48 +742,47 @@ class ImapPostfach(Postfach):
                         nochmal.add(ordner)
                         warteschlange.insert(0, ordner)
                     continue
-                for kopf, kennung in funde:
-                    if kennung:
-                        if kennung in schon:
-                            continue
-                        schon.add(kennung)
-                    treffer.append(kopf)
-            treffer.sort(key=lambda kopf: kopf.get("datum", ""), reverse=True)
-            return treffer[:grenze]
+                aufnehmen(ordner, ergebnis)
         finally:
             _abmelden(verbindung)
 
+    def _kopf_holen(self, verbindung, ordner, uid, *bekannt: set) -> tuple[dict, str] | None:
+        """Kopf, Anhangsnamen und Auszug einer Mail; None für Unlesbares, Bekanntes und eigene Mails."""
+        _, roh = verbindung.uid(
+            "fetch",
+            uid,
+            "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
+        )
+        nachricht = _imap_nachricht(roh)
+        if nachricht is None:
+            return None
+        kennung = str(nachricht.get("Message-ID") or "").strip()
+        if kennung and any(kennung in menge for menge in bekannt):
+            return None
+        kopf = _kopf(nachricht, f"{ordner}:{uid.decode() if isinstance(uid, bytes) else uid}")
+        if _eigene_belege_mail(kopf, nachricht):
+            return None
+        # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
+        kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
+        kopf["auszug"] = _inhalt(nachricht)[:300]
+        return kopf, kennung
+
     def _ordner_durchsuchen(self, verbindung, ordner, abfrage, seit, nur_anhang, grenze, schon) -> list[tuple[dict, str]]:
-        """Treffer eines Ordners. Erst nach vollständigem Durchlauf übernommen, damit ein
-        Abbruch mitten im Ordner beim Wiederholen nichts doppelt liefert."""
+        """Treffer eines Ordners für `suchen`."""
         if verbindung.select(_imap_quote(ordner), readonly=True)[0] != "OK":
             kern.log(f"IMAP-Ordner {ordner} nicht gefunden, übersprungen.")
             return []
         _, daten = self._suche(verbindung, _imap_kriterien(abfrage, seit))
         alle = daten[0].split() if daten and daten[0] else []
-        uids = alle[-grenze:][::-1]
         funde: list[tuple[dict, str]] = []
         hier: set[str] = set()
-        for uid in uids:
-            _, roh = verbindung.uid(
-                "fetch",
-                uid,
-                "(BODY.PEEK[HEADER] BODYSTRUCTURE BODY.PEEK[TEXT]<0.2000>)",
-            )
-            nachricht = _imap_nachricht(roh)
-            if nachricht is None:
+        for uid in alle[-grenze:][::-1]:
+            gefunden = self._kopf_holen(verbindung, ordner, uid, schon, hier)
+            if not gefunden:
                 continue
-            kennung = str(nachricht.get("Message-ID") or "").strip()
-            if kennung and (kennung in schon or kennung in hier):
-                continue
-            kopf = _kopf(nachricht, f"{ordner}:{uid.decode()}")
-            if _eigene_belege_mail(kopf, nachricht):
-                continue
-            # Der Kopf allein kennt keine Anhänge; die stehen in BODYSTRUCTURE.
-            kopf["anhaenge"] = kopf["anhaenge"] or _imap_anhaenge(roh)
+            kopf, kennung = gefunden
             if nur_anhang and not kopf["anhaenge"]:
                 continue
-            kopf["auszug"] = _inhalt(nachricht)[:300]
             funde.append((kopf, kennung))
             if kennung:
                 hier.add(kennung)

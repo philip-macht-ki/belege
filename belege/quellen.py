@@ -132,27 +132,15 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
     """
     from . import rechnungslink
     from .abofalle import erkennen
-    from .postfach import PostfachAbbruch
 
     max_mb = float(kern.konfig("belege").get("quellen", {}).get("rechnungslink_max_mb", 15))
     mailtext_an = bool(kern.konfig("belege").get("quellen", {}).get("rechnung_im_mailtext", True))
     bekannte = set(stand.get("mails", [])) | set(stand.get("links_geprueft", [])) | schon
     kandidaten: dict = {}
-    for wort in rechnungslink.SUCHWOERTER:
-        try:
-            treffer = postfach.suchen(abfrage=wort, seit=seit)
-        except PostfachAbbruch as fehler:
-            # Bricht die Verbindung trotz Neuverbinden ab, bringen weitere Suchwörter nur
-            # weitere Abbrüche. Der nächste Takt versucht es neu.
-            kern.log(f"Rechnungslinks {konto}: Suche abgebrochen, Postfach nicht stabil erreichbar ({fehler})")
-            break
-        except Exception as fehler:  # ein Suchwort, das der Server ablehnt, soll den Rest nicht kippen
-            kern.log(f"Rechnungslinks {konto}: Suche nach {wort} fehlgeschlagen ({fehler})")
-            continue
-        for mail in treffer:
-            mail_id = mail.get("id")
-            if mail_id and mail_id not in bekannte and not mail.get("anhaenge") and not ausgeschlossen(mail):
-                kandidaten.setdefault(mail_id, mail)
+    for mail in _link_suche(postfach, konto, seit):
+        mail_id = mail.get("id")
+        if mail_id and mail_id not in bekannte and not mail.get("anhaenge") and not ausgeschlossen(mail):
+            kandidaten.setdefault(mail_id, mail)
     for mail_id, mail in kandidaten.items():
         try:
             voll = postfach.lesen(str(mail_id))
@@ -206,6 +194,37 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
                 continue
         kern.log(f"Rechnungslink {konto}:{mail_id} übersprungen: {grund}")
         _link_geprueft(konto, str(mail_id), echt)
+
+
+def _link_suche(postfach, konto: str, seit: date) -> list[dict]:
+    """Mails zu den Suchwörtern für Rechnungslinks, je Wort die neuesten 20.
+
+    IMAP sucht alle Wörter in einem Durchlauf über die Ordner (`suchen_woerter`);
+    andere Wege fragen Wort für Wort.
+    """
+    from . import rechnungslink
+    from .postfach import PostfachAbbruch
+
+    if hasattr(postfach, "suchen_woerter"):
+        try:
+            return postfach.suchen_woerter(rechnungslink.SUCHWOERTER, seit=seit)
+        except PostfachAbbruch as fehler:
+            kern.log(f"Rechnungslinks {konto}: Suche abgebrochen, Postfach nicht stabil erreichbar ({fehler})")
+        except Exception as fehler:  # noqa: BLE001 – die Ablage der Anhänge geht vor
+            kern.log(f"Rechnungslinks {konto}: Suche fehlgeschlagen ({fehler})")
+        return []
+    alle: list[dict] = []
+    for wort in rechnungslink.SUCHWOERTER:
+        try:
+            alle.extend(postfach.suchen(abfrage=wort, seit=seit))
+        except PostfachAbbruch as fehler:
+            # Bricht die Verbindung trotz Neuverbinden ab, bringen weitere Suchwörter nur
+            # weitere Abbrüche. Der nächste Takt versucht es neu.
+            kern.log(f"Rechnungslinks {konto}: Suche abgebrochen, Postfach nicht stabil erreichbar ({fehler})")
+            break
+        except Exception as fehler:  # ein Suchwort, das der Server ablehnt, soll den Rest nicht kippen
+            kern.log(f"Rechnungslinks {konto}: Suche nach {wort} fehlgeschlagen ({fehler})")
+    return alle
 
 
 def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:

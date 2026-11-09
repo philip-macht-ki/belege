@@ -318,6 +318,10 @@ def _rechnung(
     pdf.output(str(ziel))
 
 
+_ENGLISCHE_MONATE = ("January", "February", "March", "April", "May", "June", "July", "August",
+                     "September", "October", "November", "December")
+
+
 def _zahlfix_receipt(
     ziel: Path,
     firma: Firma,
@@ -348,7 +352,8 @@ def _zahlfix_receipt(
     brutto = sum(p.einzelpreis for p in positionen)
     felder = [
         ("Receipt number", nummer),
-        ("Date paid", f"{datum:%B %d, %Y}"),
+        # Monatsname fest englisch: %B folgt der Spracheinstellung (LC_TIME) des Macs.
+        ("Date paid", f"{_ENGLISCHE_MONATE[datum.month - 1]} {datum.day:02d}, {datum.year}"),
         ("Payment method", "Visa •••• 4242"),
         ("Billed to", kunde),
         ("Amount paid", f"€{brutto:.2f}"),
