@@ -132,6 +132,7 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
     """
     from . import rechnungslink
     from .abofalle import erkennen
+    from .postfach import PostfachAbbruch
 
     max_mb = float(kern.konfig("belege").get("quellen", {}).get("rechnungslink_max_mb", 15))
     mailtext_an = bool(kern.konfig("belege").get("quellen", {}).get("rechnung_im_mailtext", True))
@@ -140,6 +141,11 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
     for wort in rechnungslink.SUCHWOERTER:
         try:
             treffer = postfach.suchen(abfrage=wort, seit=seit)
+        except PostfachAbbruch as fehler:
+            # Bricht die Verbindung trotz Neuverbinden ab, bringen weitere Suchwörter nur
+            # weitere Abbrüche. Der nächste Takt versucht es neu.
+            kern.log(f"Rechnungslinks {konto}: Suche abgebrochen, Postfach nicht stabil erreichbar ({fehler})")
+            break
         except Exception as fehler:  # ein Suchwort, das der Server ablehnt, soll den Rest nicht kippen
             kern.log(f"Rechnungslinks {konto}: Suche nach {wort} fehlgeschlagen ({fehler})")
             continue

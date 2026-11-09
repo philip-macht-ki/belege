@@ -85,7 +85,7 @@ def test_imap_entwurf_findet_special_use_drafts(repo, monkeypatch):
     aufrufe = []
 
     class Fake:
-        def __init__(self, *a):
+        def __init__(self, *a, **k):
             pass
 
         def login(self, *a):
