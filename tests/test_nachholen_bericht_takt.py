@@ -100,6 +100,18 @@ def test_4_takt_holt_den_verpassten_tageslauf_nur_einmal(repo, monkeypatch):
     assert aufrufe == [("downloads", "nachsortieren", "bericht")]
 
 
+def test_4b_tageslauf_nach_nachholen_vor_kalendertermin_sendet_nur_einmal(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 4, 20, 58, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-03T21:00:00+01:00", "monat": zeit[0].isoformat(), "posten": zeit[0].isoformat()}})
+    aufrufe = []
+    monkeypatch.setattr(takt, "_lauf", lambda *a: aufrufe.append(a[2]) or True)
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 11, 4, 21, tzinfo=kern.zone())
+    assert takt.befehl_tag(_args()) == 0
+    assert aufrufe == ["tag"]
+
+
 def test_5_takt_holt_normal_gelaufenen_tageslauf_nicht_nach(repo, monkeypatch):
     zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)

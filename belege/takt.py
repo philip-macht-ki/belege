@@ -434,6 +434,11 @@ def befehl(args) -> int:
 
 def befehl_tag(args) -> int:
     """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, dann Tagesbericht."""
+    # Ein kurz vor dem Kalendertermin nachgeholter Tageslauf zählt für denselben
+    # Kalendertag.  Sonst könnte `leer_senden` eine Doppelmail erzeugen.
+    if echt(args) and not _faelliger_tag():
+        print("nichts: Tageslauf lief für diesen Termin schon.")
+        return 0
     ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
     if ok and echt(args):
         gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
