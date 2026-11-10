@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 from belege import bericht, kern, monat, posten, takt
@@ -222,3 +223,134 @@ def test_11_erstes_update_ohne_berichtsmerker_sendet_nichts(repo, monkeypatch):
     monkeypatch.setattr(takt, "_lauf", lambda *a: aufrufe.append(a) or True)
     takt._nachholen(_args())
     assert aufrufe == []
+
+
+def test_a_startgrenze_sperrt_den_kalender_tageslauf_am_selben_tag_nicht(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append((a, kw)) or kern.Ergebnis("ok"))
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true"), encoding="utf-8")
+    original = takt._schritt
+
+    def schritt(name, args):
+        return original(name, args) if name == "bericht" else ("ok", [])
+
+    monkeypatch.setattr(takt, "_schritt", schritt)
+
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 11, 4, 21, tzinfo=kern.zone())
+    assert takt.befehl_tag(_args()) == 0
+
+    assert len(gesendet) == 1
+
+
+def test_b_startgrenze_sperrt_den_kalender_monatslauf_nicht(repo, monkeypatch):
+    zeit = [datetime(2026, 12, 2, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or 0)
+
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 12, 3, 9, tzinfo=kern.zone())
+    takt._nachholen(_args())
+
+    assert len(aufrufe) == 1 and aufrufe[0].uebergabe
+
+
+def test_c_startgrenze_sperrt_den_kalender_postenlauf_nicht(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 14, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _posten_einrichten(repo)
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: 0)
+    monkeypatch.setattr(posten, "befehl", lambda args: aufrufe.append(args) or 0)
+
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 11, 15, 7, tzinfo=kern.zone())
+    takt._nachholen(_args())
+
+    assert len(aufrufe) == 1 and aufrufe[0].mail
+
+
+def test_d_ohne_monatsmerker_holt_der_erste_takt_nichts_nach(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 12, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or 0)
+
+    takt._nachholen(_args())
+
+    assert aufrufe == []
+
+
+def test_e_ohne_posten_sendemerker_gibt_es_beim_ersten_takt_keinen_zwischenstand(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 15, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _posten_einrichten(repo)
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: 0)
+    monkeypatch.setattr(posten, "befehl", lambda args: aufrufe.append(args) or 0)
+
+    takt._nachholen(_args())
+
+    assert aufrufe == []
+
+
+def test_f_aktive_tag_sperre_markiert_den_lauf_nicht_als_erledigt(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"tag": "2026-11-02T21:00:00+01:00"}})
+    aufrufe = []
+    monkeypatch.setattr(takt, "_lauf", lambda *a: aufrufe.append(a[2]) or False)
+
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+
+    assert aufrufe == ["tag", "tag"]
+    assert "tag" not in kern.lesen(repo / "arbeit" / "gesehen.json")["lauf"] or \
+        not kern.lesen(repo / "arbeit" / "gesehen.json")["lauf"]["tag"].startswith("2026-11-04")
+
+
+def test_g_nachgeholter_postenlauf_nutzt_den_kalendereinstieg(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 2, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _posten_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab": {"tag": zeit[0].isoformat(), "monat": zeit[0].isoformat(), "posten": "2026-10-15T07:00:00+02:00"}})
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(("monat", vars(args))) or 0)
+    monkeypatch.setattr(posten, "befehl", lambda args: aufrufe.append(("posten", vars(args))) or 0)
+
+    takt._nachholen(_args())
+
+    assert aufrufe == [
+        ("monat", {"echt": True, "monat": None, "uebergabe": False, "zwischenstand": True, "anfragen": False, "auszug": None, "ziel": []}),
+        ("posten", {"echt": True, "mail": True, "antworten": False}),
+    ]
+
+
+def test_h_zeitgrenze_laesst_monatslauf_offen_und_wartet_eine_stunde(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"monat": "2026-10-03T09:00:00+02:00"}})
+    aufrufe, versuche = [], []
+
+    @contextmanager
+    def zu_lang(*_args):
+        versuche.append(zeit[0])
+        raise takt.LaufZuLang("monat: Lauf nach 1 Minuten abgebrochen")
+        yield
+
+    monkeypatch.setattr(takt, "_zeitgrenze", zu_lang)
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or 0)
+    takt._nachholen(_args())
+    zeit[0] += timedelta(minutes=59)
+    takt._nachholen(_args())
+    zeit[0] += timedelta(minutes=1)
+    takt._nachholen(_args())
+
+    assert aufrufe == [] and len(versuche) == 2
