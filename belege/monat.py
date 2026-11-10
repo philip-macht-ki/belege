@@ -39,7 +39,7 @@ def _vormonat(monat: str) -> str:
     return (date.fromisoformat(monat + "-01") - timedelta(days=1)).strftime("%Y-%m")
 
 
-def faellige_monate() -> tuple[list[str], list[str]]:
+def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None) -> tuple[list[str], list[str]]:
     """Noch nicht übergebene Monate, höchstens die letzten drei.
 
     Eine neue Einrichtung beginnt bewusst nur mit dem Vormonat.  Ältere Lücken
@@ -47,7 +47,20 @@ def faellige_monate() -> tuple[list[str], list[str]]:
     """
     letzter = _monat(None)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
-    monate = sorted(k for k in (gesehen.get("uebergabe", {}) or {}) if re.fullmatch(r"\d{4}-\d{2}", k))
+    uebergaben = gesehen.get("uebergabe", {}) or {}
+    if firma is None:
+        monate = sorted(k for k in uebergaben if re.fullmatch(r"\d{4}-\d{2}", k))
+    else:
+        praefix = f"{firma['name']}:"
+        monate = sorted({wert[:7] for schluessel in uebergaben
+                         if schluessel.startswith(praefix)
+                         for wert in [schluessel[len(praefix):]]
+                         if re.fullmatch(r"\d{4}-\d{2}(?::.+)?", wert)})
+        # Ein alter, einfacher Merker stammt aus einer Einzel-Firma-Einrichtung.
+        # In einer Mehr-Firma-Einrichtung darf er keinen anderen Firmenstand verdecken.
+        if len(firmen or kern.firmen()) == 1:
+            monate += sorted(k for k in uebergaben if re.fullmatch(r"\d{4}-\d{2}", k))
+            monate = sorted(set(monate))
     if not monate:
         return [letzter], []
     start = date.fromisoformat(monate[-1] + "-01")
@@ -995,17 +1008,25 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
 def befehl(args) -> int:
     """Führt Monatsabgleich, optionale Übergabe und Rechnungsanfragen aus."""
     if not getattr(args, "monat", None) and getattr(args, "uebergabe", False):
-        monate, ueberlesen = faellige_monate()
-        if ueberlesen:
-            text = f"Nicht automatisch nachgeholt: {ueberlesen[0]} bis {ueberlesen[-1]} (mehr als drei Monate zurück)."
-            print(f"befund: {text}")
-            kern.ereignis("monat", text)
         code = 0
-        for monat_wert in monate:
-            from argparse import Namespace
-            werte = vars(args).copy()
-            werte["monat"] = monat_wert
-            code = max(code, befehl(Namespace(**werte)))
+        firmen = kern.firmen()
+        plaene = [(None, *faellige_monate())] if len(firmen) <= 1 else [
+            (firma, *faellige_monate(firma, firmen)) for firma in firmen
+        ]
+        for firma, monate, ueberlesen in plaene:
+            if ueberlesen:
+                zusatz = f" für {firma['name']}" if firma else ""
+                text = (f"Nicht automatisch nachgeholt{zusatz}: {ueberlesen[0]} bis {ueberlesen[-1]} "
+                        "(mehr als drei Monate zurück).")
+                print(f"befund: {text}")
+                kern.ereignis("monat", text)
+            for monat_wert in monate:
+                from argparse import Namespace
+                werte = vars(args).copy()
+                werte["monat"] = monat_wert
+                if firma:
+                    werte["_firma"] = firma["name"]
+                code = max(code, befehl(Namespace(**werte)))
         if kern.echt(args) and code == 0:
             gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
             gesehen.setdefault("lauf", {})["monat"] = kern.jetzt().isoformat(timespec="seconds")
@@ -1026,11 +1047,14 @@ def befehl(args) -> int:
         return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     alle_firmen = kern.firmen()
+    aktive_firmen = alle_firmen
+    if getattr(args, "_firma", None):
+        aktive_firmen = [firma for firma in alle_firmen if firma["name"] == args._firma]
     if len(alle_firmen) > 1:
         buchungen = buchungen_aus(auszuege, monat)
         alle_daten: list[dict] = []
         je_firma: list[tuple[str, list[dict]]] = []
-        for einzelfirma in alle_firmen:
+        for einzelfirma in aktive_firmen:
             hinweis = None
             if not einzelfirma.get("konten") and einzelfirma["name"] != alle_firmen[0]["name"]:
                 hinweis = "Kontoauszug keiner Firma zugeordnet: trag in [[firma]] konten ein"
