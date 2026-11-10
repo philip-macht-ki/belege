@@ -43,7 +43,9 @@ def berichtszeitraum() -> tuple[datetime | None, datetime | None]:
         vorher = datetime.fromisoformat(stand)
     except ValueError:
         return None, None
-    return vorher, max(vorher + timedelta(days=1), jetzt() - timedelta(days=30))
+    # Der Zeitraum beginnt unmittelbar nach dem letzten Bericht, genau wie die
+    # Auswahl der Ereignisse; ein Tagesaufschlag würde die Kopfzeile verfälschen.
+    return vorher, max(vorher, jetzt() - timedelta(days=30))
 
 
 def _zeile_beleg(e: dict) -> str:

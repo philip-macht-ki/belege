@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import os
+import re
 import signal
 import threading
 import time
@@ -256,6 +257,7 @@ def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
                 fehlerfrei = fehlerfrei and not zustand.startswith(("fehler", "Exit"))
     except RuntimeError:
         print("nichts: Ein Lauf ist schon aktiv.")
+        fehlerfrei = False
     except LaufZuLang as grenze:
         fehlerfrei = False
         meldung = f"{grenze} Zuletzt lief der Schritt {aktiv}."
@@ -316,6 +318,9 @@ def _alte_laeufe_merken() -> None:
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     lauf = gesehen.setdefault("lauf", {})
     geaendert = False
+    if not re.fullmatch(r"\d{4}-\d{2}", str(gesehen.get("nachholen_ab_monat", ""))):
+        gesehen["nachholen_ab_monat"] = jetzt().strftime("%Y-%m")
+        geaendert = True
     if "tag" not in lauf and gesehen.get("bericht"):
         lauf["tag"] = str(gesehen["bericht"])
         geaendert = True
@@ -325,6 +330,12 @@ def _alte_laeufe_merken() -> None:
     if "posten" not in lauf and any(str(s).startswith("posten:") for s in (gesehen.get("gesendet_teile") or {})):
         lauf["posten"] = jetzt().isoformat(timespec="seconds")
         geaendert = True
+    # Fehlt ein alter Merker ganz, ist das kein rückwirkend fälliger Lauf.  Ab
+    # diesem Update wird erst der nächste reguläre Termin nachgeholt.
+    for name in ("tag", "monat", "posten"):
+        if name not in lauf:
+            lauf[name] = jetzt().isoformat(timespec="seconds")
+            geaendert = True
     if geaendert:
         schreiben(pfad("arbeit", "gesehen.json"), gesehen)
 
@@ -373,9 +384,27 @@ def _nachholen(args) -> None:
     if not echt(args):
         return
     _alte_laeufe_merken()
+    def begrenzt(name, lauf):
+        try:
+            with _zeitgrenze(_max_minuten() * 60, name, True), Sperre(name):
+                return lauf()
+        except LaufZuLang:
+            return 1
+        except RuntimeError:
+            return 1
+
+    def posten_lauf():
+        monat_modul = importlib.import_module("belege.monat")
+        posten_modul = importlib.import_module("belege.posten")
+        zwischenstand = Namespace(echt=True, monat=None, uebergabe=False,
+                                  zwischenstand=True, anfragen=False, auszug=None, ziel=[])
+        if monat_modul.befehl(zwischenstand):
+            return 1
+        return posten_modul.befehl(Namespace(echt=True, mail=True, antworten=False))
+
     laeufe = (("tag", _faelliger_tag, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
-              ("monat", _faelliger_monat, lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[]))),
-              ("posten", _faellige_posten, lambda: importlib.import_module("belege.posten").mail(True)))
+              ("monat", _faelliger_monat, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[])))),
+              ("posten", _faellige_posten, lambda: begrenzt("posten", posten_lauf)))
     for name, faellig, ausfuehren in laeufe:
         if not _nachholen_eingerichtet(name) or not faellig() or not _versuch_merken(name):
             continue

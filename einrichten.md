@@ -17,8 +17,11 @@ mit `winget install --id UB-Mannheim.TesseractOCR -e` (deutsche Sprachdaten sind
 dabei) und prüft danach mit `uv run belege pruefen`, dass `tesseract` gefunden
 wird. Fehlt Tesseract, liest Claude solche Belege selbst, das kostet Nutzung im
 Claude-Abo. Der Zeitplan läuft über die Aufgabenplanung; die Läufe heißen dort
-„belege takt“, „belege tag“ usw. Ein Laptop holt verpasste Läufe beim nächsten
-Start nach.
+„belege takt“, „belege tag“ usw. Ein Laptop holt ab diesem Update verpasste Läufe
+beim nächsten Start nach: Belege bis 60 Tage und Monatsübergaben bis drei Monate,
+Tagesbericht und Zwischenstand jeweils einmal zusammengefasst. Ältere oder von
+Hand ausgelassene Monate werden nicht automatisch versendet, auch nicht nach
+ausgeschaltetem Zeitplan.
 
 Hallo. Heute richten wir nur das Postfach ein: Rechnungen landen danach von
 allein in `~/Belege`. Das kurze Video aus Lektion 0-1 ist freiwillig.

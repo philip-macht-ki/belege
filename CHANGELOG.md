@@ -8,6 +8,9 @@ aktion: keine
 
 - Nach einem ausgeschalteten Mac holt belege fehlende Tages-, Monats- und Postenläufe beim nächsten Takt kontrolliert nach.
 - Monatsabschluss und Tagesbericht richten sich am letzten erfolgreichen Lauf aus, mit klaren Grenzen für lange Pausen.
+- Das gilt für alles, was ab diesem Update verpasst wird: Belege bis 60 Tage,
+  Monatsübergaben bis drei Monate sowie Tagesbericht und Zwischenstand jeweils
+  einmal zusammengefasst. Ältere Lücken werden nicht rückwirkend versendet.
 
 ### Musst du etwas tun?
 

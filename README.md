@@ -7,7 +7,10 @@ stehenden Mac-Schritten. Unter Windows öffne PowerShell, installiere uv bei Bed
 mit `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 und Git über Git for Windows. Windows-Pfade verwenden Backslashes; App-Passwörter
 und die übrige Konfiguration bleiben gleich. `belege zeitplan an --echt` legt
-Aufgaben für den aktuellen Benutzer an und holt verpasste Läufe nach. MoneyMoney
+Aufgaben für den aktuellen Benutzer an. Wenn der Rechner wieder läuft, fasst
+belege ab diesem Update verpasste Belege (bis 60 Tage), Monatsübergaben (bis drei
+Monate), Zwischenstände und Tagesberichte einmal zusammen; alte Lücken löst es
+nicht rückwirkend aus. MoneyMoney
 ist Mac-only. Unter Windows empfiehlt sich kostenloses Hibiscus/Jameica
 (`einrichten_hibiscus.md`) oder CSV-Auszüge von Hand im Auszugsordner.
 
@@ -41,6 +44,11 @@ allein; deine Einstellungen, Zeitpläne und Schlüssel bleiben erhalten. Ein Upd
 bei dem du selbst etwas entscheiden musst, wird nicht automatisch eingespielt.
 Dann sag einfach deinem Claude: „Update“. Du kannst den automatischen Check in
 `konfig/belege.toml` mit `[update] automatisch = false` ausschalten.
+
+Nach einem Ausfall holt belege nur Termine nach, die ab diesem Update verpasst
+wurden: Belege bis 60 Tage und Monatsübergaben bis drei Monate, Tagesbericht und
+Zwischenstand jeweils als eine Zusammenfassung. Bereits ältere oder von Hand
+ausgelassene Monate werden nicht überraschend versendet.
 
 ## Was es tut
 
@@ -96,7 +104,7 @@ das einmal und danach höchstens wöchentlich; nach einer Nachlieferung folgt En
   auf eine Kopie der Datei (abschaltbar: `[texterkennung] claude = false`).
 - **Ein Rechner arbeitet.** Zeitplan und Ablage laufen nur auf deinem
   Dauerrechner. `[rechner] erlaubt` in `konfig/belege.toml` sperrt alle anderen,
-  denn ein Laptop holt verpasste Läufe beim Aufklappen nach und legt sonst
+  denn ein Laptop holt ab diesem Update verpasste Läufe beim Aufklappen nach und legt sonst
   doppelt ab.
 - **Der Ordner ist deine Arbeitskopie.** Das Original bleibt im Postfach bzw. bei
   deinem Steuerberater oder Buchhaltungsprogramm. Bei E-Rechnungen wird das XML

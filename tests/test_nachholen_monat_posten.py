@@ -106,7 +106,7 @@ def test_nachholen_posten_sendet_verpassten_zwischenstand_nur_einmal(repo, monke
     zeit = [datetime(2026, 11, 4, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     posten.fortschreiben([{"datum": "2026-11-01", "betrag": -12.5, "name": "Pixelwerk", "zweck": "Abo", "status": "fehlt"}])
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"tag": zeit[0].isoformat(), "monat": zeit[0].isoformat()}})
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": zeit[0].isoformat(), "monat": zeit[0].isoformat(), "posten": "2026-10-15T07:00:00+02:00"}})
     gesendet = []
     monkeypatch.setattr("belege.senden.senden", lambda *args, **kw: gesendet.append(args) or kern.Ergebnis("ok"))
 
@@ -165,3 +165,40 @@ def test_nachholen_monat_einzelfirma_liest_alten_einfachen_merker(repo, monkeypa
     assert [betreff for betreff, _ in gesendet] == [
         "Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel",
     ]
+
+
+def test_nach_update_holt_monat_keine_alte_handluecke_nach(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 12, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-08": "2026-09-03T09:00:00+02:00"}})
+    assert monat.faellige_monate() == (["2026-10"], [])
+
+
+def test_nach_update_holt_monate_seit_start_ueber_jahreswechsel_nach(repo, monkeypatch):
+    zeit = [datetime(2027, 2, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-08": "2026-09-03T09:00:00+02:00"}})
+    assert monat.faellige_monate() == (["2026-11", "2026-12", "2027-01"], [])
+
+
+def test_monatsnachholen_stoppt_an_fehlermonat_und_setzt_dort_fort(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+    original = monat.befehl
+    aufrufe, fehler = [], [True]
+
+    def lauf(args):
+        if args.monat is None:
+            return original(args)
+        aufrufe.append(args.monat)
+        if args.monat == "2026-09" and fehler and fehler.pop():
+            return 1
+        kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {args.monat: zeit[0].isoformat()}})
+        return 0
+
+    monkeypatch.setattr(monat, "befehl", lauf)
+    assert monat.befehl(_args()) == 1
+    assert aufrufe == ["2026-08", "2026-09"]
+    assert monat.befehl(_args()) == 0
+    assert aufrufe == ["2026-08", "2026-09", "2026-09", "2026-10"]

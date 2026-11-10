@@ -35,10 +35,6 @@ def _monat(wert: str | None) -> str:
     return (erster - timedelta(days=1)).strftime("%Y-%m")
 
 
-def _vormonat(monat: str) -> str:
-    return (date.fromisoformat(monat + "-01") - timedelta(days=1)).strftime("%Y-%m")
-
-
 def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None) -> tuple[list[str], list[str]]:
     """Noch nicht übergebene Monate, höchstens die letzten drei.
 
@@ -71,6 +67,14 @@ def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None)
     # Der aktuelle Vormonat muss auch bei einer unvollständigen Merkerliste laufen.
     if letzter not in alle and letzter not in monate:
         alle.append(letzter)
+    # Bei einem Update darf eine alte, von Hand entstandene Lücke nicht plötzlich
+    # an das Steuerbüro gehen.  Vor dem Startmonat gilt deshalb weiter nur der
+    # damalige Vormonat; erst danach sind echte Ausfälle nachholbar.
+    ab = str(gesehen.get("nachholen_ab_monat", ""))
+    if re.fullmatch(r"\d{4}-\d{2}", ab):
+        vor_ab = [wert for wert in alle if wert < ab]
+        ab_da = [wert for wert in alle if wert >= ab]
+        alle = ([letzter] if letzter in vor_ab else []) + ab_da
     ueberlesen = alle[:-3]
     return alle[-3:], ueberlesen
 
@@ -1026,7 +1030,12 @@ def befehl(args) -> int:
                 werte["monat"] = monat_wert
                 if firma:
                     werte["_firma"] = firma["name"]
-                code = max(code, befehl(Namespace(**werte)))
+                ergebnis = befehl(Namespace(**werte))
+                code = max(code, ergebnis)
+                # Die Übergaben sind eine Kette: Nach einem Fehler darf kein
+                # späterer Monat den gemeinsamen Fortschrittsstand überspringen.
+                if ergebnis:
+                    break
         if kern.echt(args) and code == 0:
             gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
             gesehen.setdefault("lauf", {})["monat"] = kern.jetzt().isoformat(timespec="seconds")
