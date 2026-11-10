@@ -56,7 +56,7 @@ def test_nachholen_monat_uebergibt_die_letzten_drei_monate_einmal(repo, monkeypa
     zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
 
     assert monat.befehl(_args()) == 0
 
@@ -92,7 +92,7 @@ def test_nachholen_monat_meldet_ausgelassene_monate(repo, monkeypatch, capsys):
     zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-03": "2026-04-03T10:00:00+02:00"}})
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-04", "uebergabe": {"2026-03": "2026-04-03T10:00:00+02:00"}})
 
     assert monat.befehl(_args()) == 0
 
@@ -141,7 +141,7 @@ def test_nachholen_monat_bestimmt_den_stand_je_firma(repo, monkeypatch):
         + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\nkonten = []\n',
         encoding="utf-8",
     )
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {
         "Firma A:2026-09": "2026-10-03T10:00:00+02:00",
         "Firma B:2026-07": "2026-08-03T10:00:00+02:00",
     }})
@@ -158,7 +158,7 @@ def test_nachholen_monat_einzelfirma_liest_alten_einfachen_merker(repo, monkeypa
     zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
 
     assert monat.befehl(_args()) == 0
 
@@ -184,7 +184,7 @@ def test_nach_update_holt_monate_seit_start_ueber_jahreswechsel_nach(repo, monke
 def test_monatsnachholen_stoppt_an_fehlermonat_und_setzt_dort_fort(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
-    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
     original = monat.befehl
     aufrufe, fehler = [], [True]
 
@@ -194,7 +194,9 @@ def test_monatsnachholen_stoppt_an_fehlermonat_und_setzt_dort_fort(repo, monkeyp
         aufrufe.append(args.monat)
         if args.monat == "2026-09" and fehler and fehler.pop():
             return 1
-        kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {args.monat: zeit[0].isoformat()}})
+        gesehen = kern.lesen(repo / "arbeit" / "gesehen.json", {}) or {}
+        gesehen.setdefault("uebergabe", {})[args.monat] = zeit[0].isoformat()
+        kern.schreiben(repo / "arbeit" / "gesehen.json", gesehen)
         return 0
 
     monkeypatch.setattr(monat, "befehl", lauf)
@@ -202,3 +204,46 @@ def test_monatsnachholen_stoppt_an_fehlermonat_und_setzt_dort_fort(repo, monkeyp
     assert aufrufe == ["2026-08", "2026-09"]
     assert monat.befehl(_args()) == 0
     assert aufrufe == ["2026-08", "2026-09", "2026-09", "2026-10"]
+
+
+def test_uebergabefehler_stoppt_echte_monatskette_und_holt_luecke_nach(repo, monkeypatch):
+    """Nur Uhr und unterste Versandschicht sind ersetzt; monat.befehl läuft echt."""
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _auszuege_bis_oktober(repo)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "alt"}})
+    gesendet, kaputt = [], [True]
+
+    def senden(*args, **_kw):
+        gesendet.append(args[1])
+        fehler = args[1].startswith("Belege 09/") and bool(kaputt)
+        if fehler:
+            kaputt.pop()
+        return kern.Ergebnis("fehler" if fehler else "ok")
+
+    monkeypatch.setattr("belege.senden.senden", senden)
+    assert monat.befehl(_args()) == 1
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel"]
+    assert set(kern.lesen(repo / "arbeit" / "gesehen.json")["uebergabe"]) == {"2026-07", "2026-08"}
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel"]
+
+
+def test_kalenderweg_setzt_startgrenze_im_echten_monatsbefehl(repo, monkeypatch):
+    """Nur Uhr und Versandschicht sind ersetzt; auch Folge- und Jahreswechsel laufen echt."""
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _auszuege_bis_oktober(repo)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "alt"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *args, **_kw: gesendet.append(args[1]) or kern.Ergebnis("ok"))
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 10/2026, Studio Beispiel"]
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 10/2026, Studio Beispiel"]
+    zeit[0] = datetime(2027, 2, 5, 10, tzinfo=kern.zone())
+    (repo / "auszuege" / "2026.csv").write_text((repo / "auszuege" / "2026.csv").read_text(encoding="utf-8") + "02.11.2026;Bank;-1,00\n02.12.2026;Bank;-1,00\n02.01.2027;Bank;-1,00\n", encoding="utf-8")
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")][-3:] == ["Belege 11/2026, Studio Beispiel", "Belege 12/2026, Studio Beispiel", "Belege 01/2027, Studio Beispiel"]

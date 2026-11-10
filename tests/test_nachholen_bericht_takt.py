@@ -305,7 +305,7 @@ def test_f_aktive_tag_sperre_markiert_den_lauf_nicht_als_erledigt(repo, monkeypa
     _uhr(monkeypatch, zeit)
     kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"tag": "2026-11-02T21:00:00+01:00"}})
     aufrufe = []
-    monkeypatch.setattr(takt, "_lauf", lambda *a: aufrufe.append(a[2]) or False)
+    monkeypatch.setattr(takt, "_lauf", lambda *a: aufrufe.append(a[2]) or None)
 
     takt._nachholen(_args())
     takt._nachholen(_args())
@@ -354,3 +354,74 @@ def test_h_zeitgrenze_laesst_monatslauf_offen_und_wartet_eine_stunde(repo, monke
     takt._nachholen(_args())
 
     assert aufrufe == [] and len(versuche) == 2
+
+
+def test_3a_echter_nachholtag_blockiert_heutigen_termin_nicht(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 8, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true"), encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-03T21:00:00+01:00"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append(a[1]) or kern.Ergebnis("ok"))
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 11, 5, 21, tzinfo=kern.zone())
+    assert takt.befehl_tag(_args()) == 0
+    assert len(gesendet) == 2
+
+
+def test_3b_echter_handtag_am_nachmittag_blockiert_abendtermin_nicht(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 15, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true"), encoding="utf-8")
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append(a[1]) or kern.Ergebnis("ok"))
+    assert takt.befehl_tag(_args()) == 0
+    zeit[0] = datetime(2026, 11, 5, 21, tzinfo=kern.zone())
+    assert takt.befehl_tag(_args()) == 0
+    assert len(gesendet) == 2
+
+
+def test_3c_echter_nachholtag_fuer_denselben_termin_ist_nur_einmal(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 21, 1, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true"), encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-04T21:00:00+01:00"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append(a[1]) or kern.Ergebnis("ok"))
+    takt._nachholen(_args())
+    zeit[0] += timedelta(minutes=1)
+    assert takt.befehl_tag(_args()) == 0
+    assert len(gesendet) == 1
+
+
+def test_3d_echter_tagtermin_mit_andere_uhrzeit(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 8, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true").replace('tag_uhrzeit = "21:00"', 'tag_uhrzeit = "07:30"'), encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-04T07:30:00+01:00"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append(a[1]) or kern.Ergebnis("ok"))
+    takt._nachholen(_args())
+    assert takt.befehl_tag(_args()) == 0
+    assert len(gesendet) == 1
+
+
+def test_4a_echter_tagesfehler_wartet_eine_stunde(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 8, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("leer_senden = false", "leer_senden = true"), encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-03T21:00:00+01:00"}})
+    versuche = []
+    def senden(*a, **kw):
+        versuche.append(zeit[0])
+        return kern.Ergebnis("fehler")
+    monkeypatch.setattr("belege.senden.senden", senden)
+    for minuten in (0, 15, 15, 31):
+        zeit[0] += timedelta(minutes=minuten)
+        takt._nachholen(_args())
+    assert len(versuche) == 2

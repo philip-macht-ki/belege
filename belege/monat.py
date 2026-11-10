@@ -35,6 +35,14 @@ def _monat(wert: str | None) -> str:
     return (erster - timedelta(days=1)).strftime("%Y-%m")
 
 
+def _lauftermin() -> datetime | None:
+    """Der bereits erreichte Solltermin des monatlichen Kalenderlaufs."""
+    nun = kern.jetzt()
+    tag = int(kern.konfig("belege").get("uebergabe", {}).get("tag", 3))
+    soll = nun.replace(day=tag, hour=9, minute=0, second=0, microsecond=0)
+    return soll if nun >= soll else None
+
+
 def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None) -> tuple[list[str], list[str]]:
     """Noch nicht übergebene Monate, höchstens die letzten drei.
 
@@ -43,6 +51,11 @@ def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None)
     """
     letzter = _monat(None)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+    # Die Grenze gehört zum Monatsweg selbst, nicht nur zum Takt.  So kann ein
+    # Kalender- oder Handlauf nach dem Update keine alte Lücke zustellen.
+    if not re.fullmatch(r"\d{4}-\d{2}", str(gesehen.get("nachholen_ab_monat", ""))):
+        gesehen["nachholen_ab_monat"] = kern.jetzt().strftime("%Y-%m")
+        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
     uebergaben = gesehen.get("uebergabe", {}) or {}
     if firma is None:
         monate = sorted(k for k in uebergaben if re.fullmatch(r"\d{4}-\d{2}", k))
@@ -897,7 +910,7 @@ def _hinweise_text(monat: str, index: dict, firma: dict | None = None) -> str:
     return "Hinweise für die Buchhaltung\n" + "\n".join(zeilen) if zeilen else ""
 
 
-def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, firma: dict | None = None) -> None:
+def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, firma: dict | None = None) -> bool:
     """Übergibt das Paket an den Steuerberater, einmal je Monat.
 
     Die offenen Posten stehen im Mailtext, nicht als Anhang, weil Beleg-Adressen
@@ -915,7 +928,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     if schon and "nochmal" not in (getattr(args, "ziel", None) or []):
         print(f"nichts: {monat} wurde schon am {schon[:10]} übergeben. Nochmal: belege monat nochmal "
               f"--monat {monat} --uebergabe --echt")
-        return
+        return True
 
     cfg = kern.konfig("belege").get("uebergabe", {})
     cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
@@ -924,6 +937,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     if adressen and cfg.get("weg", "mail") == "mail":
         from .senden import senden
         name = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
+        gelungen = True
         for art in ("eingang", "ausgang", "sonstige"):
             eigene = f"{schluessel}:{art}"
             if gesehen.get("uebergabe", {}).get(eigene):
@@ -934,6 +948,7 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
                 continue
             if not adresse:
                 print(f"befund: {art}: keine Übergabe-Adresse eingetragen, nicht gesendet.")
+                gelungen = False
                 continue
             # Die offenen Posten stehen wie bei der gemeinsamen Übergabe im Text, hier in der Mail mit den Eingangsbelegen.
             posten = ("\n\n" + offene_posten_text(monat, ergebnis)) if art == "eingang" else ""
@@ -941,10 +956,12 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
             text_art = f"Hallo,\n\nanbei {len(dateien)} Belege ({art}) für {monat[5:]}/{monat[:4]}.{posten}{notizen}\n\nViele Grüße\n{name}"
             r = senden(adresse, f"Belege {monat[5:]}/{monat[:4]} ({art}), {name}", text_art, dateien, echt, fortschritt=f"uebergabe:{eigene}")
             print(f"{r.status}: {r.meldung}")
-            if echt and r.status == "ok":
-                gesehen.setdefault("uebergabe", {})[eigene] = kern.jetzt().isoformat(timespec="seconds")
-                kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
-        return
+            if not echt or r.status != "ok":
+                gelungen = False
+                continue
+            gesehen.setdefault("uebergabe", {})[eigene] = kern.jetzt().isoformat(timespec="seconds")
+            kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+        return gelungen
     dateien = paket_packen(monat, ziel, index, firma["name"] if firma else None)
     betrieb = firma["name"] if firma else kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     betreff = f"Belege {monat[5:]}/{monat[:4]}, {betrieb}"
@@ -958,11 +975,11 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     if cfg.get("weg") == "ordner":
         if not cfg.get("ordner"):
             print("fehler: [uebergabe] ordner ist leer.")
-            return
+            return False
         zielordner = kern.erweitert(cfg["ordner"]) / monat
         if not echt:
             print(f"trocken: würde {len(dateien)} Dateien nach {zielordner} kopieren.")
-            return
+            return True
         zielordner.mkdir(parents=True, exist_ok=True)
         for datei in dateien + [ziel / "fehlt_noch.md", ziel / "klaerung.md"]:
             shutil.copy2(datei, kern.freier_name(zielordner / datei.name))
@@ -971,18 +988,19 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
         if not cfg.get("adresse"):
             print("fehler: [uebergabe] adresse ist leer. "
                   "Sag deinem Claude: Richte Teil 5 aus einrichten.md ein.")
-            return
+            return False
         from .senden import senden
 
         r = senden(cfg["adresse"], betreff, text, dateien, echt, fortschritt=f"uebergabe:{schluessel}")
         print(f"{r.status}: {r.meldung}")
         if not echt or r.status != "ok":
-            return
+            return False
         ergebnis_text = f"{len(dateien)} Belege an {cfg['adresse']} gesendet"
 
     gesehen.setdefault("uebergabe", {})[schluessel] = kern.jetzt().isoformat(timespec="seconds")
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
     kern.ereignis("monat", f"Übergabe {monat}: {ergebnis_text}")
+    return True
 
 
 def _anfragen(daten: list[dict], echt: bool) -> None:
@@ -1028,6 +1046,7 @@ def befehl(args) -> int:
                 from argparse import Namespace
                 werte = vars(args).copy()
                 werte["monat"] = monat_wert
+                werte["_nachholkette"] = True
                 if firma:
                     werte["_firma"] = firma["name"]
                 ergebnis = befehl(Namespace(**werte))
@@ -1037,9 +1056,11 @@ def befehl(args) -> int:
                 if ergebnis:
                     break
         if kern.echt(args) and code == 0:
-            gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
-            gesehen.setdefault("lauf", {})["monat"] = kern.jetzt().isoformat(timespec="seconds")
-            kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+            termin = _lauftermin()
+            if termin:
+                gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf", {})["monat"] = termin.isoformat(timespec="seconds")
+                kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
         return code
     monat = _monat(getattr(args, "monat", None))
     auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
@@ -1053,7 +1074,7 @@ def befehl(args) -> int:
         text = f"Für {_monatsname(monat)} fehlt der Kontoauszug. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney."
         kern.ereignis("monat", text)
         print(f"nichts: {text}")
-        return 0
+        return 1 if getattr(args, "_nachholkette", False) else 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     alle_firmen = kern.firmen()
     aktive_firmen = alle_firmen
@@ -1078,7 +1099,8 @@ def befehl(args) -> int:
             print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
             je_firma.append((einzelfirma["name"], daten_firma))
             if getattr(args, "uebergabe", False):
-                _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
+                if not _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma) and getattr(args, "_nachholkette", False):
+                    return 1
             if getattr(args, "anfragen", False):
                 _anfragen(daten_firma, kern.echt(args))
         from .posten import fortschreiben
@@ -1106,7 +1128,8 @@ def befehl(args) -> int:
     betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     monatsmail.senden(monat, monatsmail.text(monat, [(betrieb, daten)], index), args)
     if getattr(args, "uebergabe", False):
-        _uebergabe(monat, ziel, index, daten, args)
+        if not _uebergabe(monat, ziel, index, daten, args) and getattr(args, "_nachholkette", False):
+            return 1
     if getattr(args, "anfragen", False):
         _anfragen(daten, kern.echt(args))
     return 0
