@@ -16,9 +16,10 @@ import time
 import traceback
 from collections import Counter
 from contextlib import contextmanager
+from datetime import timedelta
 
 from .einrichten import auffrischen as _starter_auffrischen
-from .kern import CloudGesperrt, Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
+from .kern import CloudGesperrt, Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, lesen, log, netz_da, netzfehler, pfad, schreiben, jetzt
 
 
 def _weiterreichen(args) -> argparse.Namespace:
@@ -294,6 +295,70 @@ def lebenszeichen(wach: bool = False) -> None:
         log(f"Lebenszeichen nicht gesendet: {fehler}")
 
 
+def _laufstand(name: str) -> str:
+    return str((lesen(pfad("arbeit", "gesehen.json"), {}) or {}).get("lauf", {}).get(name, ""))
+
+
+def _versuch_merken(name: str) -> bool:
+    """Höchstens ein fehlgeschlagener Nachholversuch je Stunde."""
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    alt = str((gesehen.get("nachholversuch", {}) or {}).get(name, ""))
+    try:
+        from datetime import datetime
+        if jetzt() - datetime.fromisoformat(alt) < timedelta(hours=1):
+            return False
+    except ValueError:
+        pass
+    gesehen.setdefault("nachholversuch", {})[name] = jetzt().isoformat(timespec="seconds")
+    schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+    return True
+
+
+def _faelliger_tag() -> bool:
+    zeit = str(konfig("belege").get("takt", {}).get("tag_uhrzeit", "21:00"))
+    stunde, minute = (int(x) for x in zeit.split(":"))
+    nun = jetzt()
+    soll = nun.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+    if nun < soll:
+        soll -= timedelta(days=1)
+    return not _laufstand("tag") or _laufstand("tag")[:10] < soll.date().isoformat()
+
+
+def _faelliger_monat() -> bool:
+    nun = jetzt()
+    return nun.day >= 3 and (nun.day > 3 or (nun.hour, nun.minute) >= (9, 0)) and _laufstand("monat")[:7] != nun.strftime("%Y-%m")
+
+
+def _faellige_posten() -> bool:
+    nun = jetzt()
+    tage = [d for d in (1, 15) if nun.day > d or (nun.day == d and (nun.hour, nun.minute) >= (7, 0))]
+    if not tage:
+        return False
+    return _laufstand("posten")[:10] < nun.replace(day=tage[-1]).date().isoformat()
+
+
+def _nachholen(args) -> None:
+    """Startet nach einem ausgeschalteten Mac jeden fälligen Kalenderlauf einmal."""
+    from argparse import Namespace
+    if not echt(args):
+        return
+    laeufe = (("tag", _faelliger_tag, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
+              ("monat", _faelliger_monat, lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[]))),
+              ("posten", _faellige_posten, lambda: importlib.import_module("belege.posten").mail(True)))
+    for name, faellig, ausfuehren in laeufe:
+        if not faellig() or not _versuch_merken(name):
+            continue
+        try:
+            ok = ausfuehren() == 0 if name != "tag" else bool(ausfuehren())
+            if ok and name == "tag":
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf", {})["tag"] = jetzt().isoformat(timespec="seconds")
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+        except Exception as fehler:  # Ein Nachholfehler stoppt den normalen Takt nicht.
+            ereignis("fehler", f"Nachholen {name}: {fehler}")
+            log(f"Nachholen {name} fehlgeschlagen: {fehler}")
+
+
 def befehl(args) -> int:
     """`belege takt`: Postfach, Handy, Papierpost, Wächter und Opt-in-Aufräumen."""
     if echt(args):
@@ -303,10 +368,15 @@ def befehl(args) -> int:
         schritte += ("aufraeumen",)
     if _lauf(args, schritte, "takt") and echt(args):
         lebenszeichen()
+    _nachholen(args)
     return 0
 
 
 def befehl_tag(args) -> int:
     """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, dann Tagesbericht."""
-    _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
+    ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
+    if ok and echt(args):
+        gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+        gesehen.setdefault("lauf", {})["tag"] = jetzt().isoformat(timespec="seconds")
+        schreiben(pfad("arbeit", "gesehen.json"), gesehen)
     return 0

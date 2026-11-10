@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import subprocess
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreiben
 from .plattform import ist_windows
@@ -21,7 +21,7 @@ def _gesehen() -> dict:
 
 
 def neue_ereignisse() -> list[dict]:
-    """Ereignisse seit dem letzten gesendeten Bericht (höchstens gestern und heute)."""
+    """Ereignisse seit dem letzten Bericht, höchstens dreißig Tage."""
     seit = None
     stand = _gesehen().get("bericht")
     if stand:
@@ -29,6 +29,8 @@ def neue_ereignisse() -> list[dict]:
             seit = datetime.fromisoformat(stand)
         except ValueError:
             seit = None
+    if seit:
+        seit = max(seit, jetzt() - timedelta(days=30))
     return [e for e in ereignisse(seit) if e.get("art") in ARTEN]
 
 
@@ -239,6 +241,15 @@ def befehl(args) -> int:
             ereignis("fehler", f"Aufräumliste der Rechnungsprüfung nicht erstellt: {fehler}")
     liste = neue_ereignisse()
     text, betreff = text_und_betreff(liste)
+    stand = _gesehen().get("bericht")
+    if stand:
+        try:
+            vorher = datetime.fromisoformat(stand).date()
+            heute = jetzt().date()
+            if (heute - vorher).days > 1:
+                text = f"Zusammenfassung vom {(vorher + timedelta(days=1)):%d.%m.%Y} bis {heute:%d.%m.%Y}\n\n" + text
+        except ValueError:
+            pass
     if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", False):
         print("nichts: Heute nichts Neues, kein Bericht.")
         return 0

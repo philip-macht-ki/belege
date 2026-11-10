@@ -35,6 +35,33 @@ def _monat(wert: str | None) -> str:
     return (erster - timedelta(days=1)).strftime("%Y-%m")
 
 
+def _vormonat(monat: str) -> str:
+    return (date.fromisoformat(monat + "-01") - timedelta(days=1)).strftime("%Y-%m")
+
+
+def faellige_monate() -> tuple[list[str], list[str]]:
+    """Noch nicht übergebene Monate, höchstens die letzten drei.
+
+    Eine neue Einrichtung beginnt bewusst nur mit dem Vormonat.  Ältere Lücken
+    werden nicht still verschluckt, sondern dem Lauf als Hinweis mitgegeben.
+    """
+    letzter = _monat(None)
+    gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+    monate = sorted(k for k in (gesehen.get("uebergabe", {}) or {}) if re.fullmatch(r"\d{4}-\d{2}", k))
+    if not monate:
+        return [letzter], []
+    start = date.fromisoformat(monate[-1] + "-01")
+    alle: list[str] = []
+    while start.strftime("%Y-%m") < letzter:
+        start = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        alle.append(start.strftime("%Y-%m"))
+    # Der aktuelle Vormonat muss auch bei einer unvollständigen Merkerliste laufen.
+    if letzter not in alle and letzter not in monate:
+        alle.append(letzter)
+    ueberlesen = alle[:-3]
+    return alle[-3:], ueberlesen
+
+
 def _normal(wert: str) -> str:
     """Vereinfacht Namen für einen vorsichtigen Lieferantenvergleich."""
     wert = (
@@ -967,6 +994,23 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
 
 def befehl(args) -> int:
     """Führt Monatsabgleich, optionale Übergabe und Rechnungsanfragen aus."""
+    if not getattr(args, "monat", None) and getattr(args, "uebergabe", False):
+        monate, ueberlesen = faellige_monate()
+        if ueberlesen:
+            text = f"Nicht automatisch nachgeholt: {ueberlesen[0]} bis {ueberlesen[-1]} (mehr als drei Monate zurück)."
+            print(f"befund: {text}")
+            kern.ereignis("monat", text)
+        code = 0
+        for monat_wert in monate:
+            from argparse import Namespace
+            werte = vars(args).copy()
+            werte["monat"] = monat_wert
+            code = max(code, befehl(Namespace(**werte)))
+        if kern.echt(args) and code == 0:
+            gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+            gesehen.setdefault("lauf", {})["monat"] = kern.jetzt().isoformat(timespec="seconds")
+            kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+        return code
     monat = _monat(getattr(args, "monat", None))
     auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
     register_dateien = _konten_pruefen(monat, args)

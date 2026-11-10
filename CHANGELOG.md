@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.19.6] – 10.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Nach einem ausgeschalteten Mac holt belege fehlende Tages-, Monats- und Postenläufe beim nächsten Takt kontrolliert nach.
+- Monatsabschluss und Tagesbericht richten sich am letzten erfolgreichen Lauf aus, mit klaren Grenzen für lange Pausen.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.5] – 09.11.2026
 
 aktion: keine

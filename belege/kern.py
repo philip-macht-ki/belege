@@ -365,12 +365,16 @@ def netzfehler(fehler: BaseException) -> bool:
 
 
 def ereignisse(seit: datetime | None = None) -> list[dict]:
-    """Alle Ereignisse von gestern und heute, optional erst ab `seit`."""
+    """Ereignisse seit ``seit``; ohne Grenze wie bisher gestern und heute."""
     from datetime import timedelta
 
     heute = jetzt().date()
     zeilen: list[dict] = []
-    for tag in (heute - timedelta(days=1), heute):
+    erster = heute - timedelta(days=1)
+    if seit is not None:
+        erster = max(erster, seit.date())
+    for nummer in range((heute - erster).days + 1):
+        tag = erster + timedelta(days=nummer)
         datei = pfad("arbeit", "ereignisse", f"{tag:%Y-%m-%d}.jsonl")
         if not datei.exists():
             continue
