@@ -299,6 +299,36 @@ def _laufstand(name: str) -> str:
     return str((lesen(pfad("arbeit", "gesehen.json"), {}) or {}).get("lauf", {}).get(name, ""))
 
 
+def _nachholen_eingerichtet(name: str) -> bool:
+    """Nur Läufe nachholen, deren Ziel in der Einrichtung vorhanden ist."""
+    cfg = konfig("belege")
+    if name == "tag":
+        bericht = cfg.get("bericht", {})
+        return bool(bericht.get("an") or (konten() or [{}])[0].get("adresse"))
+    if name == "monat":
+        uebergabe = cfg.get("uebergabe", {})
+        return bool(uebergabe.get("adresse") or uebergabe.get("ordner"))
+    return pfad("arbeit", "posten.json").exists()
+
+
+def _alte_laeufe_merken() -> None:
+    """Übernimmt vorhandene Altmerker, ohne nach einem Update alte Läufe zu duplizieren."""
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    lauf = gesehen.setdefault("lauf", {})
+    geaendert = False
+    if "tag" not in lauf and gesehen.get("bericht"):
+        lauf["tag"] = str(gesehen["bericht"])
+        geaendert = True
+    if "monat" not in lauf and (gesehen.get("uebergabe") or gesehen.get("monatsmail")):
+        lauf["monat"] = jetzt().isoformat(timespec="seconds")
+        geaendert = True
+    if "posten" not in lauf and any(str(s).startswith("posten:") for s in (gesehen.get("gesendet_teile") or {})):
+        lauf["posten"] = jetzt().isoformat(timespec="seconds")
+        geaendert = True
+    if geaendert:
+        schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+
+
 def _versuch_merken(name: str) -> bool:
     """Höchstens ein fehlgeschlagener Nachholversuch je Stunde."""
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
@@ -342,11 +372,12 @@ def _nachholen(args) -> None:
     from argparse import Namespace
     if not echt(args):
         return
+    _alte_laeufe_merken()
     laeufe = (("tag", _faelliger_tag, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
               ("monat", _faelliger_monat, lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[]))),
               ("posten", _faellige_posten, lambda: importlib.import_module("belege.posten").mail(True)))
     for name, faellig, ausfuehren in laeufe:
-        if not faellig() or not _versuch_merken(name):
+        if not _nachholen_eingerichtet(name) or not faellig() or not _versuch_merken(name):
             continue
         try:
             ok = ausfuehren() == 0 if name != "tag" else bool(ausfuehren())

@@ -370,9 +370,7 @@ def ereignisse(seit: datetime | None = None) -> list[dict]:
 
     heute = jetzt().date()
     zeilen: list[dict] = []
-    erster = heute - timedelta(days=1)
-    if seit is not None:
-        erster = max(erster, seit.date())
+    erster = seit.date() if seit is not None else heute - timedelta(days=1)
     for nummer in range((heute - erster).days + 1):
         tag = erster + timedelta(days=nummer)
         datei = pfad("arbeit", "ereignisse", f"{tag:%Y-%m-%d}.jsonl")

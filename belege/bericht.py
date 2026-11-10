@@ -34,6 +34,18 @@ def neue_ereignisse() -> list[dict]:
     return [e for e in ereignisse(seit) if e.get("art") in ARTEN]
 
 
+def berichtszeitraum() -> tuple[datetime | None, datetime | None]:
+    """Grenzen der Zusammenfassung, einschließlich der 30-Tage-Grenze."""
+    stand = _gesehen().get("bericht")
+    if not stand:
+        return None, None
+    try:
+        vorher = datetime.fromisoformat(stand)
+    except ValueError:
+        return None, None
+    return vorher, max(vorher + timedelta(days=1), jetzt() - timedelta(days=30))
+
+
 def _zeile_beleg(e: dict) -> str:
     """"04.10. Pixelwerk 59,50 €" aus einem Ereignis `abgelegt`."""
     d = e.get("daten", {})
@@ -241,15 +253,9 @@ def befehl(args) -> int:
             ereignis("fehler", f"Aufräumliste der Rechnungsprüfung nicht erstellt: {fehler}")
     liste = neue_ereignisse()
     text, betreff = text_und_betreff(liste)
-    stand = _gesehen().get("bericht")
-    if stand:
-        try:
-            vorher = datetime.fromisoformat(stand).date()
-            heute = jetzt().date()
-            if (heute - vorher).days > 1:
-                text = f"Zusammenfassung vom {(vorher + timedelta(days=1)):%d.%m.%Y} bis {heute:%d.%m.%Y}\n\n" + text
-        except ValueError:
-            pass
+    vorher, beginn = berichtszeitraum()
+    if vorher and beginn and (jetzt().date() - vorher.date()).days > 1:
+        text = f"Zusammenfassung vom {beginn:%d.%m.%Y} bis {jetzt():%d.%m.%Y}\n\n" + text
     if not liste and not konfig("belege").get("bericht", {}).get("leer_senden", False):
         print("nichts: Heute nichts Neues, kein Bericht.")
         return 0
