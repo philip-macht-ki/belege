@@ -11,6 +11,12 @@ aktion: keine
 - Das gilt für alles, was ab diesem Update verpasst wird: Belege bis 60 Tage,
   Monatsübergaben bis drei Monate sowie Tagesbericht und Zwischenstand jeweils
   einmal zusammengefasst. Ältere Lücken werden nicht rückwirkend versendet.
+- Scheitert eine Monatsübergabe, bleibt dieser Monat als nächster offen; kein späterer
+  Monat überspringt ihn. Fehlt nur ein Kontoauszug, kann der Monat nach dessen
+  Nachlieferung später noch übergeben werden.
+- Tages-, Monats- und Postenläufe merken ihren geplanten Termin. Ein Handlauf oder
+  ein Nachholen sperrt deshalb keinen späteren Kalendertermin; nach einem Fehler
+  wartet der Nachholtakt mindestens eine Stunde bis zum nächsten Versuch.
 
 ### Musst du etwas tun?
 

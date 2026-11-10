@@ -22,6 +22,9 @@ beim nächsten Start nach: Belege bis 60 Tage und Monatsübergaben bis drei Mona
 Tagesbericht und Zwischenstand jeweils einmal zusammengefasst. Ältere oder von
 Hand ausgelassene Monate werden nicht automatisch versendet, auch nicht nach
 ausgeschaltetem Zeitplan.
+Eine fehlgeschlagene Monatsübergabe hält die Reihenfolge an: Erst wenn sie gelingt,
+folgt ein späterer Monat. Ein fehlender Kontoauszug kann nach dem Nachliefern noch
+übergeben werden.
 
 Hallo. Heute richten wir nur das Postfach ein: Rechnungen landen danach von
 allein in `~/Belege`. Das kurze Video aus Lektion 0-1 ist freiwillig.

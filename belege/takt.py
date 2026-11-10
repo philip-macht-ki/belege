@@ -234,7 +234,7 @@ def _zeitgrenze(sekunden: float, name: str, echt_lauf: bool):
         wache.cancel()
 
 
-def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
+def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool | None:
     """Führt mehrere Schritte nacheinander aus, jeden für sich abgesichert.
 
     Gibt zurück, ob alle Schritte ohne Fehler durchliefen. Der ganze Lauf hat eine
@@ -257,7 +257,9 @@ def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
                 fehlerfrei = fehlerfrei and not zustand.startswith(("fehler", "Exit"))
     except RuntimeError:
         print("nichts: Ein Lauf ist schon aktiv.")
-        fehlerfrei = False
+        # Die Sperre bedeutet nicht, dass der Lauf fehlgeschlagen ist.  Der
+        # Nachholtakt darf es beim nächsten Viertelstunden-Takt erneut probieren.
+        return None
     except LaufZuLang as grenze:
         fehlerfrei = False
         meldung = f"{grenze} Zuletzt lief der Schritt {aktiv}."
@@ -375,28 +377,40 @@ def _faellig(name: str, soll: datetime) -> bool:
 
 
 def _faelliger_tag() -> bool:
+    return _faellig("tag", _tag_termin())
+
+
+def _tag_termin() -> datetime:
     zeit = str(konfig("belege").get("takt", {}).get("tag_uhrzeit", "21:00"))
     stunde, minute = (int(x) for x in zeit.split(":"))
     nun = jetzt()
     soll = nun.replace(hour=stunde, minute=minute, second=0, microsecond=0)
     if nun < soll:
         soll -= timedelta(days=1)
-    return _faellig("tag", soll)
+    return soll
 
 
 def _faelliger_monat() -> bool:
+    return jetzt() >= _monat_termin() and _faellig("monat", _monat_termin())
+
+
+def _monat_termin() -> datetime:
     nun = jetzt()
-    soll = nun.replace(day=3, hour=9, minute=0, second=0, microsecond=0)
-    return nun >= soll and _faellig("monat", soll)
+    tag = int(konfig("belege").get("uebergabe", {}).get("tag", 3))
+    return nun.replace(day=tag, hour=9, minute=0, second=0, microsecond=0)
 
 
 def _faellige_posten() -> bool:
+    soll = _posten_termin()
+    return soll is not None and _faellig("posten", soll)
+
+
+def _posten_termin() -> datetime | None:
     nun = jetzt()
     tage = [d for d in (1, 15) if nun.day > d or (nun.day == d and (nun.hour, nun.minute) >= (7, 0))]
     if not tage:
-        return False
-    soll = nun.replace(day=tage[-1], hour=7, minute=0, second=0, microsecond=0)
-    return _faellig("posten", soll)
+        return None
+    return nun.replace(day=tage[-1], hour=7, minute=0, second=0, microsecond=0)
 
 
 def _versuch_vergessen(name: str) -> None:
@@ -420,7 +434,7 @@ def _nachholen(args) -> None:
         except LaufZuLang:
             return 1
         except RuntimeError:
-            return 1
+            return None
 
     def posten_lauf():
         monat_modul = importlib.import_module("belege.monat")
@@ -431,20 +445,24 @@ def _nachholen(args) -> None:
             return 1
         return posten_modul.befehl(Namespace(echt=True, mail=True, antworten=False))
 
-    laeufe = (("tag", _faelliger_tag, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
-              ("monat", _faelliger_monat, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[])))),
-              ("posten", _faellige_posten, lambda: begrenzt("posten", posten_lauf)))
-    for name, faellig, ausfuehren in laeufe:
+    laeufe = (("tag", _faelliger_tag, _tag_termin, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
+              ("monat", _faelliger_monat, _monat_termin, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[])))),
+              ("posten", _faellige_posten, _posten_termin, lambda: begrenzt("posten", posten_lauf)))
+    for name, faellig, termin, ausfuehren in laeufe:
         if not _nachholen_eingerichtet(name) or not faellig() or not _versuch_merken(name):
             continue
         try:
-            ok = ausfuehren() == 0 if name != "tag" else bool(ausfuehren())
-            if ok and name == "tag":
-                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
-                gesehen.setdefault("lauf", {})["tag"] = jetzt().isoformat(timespec="seconds")
-                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
-            elif not ok and name == "tag":
+            ergebnis = ausfuehren()
+            if ergebnis is None:
                 _versuch_vergessen(name)
+                continue
+            ok = ergebnis == 0 if name != "tag" else bool(ergebnis)
+            if ok:
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                # Nicht die Uhrzeit des Nachholens merken: erledigt wurde der
+                # fällige Solltermin.  Der nächste Kalendertermin bleibt frei.
+                gesehen.setdefault("lauf", {})[name] = termin().isoformat(timespec="seconds")
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
         except Exception as fehler:  # Ein Nachholfehler stoppt den normalen Takt nicht.
             ereignis("fehler", f"Nachholen {name}: {fehler}")
             log(f"Nachholen {name} fehlgeschlagen: {fehler}")
@@ -469,12 +487,15 @@ def befehl_tag(args) -> int:
     # Kalendertag.  Sonst könnte `leer_senden` eine Doppelmail erzeugen.
     # Die Startgrenze des Nachholens betrifft den Kalenderjob nicht.  Nur ein
     # tatsächlich heute gelaufener Tageslauf verhindert dessen Doppelversand.
-    if echt(args) and _laufstand("tag")[:10] >= jetzt().date().isoformat():
+    termin = _tag_termin()
+    if echt(args) and jetzt() >= termin and (_zeitwert(_laufstand("tag")) or datetime.min.replace(tzinfo=termin.tzinfo)) >= termin:
         print("nichts: Tageslauf lief für diesen Termin schon.")
         return 0
     ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
     if ok and echt(args):
-        gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
-        gesehen.setdefault("lauf", {})["tag"] = jetzt().isoformat(timespec="seconds")
-        schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+        # Ein Handlauf vor dem Termin erledigt keinen zukünftigen Kalenderlauf.
+        if jetzt() >= termin:
+            gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+            gesehen.setdefault("lauf", {})["tag"] = termin.isoformat(timespec="seconds")
+            schreiben(pfad("arbeit", "gesehen.json"), gesehen)
     return 0

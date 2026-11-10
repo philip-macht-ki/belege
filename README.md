@@ -49,6 +49,8 @@ Nach einem Ausfall holt belege nur Termine nach, die ab diesem Update verpasst
 wurden: Belege bis 60 Tage und Monatsübergaben bis drei Monate, Tagesbericht und
 Zwischenstand jeweils als eine Zusammenfassung. Bereits ältere oder von Hand
 ausgelassene Monate werden nicht überraschend versendet.
+Scheitert eine Monatsübergabe, bleibt genau dieser Monat offen; spätere Monate
+warten bis zum nächsten erfolgreichen Versuch.
 
 ## Was es tut
 
@@ -89,6 +91,7 @@ zeigt die Mail vorab; Antworten auf den Betreff `[Belege-Posten]` mit der Kurz-I
 Wer mehrere Konten hat, kopiert die Beispiele aus `konfig/konten.toml` und trägt je
 Konto Quelle, Dateimuster und Startmonat ein. Fehlt ein Auszug, meldet der Monatslauf
 das einmal und danach höchstens wöchentlich; nach einer Nachlieferung folgt Entwarnung.
+Der Monat kann dann auch später noch übergeben werden.
 
 ## Grundsätze
 
