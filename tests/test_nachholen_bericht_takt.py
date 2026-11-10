@@ -153,7 +153,7 @@ def test_7_takt_holt_verpassten_posten_zwischenstand_einmal(repo, monkeypatch):
     assert len(aufrufe) == 1 and aufrufe[0].mail
 
 
-def test_8_fehler_beim_nachholen_bremst_takt_und_wird_erst_nach_stunde_wiederholt(repo, monkeypatch):
+def test_8_fehler_beim_nachholen_wird_fuer_den_solltermin_nicht_wiederholt(repo, monkeypatch):
     zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": "2026-11-02T21:00:00+01:00", "monat": zeit[0].isoformat(), "posten": zeit[0].isoformat()}})
@@ -174,7 +174,7 @@ def test_8_fehler_beim_nachholen_bremst_takt_und_wird_erst_nach_stunde_wiederhol
     assert takt.befehl(_args()) == 0
 
     assert len(normal) == 3
-    assert len(nachholen) == 2
+    assert len(nachholen) == 1
     assert (kern.lesen(repo / "arbeit" / "gesehen.json", {}) or {})["lauf"]["tag"].startswith("2026-11-02")
 
 
@@ -332,7 +332,7 @@ def test_g_nachgeholter_postenlauf_nutzt_den_kalendereinstieg(repo, monkeypatch)
     ]
 
 
-def test_h_zeitgrenze_laesst_monatslauf_offen_und_wartet_eine_stunde(repo, monkeypatch):
+def test_h_zeitgrenze_verbraucht_den_nachholversuch(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     _uebergabe_einrichten(repo)
@@ -353,7 +353,7 @@ def test_h_zeitgrenze_laesst_monatslauf_offen_und_wartet_eine_stunde(repo, monke
     zeit[0] += timedelta(minutes=1)
     takt._nachholen(_args())
 
-    assert aufrufe == [] and len(versuche) == 2
+    assert aufrufe == [] and len(versuche) == 1
 
 
 def test_3a_echter_nachholtag_blockiert_heutigen_termin_nicht(repo, monkeypatch):
@@ -383,7 +383,7 @@ def test_3b_echter_handtag_am_nachmittag_blockiert_abendtermin_nicht(repo, monke
     assert len(gesendet) == 2
 
 
-def test_3c_echter_nachholtag_fuer_denselben_termin_ist_nur_einmal(repo, monkeypatch):
+def test_3c_hand_und_kalenderlauf_laufen_trotz_nachholen(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 21, 1, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     toml = repo / "konfig" / "belege.toml"
@@ -394,10 +394,10 @@ def test_3c_echter_nachholtag_fuer_denselben_termin_ist_nur_einmal(repo, monkeyp
     takt._nachholen(_args())
     zeit[0] += timedelta(minutes=1)
     assert takt.befehl_tag(_args()) == 0
-    assert len(gesendet) == 1
+    assert len(gesendet) == 2
 
 
-def test_3d_echter_tagtermin_mit_andere_uhrzeit(repo, monkeypatch):
+def test_3d_handlauf_mit_anderer_uhrzeit_wird_nicht_uebersprungen(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 8, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     toml = repo / "konfig" / "belege.toml"
@@ -407,10 +407,10 @@ def test_3d_echter_tagtermin_mit_andere_uhrzeit(repo, monkeypatch):
     monkeypatch.setattr("belege.senden.senden", lambda *a, **kw: gesendet.append(a[1]) or kern.Ergebnis("ok"))
     takt._nachholen(_args())
     assert takt.befehl_tag(_args()) == 0
-    assert len(gesendet) == 1
+    assert len(gesendet) == 2
 
 
-def test_4a_echter_tagesfehler_wartet_eine_stunde(repo, monkeypatch):
+def test_4a_echter_tagesfehler_wird_nicht_stuendlich_wiederholt(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 8, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     toml = repo / "konfig" / "belege.toml"
@@ -424,4 +424,4 @@ def test_4a_echter_tagesfehler_wartet_eine_stunde(repo, monkeypatch):
     for minuten in (0, 15, 15, 31):
         zeit[0] += timedelta(minutes=minuten)
         takt._nachholen(_args())
-    assert len(versuche) == 2
+    assert len(versuche) == 1

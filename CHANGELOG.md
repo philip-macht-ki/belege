@@ -7,16 +7,15 @@ aktion: keine
 ### Was ist neu für dich
 
 - Nach einem ausgeschalteten Mac holt belege fehlende Tages-, Monats- und Postenläufe beim nächsten Takt kontrolliert nach.
-- Monatsabschluss und Tagesbericht richten sich am letzten erfolgreichen Lauf aus, mit klaren Grenzen für lange Pausen.
+- Monatsabschluss und Tagesbericht richten sich an den Sollterminen aus, mit klaren Grenzen für lange Pausen.
 - Das gilt für alles, was ab diesem Update verpasst wird: Belege bis 60 Tage,
   Monatsübergaben bis drei Monate sowie Tagesbericht und Zwischenstand jeweils
   einmal zusammengefasst. Ältere Lücken werden nicht rückwirkend versendet.
-- Scheitert eine Monatsübergabe, bleibt dieser Monat als nächster offen; kein späterer
-  Monat überspringt ihn. Fehlt nur ein Kontoauszug, kann der Monat nach dessen
-  Nachlieferung später noch übergeben werden.
-- Tages-, Monats- und Postenläufe merken ihren geplanten Termin. Ein Handlauf oder
-  ein Nachholen sperrt deshalb keinen späteren Kalendertermin; nach einem Fehler
-  wartet der Nachholtakt mindestens eine Stunde bis zum nächsten Versuch.
+- Scheitert eine Monatsübergabe, bleibt nur dieser Monat offen; spätere fällige Monate
+  werden trotzdem übergeben. Fehlt nur ein Kontoauszug, wartet nur dieser Monat auf
+  dessen Nachlieferung.
+- Der Takt versucht jeden verpassten Solltermin höchstens einmal, auch bei einem
+  Fehler. Hand- und Kalenderläufe bleiben davon unberührt und laufen immer.
 
 ### Musst du etwas tun?
 

@@ -39,57 +39,56 @@ def _lauftermin() -> datetime | None:
     """Der bereits erreichte Solltermin des monatlichen Kalenderlaufs."""
     nun = kern.jetzt()
     tag = int(kern.konfig("belege").get("uebergabe", {}).get("tag", 3))
-    soll = nun.replace(day=tag, hour=9, minute=0, second=0, microsecond=0)
+    naechster = (nun.replace(day=28) + timedelta(days=4)).replace(day=1)
+    soll = nun.replace(day=min(tag, (naechster - timedelta(days=1)).day), hour=9, minute=0, second=0, microsecond=0)
     return soll if nun >= soll else None
 
 
-def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None) -> tuple[list[str], list[str]]:
-    """Noch nicht übergebene Monate, höchstens die letzten drei.
-
-    Eine neue Einrichtung beginnt bewusst nur mit dem Vormonat.  Ältere Lücken
-    werden nicht still verschluckt, sondern dem Lauf als Hinweis mitgegeben.
-    """
+def faellige_monate(firma: dict | None = None, firmen: list[dict] | None = None,
+                    merken: bool = False) -> tuple[list[str], list[str]]:
+    """Offene Monate im Nachholfenster, unabhängig voneinander und geordnet."""
     letzter = _monat(None)
     gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
     # Die Grenze gehört zum Monatsweg selbst, nicht nur zum Takt.  So kann ein
     # Kalender- oder Handlauf nach dem Update keine alte Lücke zustellen.
     if not re.fullmatch(r"\d{4}-\d{2}", str(gesehen.get("nachholen_ab_monat", ""))):
         gesehen["nachholen_ab_monat"] = kern.jetzt().strftime("%Y-%m")
-        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+        if merken:
+            kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
     uebergaben = gesehen.get("uebergabe", {}) or {}
-    if firma is None:
-        monate = sorted(k for k in uebergaben if re.fullmatch(r"\d{4}-\d{2}", k))
-    else:
-        praefix = f"{firma['name']}:"
-        monate = sorted({wert[:7] for schluessel in uebergaben
-                         if schluessel.startswith(praefix)
-                         for wert in [schluessel[len(praefix):]]
-                         if re.fullmatch(r"\d{4}-\d{2}(?::.+)?", wert)})
-        # Ein alter, einfacher Merker stammt aus einer Einzel-Firma-Einrichtung.
-        # In einer Mehr-Firma-Einrichtung darf er keinen anderen Firmenstand verdecken.
-        if len(firmen or kern.firmen()) == 1:
-            monate += sorted(k for k in uebergaben if re.fullmatch(r"\d{4}-\d{2}", k))
-            monate = sorted(set(monate))
-    if not monate:
-        return [letzter], []
-    start = date.fromisoformat(monate[-1] + "-01")
-    alle: list[str] = []
-    while start.strftime("%Y-%m") < letzter:
-        start = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
-        alle.append(start.strftime("%Y-%m"))
-    # Der aktuelle Vormonat muss auch bei einer unvollständigen Merkerliste laufen.
-    if letzter not in alle and letzter not in monate:
-        alle.append(letzter)
-    # Bei einem Update darf eine alte, von Hand entstandene Lücke nicht plötzlich
-    # an das Steuerbüro gehen.  Vor dem Startmonat gilt deshalb weiter nur der
-    # damalige Vormonat; erst danach sind echte Ausfälle nachholbar.
     ab = str(gesehen.get("nachholen_ab_monat", ""))
-    if re.fullmatch(r"\d{4}-\d{2}", ab):
-        vor_ab = [wert for wert in alle if wert < ab]
-        ab_da = [wert for wert in alle if wert >= ab]
-        alle = ([letzter] if letzter in vor_ab else []) + ab_da
-    ueberlesen = alle[:-3]
-    return alle[-3:], ueberlesen
+    ende = date.fromisoformat(letzter + "-01")
+    start = (ende.replace(day=1) - timedelta(days=1)).replace(day=1)
+    start = (start - timedelta(days=1)).replace(day=1)
+    start_text = max(start.strftime("%Y-%m"), ab) if re.fullmatch(r"\d{4}-\d{2}", ab) else start.strftime("%Y-%m")
+    # Die beim Update gesetzte Grenze ist der laufende Monat. Der reguläre
+    # Vormonat bleibt dennoch fällig, sonst fiele der erste Kalenderlauf aus.
+    if start_text > letzter:
+        start_text = letzter
+    monate: list[str] = []
+    zeiger = date.fromisoformat(start_text + "-01")
+    while zeiger <= ende:
+        monat = zeiger.strftime("%Y-%m")
+        praefix = f"{firma['name']}:" if firma else ""
+        # Bei getrennten Belegarten genügt kein fremder Firmenmerker: die
+        # Übergabe selbst überspringt bereits erledigte Wege und macht nur den
+        # offenen Weg fertig.
+        erledigt = bool(uebergaben.get(praefix + monat))
+        if firma and len(firmen or kern.firmen()) == 1:
+            erledigt = erledigt or bool(uebergaben.get(monat))
+        if not erledigt:
+            monate.append(monat)
+        zeiger = (zeiger.replace(day=28) + timedelta(days=4)).replace(day=1)
+    ueberlesen: list[str] = []
+    if re.fullmatch(r"\d{4}-\d{2}", ab) and ab < start.strftime("%Y-%m"):
+        zeiger = date.fromisoformat(ab + "-01")
+        while zeiger < start:
+            monat = zeiger.strftime("%Y-%m")
+            praefix = f"{firma['name']}:" if firma else ""
+            if not uebergaben.get(praefix + monat):
+                ueberlesen.append(monat)
+            zeiger = (zeiger.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return monate, ueberlesen
 
 
 def _normal(wert: str) -> str:
@@ -1027,13 +1026,25 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
         )
 
 
+def _ereignis_einmal(text: str) -> None:
+    """Schreibt denselben Monatswartegrund höchstens einmal in den Tagesbericht."""
+    datei = kern.pfad("arbeit", "ereignisse", f"{kern.jetzt():%Y-%m-%d}.jsonl")
+    if datei.exists() and f'"text": "{text}"' in datei.read_text(encoding="utf-8"):
+        return
+    kern.ereignis("monat", text)
+
+
 def befehl(args) -> int:
     """Führt Monatsabgleich, optionale Übergabe und Rechnungsanfragen aus."""
     if not getattr(args, "monat", None) and getattr(args, "uebergabe", False):
-        code = 0
+        if kern.echt(args):
+            termin = _lauftermin()
+            if termin:
+                from . import takt
+                takt._versuch_merken("monat", termin)
         firmen = kern.firmen()
-        plaene = [(None, *faellige_monate())] if len(firmen) <= 1 else [
-            (firma, *faellige_monate(firma, firmen)) for firma in firmen
+        plaene = [(None, *faellige_monate(merken=kern.echt(args)))] if len(firmen) <= 1 else [
+            (firma, *faellige_monate(firma, firmen, merken=kern.echt(args))) for firma in firmen
         ]
         for firma, monate, ueberlesen in plaene:
             if ueberlesen:
@@ -1041,27 +1052,21 @@ def befehl(args) -> int:
                 text = (f"Nicht automatisch nachgeholt{zusatz}: {ueberlesen[0]} bis {ueberlesen[-1]} "
                         "(mehr als drei Monate zurück).")
                 print(f"befund: {text}")
-                kern.ereignis("monat", text)
+                _ereignis_einmal(text)
             for monat_wert in monate:
                 from argparse import Namespace
                 werte = vars(args).copy()
                 werte["monat"] = monat_wert
-                werte["_nachholkette"] = True
                 if firma:
                     werte["_firma"] = firma["name"]
-                ergebnis = befehl(Namespace(**werte))
-                code = max(code, ergebnis)
-                # Die Übergaben sind eine Kette: Nach einem Fehler darf kein
-                # späterer Monat den gemeinsamen Fortschrittsstand überspringen.
-                if ergebnis:
-                    break
-        if kern.echt(args) and code == 0:
+                befehl(Namespace(**werte))
+        if kern.echt(args):
             termin = _lauftermin()
             if termin:
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
                 gesehen.setdefault("lauf", {})["monat"] = termin.isoformat(timespec="seconds")
                 kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
-        return code
+        return 0
     monat = _monat(getattr(args, "monat", None))
     auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
     register_dateien = _konten_pruefen(monat, args)
@@ -1072,9 +1077,12 @@ def befehl(args) -> int:
             kern.konfig("belege").get("monat", {}).get("auszuege", "")
         )
         text = f"Für {_monatsname(monat)} fehlt der Kontoauszug. Lade ihn im Online-Banking als CSV herunter und leg ihn in {ordner.name} – oder verbinde das Konto mit MoneyMoney."
-        kern.ereignis("monat", text)
+        if getattr(args, "uebergabe", False):
+            _ereignis_einmal(f"Übergabe für {_monatsname(monat)} wartet: Kontoauszug fehlt")
+        else:
+            kern.ereignis("monat", text)
         print(f"nichts: {text}")
-        return 1 if getattr(args, "_nachholkette", False) else 0
+        return 0
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     alle_firmen = kern.firmen()
     aktive_firmen = alle_firmen
@@ -1099,8 +1107,7 @@ def befehl(args) -> int:
             print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
             je_firma.append((einzelfirma["name"], daten_firma))
             if getattr(args, "uebergabe", False):
-                if not _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma) and getattr(args, "_nachholkette", False):
-                    return 1
+                _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
             if getattr(args, "anfragen", False):
                 _anfragen(daten_firma, kern.echt(args))
         from .posten import fortschreiben
@@ -1128,8 +1135,7 @@ def befehl(args) -> int:
     betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     monatsmail.senden(monat, monatsmail.text(monat, [(betrieb, daten)], index), args)
     if getattr(args, "uebergabe", False):
-        if not _uebergabe(monat, ziel, index, daten, args) and getattr(args, "_nachholkette", False):
-            return 1
+        _uebergabe(monat, ziel, index, daten, args)
     if getattr(args, "anfragen", False):
         _anfragen(daten, kern.echt(args))
     return 0

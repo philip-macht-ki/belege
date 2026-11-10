@@ -225,6 +225,10 @@ def log(zeile: str) -> None:
     print(zeile, flush=True)
 
 
+class SperreBelegt(Exception):
+    """Der Lauf konnte wegen einer noch gehaltenen Lauf-Sperre nicht starten."""
+
+
 class Sperre:
     """Verhindert zwei gleichzeitige Läufe. Prüft die PID, nicht den Befehlstext
     (pgrep findet sonst die eigene Diagnose-Shell)."""
@@ -238,11 +242,11 @@ class Sperre:
             try:
                 pid = int(self.p.read_text().strip())
                 os.kill(pid, 0)
-                raise RuntimeError(f"Ein Lauf ist schon aktiv (PID {pid}).")
+                raise SperreBelegt(f"Ein Lauf ist schon aktiv (PID {pid}).")
             except (ValueError, ProcessLookupError):
                 pass  # verwaiste Sperre von einem abgebrochenen Lauf
             except PermissionError:
-                raise RuntimeError("Ein Lauf ist schon aktiv.")
+                raise SperreBelegt("Ein Lauf ist schon aktiv.")
         self.p.write_text(str(os.getpid()))
         return self
 

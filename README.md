@@ -49,8 +49,9 @@ Nach einem Ausfall holt belege nur Termine nach, die ab diesem Update verpasst
 wurden: Belege bis 60 Tage und Monatsübergaben bis drei Monate, Tagesbericht und
 Zwischenstand jeweils als eine Zusammenfassung. Bereits ältere oder von Hand
 ausgelassene Monate werden nicht überraschend versendet.
-Scheitert eine Monatsübergabe, bleibt genau dieser Monat offen; spätere Monate
-warten bis zum nächsten erfolgreichen Versuch.
+Scheitert eine Monatsübergabe, bleibt genau dieser Monat offen; spätere fällige
+Monate werden trotzdem übergeben. Der Takt versucht einen verpassten Solltermin
+höchstens einmal; Hand- und Kalenderläufe laufen weiterhin immer.
 
 ## Was es tut
 
