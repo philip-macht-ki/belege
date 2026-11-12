@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from belege import kern, monat, posten, takt
 
@@ -299,3 +299,33 @@ def test_t2_fehlernder_monat_meldet_pro_tag_nur_einmal(repo, monkeypatch):
     monat.befehl(_args())
     ereignisse = (repo / "arbeit" / "ereignisse" / "2027-01-05.jsonl").read_text(encoding="utf-8")
     assert ereignisse.count("Übergabe für November wartet: Kontoauszug fehlt") == 1
+
+
+def test_takt_versucht_fehlenden_auszug_am_folgetag_und_uebergibt_nach_nachlieferung(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"monat": "2026-10-03T09:00:00+02:00"}})
+    gesendet = []
+    monkeypatch.setattr(
+        "belege.senden.senden",
+        lambda *args, **_kw: gesendet.append(args[1]) or kern.Ergebnis("ok"),
+    )
+
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    (repo / "auszuege" / "2026.csv").write_text(
+        "Datum;Name;Betrag\n02.10.2026;Bank;-1,00\n", encoding="utf-8",
+    )
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+
+    gesehen = kern.lesen(repo / "arbeit" / "gesehen.json")
+    ereignisse = (repo / "arbeit" / "ereignisse" / "2026-11-05.jsonl").read_text(encoding="utf-8")
+    assert ereignisse.count("Übergabe für Oktober wartet: Kontoauszug fehlt") == 1
+    assert gesendet.count("Belege 10/2026, Studio Beispiel") == 1
+    assert gesehen["lauf"]["monat"].startswith("2026-11-03")
+    assert "monat" not in gesehen.get("lauf_fehlversuch", {})

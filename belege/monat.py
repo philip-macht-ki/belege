@@ -1123,7 +1123,10 @@ def befehl(args) -> int:
         else:
             kern.ereignis("monat", text)
         print(f"nichts: {text}")
-        return 0
+        # Der Takt muss den Solltermin offen lassen, damit ein nachgelieferter
+        # Auszug am Folgetag automatisch verarbeitet wird. Kalender- und
+        # Handläufe behalten dagegen ihren erfolgreichen Rückgabewert.
+        return int(getattr(args, "nachholen", False))
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     alle_firmen = kern.firmen()
     aktive_firmen = alle_firmen

@@ -367,7 +367,7 @@ def _termin_merken(name: str, termin: datetime) -> bool:
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     alt = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
     monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
-    if alt and alt >= termin and not (name == "monat" and monat_fehler != jetzt().date().isoformat()):
+    if alt and alt >= termin and not (name == "monat" and monat_fehler and monat_fehler != jetzt().date().isoformat()):
         return False
     gesehen.setdefault("laufversuch", {})[name] = termin.isoformat(timespec="seconds")
     schreiben(pfad("arbeit", "gesehen.json"), gesehen)
@@ -389,7 +389,7 @@ def _faellig(name: str, soll: datetime) -> bool:
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     versuch = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
     monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
-    if versuch and versuch >= soll and not (name == "monat" and monat_fehler != jetzt().date().isoformat()):
+    if versuch and versuch >= soll and not (name == "monat" and monat_fehler and monat_fehler != jetzt().date().isoformat()):
         return False
     ab = _zeitwert(str((gesehen.get("nachholen_ab", {}) or {}).get(name, "")))
     return not ab or soll >= ab
@@ -469,7 +469,7 @@ def _nachholen(args) -> None:
         return posten_modul.befehl(Namespace(echt=True, mail=True, antworten=False))
 
     laeufe = (("tag", _faelliger_tag, _tag_termin, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
-              ("monat", _faelliger_monat, _monat_termin, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[])))),
+              ("monat", _faelliger_monat, _monat_termin, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[], nachholen=True)))),
               ("posten", _faellige_posten, _posten_termin, lambda: begrenzt("posten", posten_lauf)))
     for name, faellig, termin, ausfuehren in laeufe:
         soll = termin()
@@ -494,6 +494,10 @@ def _nachholen(args) -> None:
                 gesehen.setdefault("lauf_fehlversuch", {})["monat"] = jetzt().date().isoformat()
                 schreiben(pfad("arbeit", "gesehen.json"), gesehen)
         except Exception as fehler:  # Ein Nachholfehler stoppt den normalen Takt nicht.
+            if name == "monat":
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf_fehlversuch", {})["monat"] = jetzt().date().isoformat()
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
             ereignis("fehler", f"Nachholen {name}: {fehler}")
             log(f"Nachholen {name} fehlgeschlagen: {fehler}")
 

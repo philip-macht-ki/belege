@@ -159,6 +159,47 @@ def test_takt_wiederholt_gescheiterte_monatsuebergabe_erst_am_folgetag(repo, mon
     assert kern.lesen(repo / "arbeit" / "gesehen.json")["lauf"]["monat"].startswith("2026-11-03")
 
 
+def test_takt_wiederholt_monatsausnahme_erst_am_folgetag(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"monat": "2026-10-03T09:00:00+02:00"}})
+    aufrufe = []
+
+    def lauf(args):
+        aufrufe.append(args)
+        if len(aufrufe) == 1:
+            raise RuntimeError("kaputt")
+        return 0
+
+    monkeypatch.setattr(monat, "befehl", lauf)
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+
+    assert len(aufrufe) == 2
+
+
+def test_takt_leerer_monatsfehlversuch_gibt_keinen_neuen_versuch_frei(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    termin = takt._monat_termin()
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {
+        "lauf": {"monat": "2026-10-03T09:00:00+02:00"},
+        "laufversuch": {"monat": termin.isoformat(timespec="seconds")},
+        "lauf_fehlversuch": {"monat": ""},
+    })
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or 0)
+
+    takt._nachholen(_args())
+
+    assert aufrufe == []
+
+
 def test_7_takt_holt_verpassten_posten_zwischenstand_einmal(repo, monkeypatch):
     zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
