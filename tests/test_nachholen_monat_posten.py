@@ -167,6 +167,31 @@ def test_nachholen_monat_einzelfirma_liest_alten_einfachen_merker(repo, monkeypa
     ]
 
 
+def test_monat_erledigt_ist_bei_leeren_getrennten_adressen_offen(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'adresse = ""\nordner = ""',
+            'adresse = ""\nadressen = {}\nordner = ""',
+        ),
+        encoding="utf-8",
+    )
+
+    assert not monat._monat_erledigt(kern.firmen()[0], "2026-10", {})
+
+
+def test_monat_erledigt_ordnete_alten_merker_der_hauptfirma_zu(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Firma A"', 1)
+        + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\n',
+        encoding="utf-8",
+    )
+
+    assert monat._monat_erledigt(kern.firmen()[0], "2026-10", {"2026-10": "alt"})
+    assert not monat._monat_erledigt(kern.firmen()[1], "2026-10", {"2026-10": "alt"})
+
+
 def test_nach_update_holt_monat_keine_alte_handluecke_nach(repo, monkeypatch):
     zeit = [datetime(2026, 11, 12, 10, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)

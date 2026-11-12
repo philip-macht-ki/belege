@@ -98,15 +98,17 @@ def _monat_erledigt(firma: dict, monat: str, uebergaben: dict) -> bool:
     schluessel = f"{firma['name']}:{monat}"
     if uebergaben.get(schluessel):
         return True
+    # Unpräfixierte Merker wurden nur im damaligen Einzelfirmenpfad geschrieben;
+    # nach einer späteren Mehrfirmen-Einrichtung gehört er zur ersten Firma.
     if firma == kern.firmen()[0] and uebergaben.get(monat):
         return True
     cfg = kern.konfig("belege").get("uebergabe", {})
     adressen = cfg.get("adressen") if isinstance(cfg.get("adressen"), dict) else None
     if not adressen or cfg.get("weg", "mail") != "mail":
         return False
-    return all(uebergaben.get(f"{schluessel}:{art}")
-               for art in ("eingang", "ausgang", "sonstige")
-               if adressen.get(art) or cfg.get("adresse"))
+    arten = [art for art in ("eingang", "ausgang", "sonstige")
+             if adressen.get(art) or cfg.get("adresse")]
+    return bool(arten) and all(uebergaben.get(f"{schluessel}:{art}") for art in arten)
 
 
 def _normal(wert: str) -> str:
