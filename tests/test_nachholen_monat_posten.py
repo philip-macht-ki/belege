@@ -352,3 +352,25 @@ def test_monat_nachholen_ohne_jede_adresse_ist_nicht_eingerichtet(repo):
     _adressen_eintragen(repo, '{ eingang = "", ausgang = "" }')
 
     assert not takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_gilt_mit_firmenadresse_als_eingerichtet(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Firma A"', 1)
+        + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\nuebergabe = "b@example.com"\n',
+        encoding="utf-8",
+    )
+
+    assert takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_ordnerweg_ohne_ordner_ist_nicht_eingerichtet(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'weg = "mail"\nadresse = ""\nordner = ""', 'weg = "ordner"\nadresse = "steuer@example.com"\nordner = ""'),
+        encoding="utf-8",
+    )
+
+    assert not takt._nachholen_eingerichtet("monat")

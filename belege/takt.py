@@ -310,11 +310,10 @@ def _nachholen_eingerichtet(name: str) -> bool:
         bericht = cfg.get("bericht", {})
         return bool(bericht.get("an") or (konten() or [{}])[0].get("adresse"))
     if name == "monat":
-        uebergabe = cfg.get("uebergabe", {})
-        adressen = uebergabe.get("adressen")
-        # Getrennte Adressen je Belegart reichen ebenfalls als Ziel.
-        getrennt = isinstance(adressen, dict) and any(adressen.get(art) for art in ("eingang", "ausgang", "sonstige"))
-        return bool(uebergabe.get("adresse") or uebergabe.get("ordner") or getrennt)
+        # Dieselben Wege wie die Übergabe selbst: Adresse, getrennte Adressen,
+        # Ordner oder die Adresse einer einzelnen Firma.
+        monat = importlib.import_module("belege.monat")
+        return any(monat.uebergabe_eingerichtet(firma) for firma in (monat.kern.firmen() or [None]))
     return pfad("arbeit", "posten.json").exists()
 
 

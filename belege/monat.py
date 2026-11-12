@@ -111,6 +111,18 @@ def _monat_erledigt(firma: dict, monat: str, uebergaben: dict) -> bool:
     return bool(arten) and all(uebergaben.get(f"{schluessel}:{art}") for art in arten)
 
 
+def uebergabe_eingerichtet(firma: dict | None = None) -> bool:
+    """Hat die Übergabe für diese Firma einen Weg?  Gleiche Regeln wie ``_uebergabe``."""
+    cfg = kern.konfig("belege").get("uebergabe", {})
+    cfg = {**cfg, **({"adresse": firma["uebergabe"]} if firma and firma.get("uebergabe") else {})}
+    adressen = cfg.get("adressen") if isinstance(cfg.get("adressen"), dict) else None
+    if adressen and cfg.get("weg", "mail") == "mail":
+        return bool(cfg.get("adresse") or any(adressen.get(art) for art in ("eingang", "ausgang", "sonstige")))
+    if cfg.get("weg") == "ordner":
+        return bool(cfg.get("ordner"))
+    return bool(cfg.get("adresse"))
+
+
 def _normal(wert: str) -> str:
     """Vereinfacht Namen für einen vorsichtigen Lieferantenvergleich."""
     wert = (
