@@ -329,3 +329,26 @@ def test_takt_versucht_fehlenden_auszug_am_folgetag_und_uebergibt_nach_nachliefe
     assert gesendet.count("Belege 10/2026, Studio Beispiel") == 1
     assert gesehen["lauf"]["monat"].startswith("2026-11-03")
     assert "monat" not in gesehen.get("lauf_fehlversuch", {})
+
+
+def _adressen_eintragen(repo, adressen):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'adresse = ""\nordner = ""',
+            f'adresse = ""\nadressen = {adressen}\nordner = ""',
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_monat_nachholen_gilt_mit_nur_getrennten_adressen_als_eingerichtet(repo):
+    _adressen_eintragen(repo, '{ eingang = "eingang@example.com", ausgang = "ausgang@example.com" }')
+
+    assert takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_ohne_jede_adresse_ist_nicht_eingerichtet(repo):
+    _adressen_eintragen(repo, '{ eingang = "", ausgang = "" }')
+
+    assert not takt._nachholen_eingerichtet("monat")
