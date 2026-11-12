@@ -1080,6 +1080,7 @@ def befehl(args) -> int:
             print(f"befund: {text}")
             _ereignis_einmal(text)
         regulaerer_monat = _monat(None)
+        fehlgeschlagen = False
         for monat_wert in monate:
             from argparse import Namespace
             werte = vars(args).copy()
@@ -1087,22 +1088,24 @@ def befehl(args) -> int:
             try:
                 # Ein Monat umfasst immer alle Firmen: Dadurch bleiben Mail,
                 # Reihenfolge und Inhalt des Kalenderlaufs unverändert.
-                befehl(Namespace(**werte))
+                if befehl(Namespace(**werte)):
+                    fehlgeschlagen = True
             except Exception as fehler:
                 # Beim einzigen regulären Vormonat bleibt die Ausnahme wie vor
                 # dem Nachholen sichtbar. Ältere Zusatzmonate dürfen spätere
                 # Monate nicht blockieren und bleiben ohne Merker offen.
                 if monat_wert == regulaerer_monat:
                     raise
+                fehlgeschlagen = True
                 kern.ereignis("fehler", f"Nachholen Monatsübergabe {monat_wert}: {fehler}")
                 kern.log(f"Nachholen Monatsübergabe {monat_wert} fehlgeschlagen: {fehler}")
-        if kern.echt(args):
+        if kern.echt(args) and not fehlgeschlagen:
             termin = _lauftermin()
             if termin:
                 gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
                 gesehen.setdefault("lauf", {})["monat"] = termin.isoformat(timespec="seconds")
                 kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
-        return 0
+        return int(fehlgeschlagen)
     monat = _monat(getattr(args, "monat", None))
     auszuege = [datei for datei in _auszuege(args, monat) if datei.exists()]
     register_dateien = _konten_pruefen(monat, args)
@@ -1128,6 +1131,7 @@ def befehl(args) -> int:
         buchungen = buchungen_aus(auszuege, monat)
         alle_daten: list[dict] = []
         je_firma: list[tuple[str, list[dict]]] = []
+        fehlgeschlagen = False
         for einzelfirma in aktive_firmen:
             hinweis = None
             if not einzelfirma.get("konten") and einzelfirma["name"] != alle_firmen[0]["name"]:
@@ -1143,13 +1147,13 @@ def befehl(args) -> int:
             print(f"ok: {einzelfirma['name']}: {zugeordnet} zugeordnet, {len(fehlt)} fehlen noch{zusatz}")
             je_firma.append((einzelfirma["name"], daten_firma))
             if getattr(args, "uebergabe", False):
-                _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma)
+                fehlgeschlagen = not _uebergabe(monat, ziel_firma, index, daten_firma, args, einzelfirma) or fehlgeschlagen
             if getattr(args, "anfragen", False):
                 _anfragen(daten_firma, kern.echt(args))
         from .posten import fortschreiben
         fortschreiben(alle_daten)
         monatsmail.senden(monat, monatsmail.text(monat, je_firma, index, mehrere=True), args)
-        return 0
+        return int(fehlgeschlagen)
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
     from .posten import fortschreiben
@@ -1171,7 +1175,8 @@ def befehl(args) -> int:
     betrieb = kern.konfig("belege").get("betrieb", {}).get("name", "Betrieb")
     monatsmail.senden(monat, monatsmail.text(monat, [(betrieb, daten)], index), args)
     if getattr(args, "uebergabe", False):
-        _uebergabe(monat, ziel, index, daten, args)
+        if not _uebergabe(monat, ziel, index, daten, args):
+            return 1
     if getattr(args, "anfragen", False):
         _anfragen(daten, kern.echt(args))
     return 0

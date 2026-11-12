@@ -139,6 +139,26 @@ def test_6_takt_holt_verpassten_monatslauf_nur_einmal(repo, monkeypatch):
     assert len(aufrufe) == 1
 
 
+def test_takt_wiederholt_gescheiterte_monatsuebergabe_erst_am_folgetag(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {
+        "tag": "2026-11-04T21:00:00+01:00", "monat": "2026-10-03T09:00:00+02:00", "posten": zeit[0].isoformat(),
+    }})
+    aufrufe = []
+    monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or (1 if len(aufrufe) == 1 else 0))
+
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+
+    assert len(aufrufe) == 2
+    assert kern.lesen(repo / "arbeit" / "gesehen.json")["lauf"]["monat"].startswith("2026-11-03")
+
+
 def test_7_takt_holt_verpassten_posten_zwischenstand_einmal(repo, monkeypatch):
     zeit = [datetime(2026, 11, 4, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)

@@ -52,7 +52,8 @@ ausgelassene Monate werden nicht überraschend versendet.
 Scheitert eine Monatsübergabe, bleibt genau dieser Monat offen; spätere fällige
 Monate werden trotzdem übergeben. Der Takt versucht einen verpassten Solltermin
 frühestens 30 Minuten nach seiner Uhrzeit und höchstens einmal; Hand- und
-Kalenderläufe laufen weiterhin immer.
+Kalenderläufe laufen weiterhin immer. Eine gescheiterte Monatsübergabe versucht
+der Takt innerhalb des Nachholfensters höchstens einmal am Tag erneut.
 
 ## Was es tut
 

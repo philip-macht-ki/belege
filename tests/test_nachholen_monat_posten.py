@@ -200,7 +200,7 @@ def test_monatsnachholen_laeuft_nach_fehlermonat_weiter(repo, monkeypatch):
         return 0
 
     monkeypatch.setattr(monat, "befehl", lauf)
-    assert monat.befehl(_args()) == 0
+    assert monat.befehl(_args()) == 1
     assert aufrufe == ["2026-08", "2026-09", "2026-10"]
     assert monat.befehl(_args()) == 0
     assert aufrufe == ["2026-08", "2026-09", "2026-10", "2026-09"]
@@ -223,7 +223,7 @@ def test_uebergabefehler_haelt_nur_diesen_monat_offen(repo, monkeypatch):
         return kern.Ergebnis("fehler" if fehler else "ok")
 
     monkeypatch.setattr("belege.senden.senden", senden)
-    assert monat.befehl(_args()) == 0
+    assert monat.befehl(_args()) == 1
     assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel"]
     assert set(kern.lesen(repo / "arbeit" / "gesehen.json")["uebergabe"]) == {"2026-07", "2026-08", "2026-10"}
     assert monat.befehl(_args()) == 0

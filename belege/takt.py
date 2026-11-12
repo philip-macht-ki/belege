@@ -366,7 +366,8 @@ def _termin_merken(name: str, termin: datetime) -> bool:
     """Merkt genau einen Versuch für einen konkreten Solltermin."""
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     alt = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
-    if alt and alt >= termin:
+    monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
+    if alt and alt >= termin and not (name == "monat" and monat_fehler != jetzt().date().isoformat()):
         return False
     gesehen.setdefault("laufversuch", {})[name] = termin.isoformat(timespec="seconds")
     schreiben(pfad("arbeit", "gesehen.json"), gesehen)
@@ -387,7 +388,8 @@ def _faellig(name: str, soll: datetime) -> bool:
         return False
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     versuch = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
-    if versuch and versuch >= soll:
+    monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
+    if versuch and versuch >= soll and not (name == "monat" and monat_fehler != jetzt().date().isoformat()):
         return False
     ab = _zeitwert(str((gesehen.get("nachholen_ab", {}) or {}).get(name, "")))
     return not ab or soll >= ab
@@ -484,6 +486,12 @@ def _nachholen(args) -> None:
                 # Nicht die Uhrzeit des Nachholens merken: erledigt wurde der
                 # fällige Solltermin.  Der nächste Kalendertermin bleibt frei.
                 gesehen.setdefault("lauf", {})[name] = soll.isoformat(timespec="seconds")
+                if name == "monat":
+                    gesehen.get("lauf_fehlversuch", {}).pop("monat", None)
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+            elif name == "monat":
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf_fehlversuch", {})["monat"] = jetzt().date().isoformat()
                 schreiben(pfad("arbeit", "gesehen.json"), gesehen)
         except Exception as fehler:  # Ein Nachholfehler stoppt den normalen Takt nicht.
             ereignis("fehler", f"Nachholen {name}: {fehler}")

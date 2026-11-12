@@ -16,7 +16,9 @@ aktion: keine
   dessen Nachlieferung.
 - Der Takt versucht jeden verpassten Solltermin höchstens einmal, auch bei einem
   Fehler, frühestens aber 30 Minuten nach dessen Uhrzeit. Hand- und
-  Kalenderläufe bleiben davon unberührt und laufen immer.
+  Kalenderläufe bleiben davon unberührt und laufen immer. Eine gescheiterte
+  Monatsübergabe versucht der Takt innerhalb des Nachholfensters höchstens
+  einmal am Tag erneut.
 
 ### Musst du etwas tun?
 
