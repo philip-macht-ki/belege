@@ -91,6 +91,8 @@ def mail(echt: bool) -> int:
     text = mailtext(zustand)
     if not text:
         kern.log("nichts offen, keine Mail")
+        if echt:
+            _lauf_merken()
         return 0
     offen = [x for x in _eintraege(zustand) if x.get("status") in {"offen", "wartet_mensch"}]
     betrag = sum(abs(float(x.get("betrag", 0))) for x in offen)
@@ -100,7 +102,22 @@ def mail(echt: bool) -> int:
         return 0
     r = senden(_zieladresse(), betreff, text, [], True, fortschritt=f"posten:{kern.jetzt():%Y-%m-%d}")
     print(f"{r.status}: {r.meldung}")
+    if r.gut:
+        _lauf_merken()
     return 0 if r.gut else 1
+
+
+def _lauf_merken() -> None:
+    """Ein erfolgreicher Zwischenstand verhindert ein zweites Nachholen."""
+    nun = kern.jetzt()
+    tage = [tag for tag in (1, 15) if nun.day > tag or (nun.day == tag and (nun.hour, nun.minute) >= (7, 0))]
+    # Ein Handlauf vor dem nächsten Solltermin sperrt diesen nicht.
+    if not tage:
+        return
+    termin = nun.replace(day=tage[-1], hour=7, minute=0, second=0, microsecond=0)
+    gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+    gesehen.setdefault("lauf", {})["posten"] = termin.isoformat(timespec="seconds")
+    kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
 def antworten() -> int:

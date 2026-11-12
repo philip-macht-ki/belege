@@ -10,15 +10,17 @@ from __future__ import annotations
 import argparse
 import importlib
 import os
+import re
 import signal
 import threading
 import time
 import traceback
 from collections import Counter
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 from .einrichten import auffrischen as _starter_auffrischen
-from .kern import CloudGesperrt, Ergebnis, Sperre, echt, einmal_taeglich, ereignis, konfig, konten, log, netz_da, netzfehler
+from .kern import CloudGesperrt, Ergebnis, Sperre, SperreBelegt, echt, einmal_taeglich, ereignis, konfig, konten, lesen, log, netz_da, netzfehler, pfad, schreiben, jetzt
 
 
 def _weiterreichen(args) -> argparse.Namespace:
@@ -232,7 +234,7 @@ def _zeitgrenze(sekunden: float, name: str, echt_lauf: bool):
         wache.cancel()
 
 
-def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
+def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool | None:
     """Führt mehrere Schritte nacheinander aus, jeden für sich abgesichert.
 
     Gibt zurück, ob alle Schritte ohne Fehler durchliefen. Der ganze Lauf hat eine
@@ -253,8 +255,11 @@ def _lauf(args, schritte: tuple[str, ...], sperre: str) -> bool:
                 zustand, _ = _schritt(name, args)
                 print(f"{name}: {zustand}")
                 fehlerfrei = fehlerfrei and not zustand.startswith(("fehler", "Exit"))
-    except RuntimeError:
+    except SperreBelegt:
         print("nichts: Ein Lauf ist schon aktiv.")
+        # Die Sperre bedeutet nicht, dass der Lauf fehlgeschlagen ist.  Der
+        # Nachholtakt darf es beim nächsten Viertelstunden-Takt erneut probieren.
+        return None
     except LaufZuLang as grenze:
         fehlerfrei = False
         meldung = f"{grenze} Zuletzt lief der Schritt {aktiv}."
@@ -294,6 +299,211 @@ def lebenszeichen(wach: bool = False) -> None:
         log(f"Lebenszeichen nicht gesendet: {fehler}")
 
 
+def _laufstand(name: str) -> str:
+    return str((lesen(pfad("arbeit", "gesehen.json"), {}) or {}).get("lauf", {}).get(name, ""))
+
+
+def _nachholen_eingerichtet(name: str) -> bool:
+    """Nur Läufe nachholen, deren Ziel in der Einrichtung vorhanden ist."""
+    cfg = konfig("belege")
+    if name == "tag":
+        bericht = cfg.get("bericht", {})
+        return bool(bericht.get("an") or (konten() or [{}])[0].get("adresse"))
+    if name == "monat":
+        # Dieselben Wege wie die Übergabe selbst: Adresse, getrennte Adressen,
+        # Ordner oder die Adresse einer einzelnen Firma.
+        monat = importlib.import_module("belege.monat")
+        return any(monat.uebergabe_eingerichtet(firma) for firma in (monat.kern.firmen() or [None]))
+    return pfad("arbeit", "posten.json").exists()
+
+
+def _alte_laeufe_merken() -> None:
+    """Setzt die Startgrenze eines Updates ohne alte Solltermine nachzuholen."""
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    lauf = gesehen.setdefault("lauf", {})
+    geaendert = False
+    if not re.fullmatch(r"\d{4}-\d{2}", str(gesehen.get("nachholen_ab_monat", ""))):
+        gesehen["nachholen_ab_monat"] = jetzt().strftime("%Y-%m")
+        geaendert = True
+    nachholen_ab = gesehen.setdefault("nachholen_ab", {})
+    # Der letzte Solltermin vor dem Update zählt für jeden Lauf als versucht.
+    # Ein alter Bericht-/Mailmerker ist kein verlässlicher Termin und darf daher
+    # keinen zusätzlichen Tageslauf auslösen.
+    for name in ("tag", "monat", "posten"):
+        if name not in lauf and not str(nachholen_ab.get(name, "")):
+            nachholen_ab[name] = jetzt().isoformat(timespec="seconds")
+            letzter = _letzter_solltermin(name)
+            if letzter:
+                lauf[name] = letzter.isoformat(timespec="seconds")
+            geaendert = True
+    if geaendert:
+        schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+
+
+def _letzter_solltermin(name: str) -> datetime | None:
+    """Der letzte Solltermin strikt vor jetzt, für die Update-Migration."""
+    nun = jetzt()
+    if name == "tag":
+        stunde, minute = (int(x) for x in str(konfig("belege").get("takt", {}).get("tag_uhrzeit", "21:00")).split(":"))
+        soll = nun.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+        return soll if soll < nun else soll - timedelta(days=1)
+    if name == "monat":
+        soll = _monat_termin()
+        if soll >= nun:
+            erster = nun.replace(day=1) - timedelta(days=1)
+            tag = int(konfig("belege").get("uebergabe", {}).get("tag", 3))
+            return erster.replace(day=min(tag, erster.day), hour=9, minute=0, second=0, microsecond=0)
+        return soll
+    soll = _posten_termin()
+    if soll and soll < nun:
+        return soll
+    tag = 15 if nun.day > 15 else 1
+    if tag == 15:
+        return nun.replace(day=15, hour=7, minute=0, second=0, microsecond=0)
+    letzter_monat = nun.replace(day=1) - timedelta(days=1)
+    return letzter_monat.replace(day=15, hour=7, minute=0, second=0, microsecond=0)
+
+
+def _termin_merken(name: str, termin: datetime) -> bool:
+    """Merkt genau einen Versuch für einen konkreten Solltermin."""
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    alt = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
+    monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
+    if alt and alt >= termin and not (name == "monat" and monat_fehler and monat_fehler != jetzt().date().isoformat()):
+        return False
+    gesehen.setdefault("laufversuch", {})[name] = termin.isoformat(timespec="seconds")
+    schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+    return True
+
+
+def _zeitwert(wert: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(wert)
+    except ValueError:
+        return None
+
+
+def _faellig(name: str, soll: datetime) -> bool:
+    """Ist ``soll`` nach der Einrichtung fällig und noch nicht versucht?"""
+    gelaufen = _zeitwert(_laufstand(name))
+    if gelaufen and gelaufen >= soll:
+        return False
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    versuch = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
+    monat_fehler = str((gesehen.get("lauf_fehlversuch", {}) or {}).get("monat", ""))
+    if versuch and versuch >= soll and not (name == "monat" and monat_fehler and monat_fehler != jetzt().date().isoformat()):
+        return False
+    ab = _zeitwert(str((gesehen.get("nachholen_ab", {}) or {}).get(name, "")))
+    return not ab or soll >= ab
+
+
+def _faelliger_tag() -> bool:
+    soll = _tag_termin()
+    return jetzt() >= soll + timedelta(minutes=30) and _faellig("tag", soll)
+
+
+def _tag_termin() -> datetime:
+    zeit = str(konfig("belege").get("takt", {}).get("tag_uhrzeit", "21:00"))
+    stunde, minute = (int(x) for x in zeit.split(":"))
+    nun = jetzt()
+    soll = nun.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+    if nun < soll:
+        soll -= timedelta(days=1)
+    return soll
+
+
+def _faelliger_monat() -> bool:
+    soll = _monat_termin()
+    return jetzt() >= soll + timedelta(minutes=30) and _faellig("monat", soll)
+
+
+def _monat_termin() -> datetime:
+    nun = jetzt()
+    tag = int(konfig("belege").get("uebergabe", {}).get("tag", 3))
+    naechster = (nun.replace(day=28) + timedelta(days=4)).replace(day=1)
+    letzter_tag = (naechster - timedelta(days=1)).day
+    return nun.replace(day=min(tag, letzter_tag), hour=9, minute=0, second=0, microsecond=0)
+
+
+def _faellige_posten() -> bool:
+    soll = _posten_termin()
+    return soll is not None and jetzt() >= soll + timedelta(minutes=30) and _faellig("posten", soll)
+
+
+def _posten_termin() -> datetime | None:
+    nun = jetzt()
+    tage = [d for d in (1, 15) if nun.day > d or (nun.day == d and (nun.hour, nun.minute) >= (7, 0))]
+    if not tage:
+        return None
+    return nun.replace(day=tage[-1], hour=7, minute=0, second=0, microsecond=0)
+
+
+def _termin_freigeben(name: str, termin: datetime) -> None:
+    """Eine belegte Sperre ist kein Versuch und lässt denselben Termin offen."""
+    gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+    if _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, ""))) == termin:
+        del gesehen["laufversuch"][name]
+        schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+
+
+def _nachholen(args) -> None:
+    """Startet nach einem ausgeschalteten Mac jeden fälligen Kalenderlauf einmal."""
+    from argparse import Namespace
+    if not echt(args):
+        return
+    _alte_laeufe_merken()
+    def begrenzt(name, lauf):
+        try:
+            with _zeitgrenze(_max_minuten() * 60, name, True), Sperre(name):
+                return lauf()
+        except LaufZuLang:
+            return 1
+        except SperreBelegt:
+            return None
+
+    def posten_lauf():
+        monat_modul = importlib.import_module("belege.monat")
+        posten_modul = importlib.import_module("belege.posten")
+        zwischenstand = Namespace(echt=True, monat=None, uebergabe=False,
+                                  zwischenstand=True, anfragen=False, auszug=None, ziel=[])
+        if monat_modul.befehl(zwischenstand):
+            return 1
+        return posten_modul.befehl(Namespace(echt=True, mail=True, antworten=False))
+
+    laeufe = (("tag", _faelliger_tag, _tag_termin, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
+              ("monat", _faelliger_monat, _monat_termin, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[], nachholen=True)))),
+              ("posten", _faellige_posten, _posten_termin, lambda: begrenzt("posten", posten_lauf)))
+    for name, faellig, termin, ausfuehren in laeufe:
+        soll = termin()
+        if not _nachholen_eingerichtet(name) or not faellig() or not _termin_merken(name, soll):
+            continue
+        try:
+            ergebnis = ausfuehren()
+            if ergebnis is None:
+                _termin_freigeben(name, soll)
+                continue
+            ok = ergebnis == 0 if name != "tag" else bool(ergebnis)
+            if ok:
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                # Nicht die Uhrzeit des Nachholens merken: erledigt wurde der
+                # fällige Solltermin.  Der nächste Kalendertermin bleibt frei.
+                gesehen.setdefault("lauf", {})[name] = soll.isoformat(timespec="seconds")
+                if name == "monat":
+                    gesehen.get("lauf_fehlversuch", {}).pop("monat", None)
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+            elif name == "monat":
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf_fehlversuch", {})["monat"] = jetzt().date().isoformat()
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+        except Exception as fehler:  # Ein Nachholfehler stoppt den normalen Takt nicht.
+            if name == "monat":
+                gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+                gesehen.setdefault("lauf_fehlversuch", {})["monat"] = jetzt().date().isoformat()
+                schreiben(pfad("arbeit", "gesehen.json"), gesehen)
+            ereignis("fehler", f"Nachholen {name}: {fehler}")
+            log(f"Nachholen {name} fehlgeschlagen: {fehler}")
+
+
 def befehl(args) -> int:
     """`belege takt`: Postfach, Handy, Papierpost, Wächter und Opt-in-Aufräumen."""
     if echt(args):
@@ -303,10 +513,23 @@ def befehl(args) -> int:
         schritte += ("aufraeumen",)
     if _lauf(args, schritte, "takt") and echt(args):
         lebenszeichen()
+    _nachholen(args)
     return 0
 
 
 def befehl_tag(args) -> int:
     """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, dann Tagesbericht."""
-    _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
+    termin = _tag_termin()
+    if echt(args) and jetzt() >= termin:
+        # Auch ein Kalenderlauf mit fehlerhaftem Schritt ist ein Versuch.  Der
+        # Takt darf daraus keine Viertelstunden-Serie machen.  Hand- und
+        # Kalenderläufe selbst werden dadurch nie übersprungen.
+        _termin_merken("tag", termin)
+    ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
+    if ok and echt(args):
+        # Ein Handlauf vor dem Termin erledigt keinen zukünftigen Kalenderlauf.
+        if jetzt() >= termin:
+            gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
+            gesehen.setdefault("lauf", {})["tag"] = termin.isoformat(timespec="seconds")
+            schreiben(pfad("arbeit", "gesehen.json"), gesehen)
     return 0

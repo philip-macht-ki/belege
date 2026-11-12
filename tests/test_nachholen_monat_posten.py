@@ -1,0 +1,376 @@
+"""Verhalten beim Nachholen von Monatsübergaben und offenen Posten."""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timedelta
+
+from belege import kern, monat, posten, takt
+
+
+def _args(**werte):
+    grund = {"monat": None, "auszug": None, "uebergabe": True, "anfragen": False,
+             "echt": True, "ziel": []}
+    grund.update(werte)
+    return argparse.Namespace(**grund)
+
+
+def _uhr(monkeypatch, zeit):
+    monkeypatch.setattr(kern, "jetzt", lambda: zeit[0])
+    monkeypatch.setattr(takt, "jetzt", lambda: zeit[0])
+
+
+def _auszuege_bis_oktober(repo):
+    datei = repo / "auszuege" / "2026.csv"
+    datei.write_text(
+        "Datum;Name;Betrag\n"
+        "02.08.2026;Bank;-1,00\n"
+        "02.09.2026;Bank;-1,00\n"
+        "02.10.2026;Bank;-1,00\n",
+        encoding="utf-8",
+    )
+
+
+def _uebergabe_einrichten(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8")
+        .replace('adresse = ""\nordner = ""', 'adresse = "steuer@example.com"\nordner = ""'),
+        encoding="utf-8",
+    )
+
+
+def _monat_lauf_vorbereiten(repo, monkeypatch):
+    _auszuege_bis_oktober(repo)
+    _uebergabe_einrichten(repo)
+    monkeypatch.setattr(monat, "_nachsuche", lambda *args: None)
+    monkeypatch.setattr(monat.monatsmail, "senden", lambda *args: None)
+    gesendet = []
+    monkeypatch.setattr(
+        "belege.senden.senden",
+        lambda an, betreff, text, anhaenge, echt, **kw: gesendet.append((betreff, echt)) or kern.Ergebnis("ok"),
+    )
+    return gesendet
+
+
+def test_nachholen_monat_uebergibt_die_letzten_drei_monate_einmal(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+
+    assert monat.befehl(_args()) == 0
+
+    assert [betreff for betreff, _ in gesendet] == [
+        "Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel",
+    ]
+    assert all((repo / "arbeit" / "monat" / wert / "abgleich.json").exists()
+               for wert in ("2026-08", "2026-09", "2026-10"))
+
+
+def test_nachholen_monat_uebergibt_den_vormonat_nicht_erneut(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-10": "2026-11-03T10:00:00+01:00"}})
+
+    assert monat.befehl(_args()) == 0
+
+    assert gesendet == []
+
+
+def test_nachholen_monat_frische_einrichtung_bearbeitet_nur_vormonat(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+
+    assert monat.befehl(_args()) == 0
+
+    assert [betreff for betreff, _ in gesendet] == ["Belege 10/2026, Studio Beispiel"]
+
+
+def test_nachholen_monat_meldet_ausgelassene_monate(repo, monkeypatch, capsys):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-04", "uebergabe": {"2026-03": "2026-04-03T10:00:00+02:00"}})
+
+    assert monat.befehl(_args()) == 0
+
+    assert [betreff for betreff, _ in gesendet] == [
+        "Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel",
+    ]
+    assert "2026-04 bis 2026-07" in capsys.readouterr().out
+
+
+def test_nachholen_posten_sendet_verpassten_zwischenstand_nur_einmal(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 4, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    posten.fortschreiben([{"datum": "2026-11-01", "betrag": -12.5, "name": "Pixelwerk", "zweck": "Abo", "status": "fehlt"}])
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-10", "lauf": {"tag": zeit[0].isoformat(), "monat": zeit[0].isoformat(), "posten": "2026-10-15T07:00:00+02:00"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *args, **kw: gesendet.append(args) or kern.Ergebnis("ok"))
+
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+    zeit[0] = datetime(2026, 11, 15, 10, tzinfo=kern.zone())
+    takt._nachholen(_args())
+
+    assert len(gesendet) == 2
+
+
+def test_nachholen_posten_holt_lauf_vom_ersten_nicht_erneut_nach(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 2, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    posten.fortschreiben([{"datum": "2026-11-01", "betrag": -12.5, "name": "Pixelwerk", "zweck": "Abo", "status": "fehlt"}])
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"posten": "2026-11-01T08:00:00+01:00", "tag": zeit[0].isoformat(), "monat": zeit[0].isoformat()}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *args, **kw: gesendet.append(args) or kern.Ergebnis("ok"))
+
+    takt._nachholen(_args())
+
+    assert gesendet == []
+
+
+def test_nachholen_monat_bestimmt_den_stand_je_firma(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Firma A"', 1)
+        + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\nkonten = []\n',
+        encoding="utf-8",
+    )
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {
+        "Firma A:2026-09": "2026-10-03T10:00:00+02:00",
+        "Firma B:2026-07": "2026-08-03T10:00:00+02:00",
+    }})
+
+    assert monat.befehl(_args()) == 0
+
+    assert [betreff for betreff, _ in gesendet] == [
+        "Belege 08/2026, Firma A", "Belege 08/2026, Firma B",
+        "Belege 09/2026, Firma B", "Belege 10/2026, Firma A", "Belege 10/2026, Firma B",
+    ]
+
+
+def test_nachholen_monat_einzelfirma_liest_alten_einfachen_merker(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+
+    assert monat.befehl(_args()) == 0
+
+    assert [betreff for betreff, _ in gesendet] == [
+        "Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel",
+    ]
+
+
+def test_monat_erledigt_ist_bei_leeren_getrennten_adressen_offen(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'adresse = ""\nordner = ""',
+            'adresse = ""\nadressen = {}\nordner = ""',
+        ),
+        encoding="utf-8",
+    )
+
+    assert not monat._monat_erledigt(kern.firmen()[0], "2026-10", {})
+
+
+def test_monat_erledigt_ordnete_alten_merker_der_hauptfirma_zu(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Firma A"', 1)
+        + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\n',
+        encoding="utf-8",
+    )
+
+    assert monat._monat_erledigt(kern.firmen()[0], "2026-10", {"2026-10": "alt"})
+    assert not monat._monat_erledigt(kern.firmen()[1], "2026-10", {"2026-10": "alt"})
+
+
+def test_nach_update_holt_monat_keine_alte_handluecke_nach(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 12, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-08": "2026-09-03T09:00:00+02:00"}})
+    assert monat.faellige_monate() == (["2026-10"], [])
+
+
+def test_nach_update_holt_monate_seit_start_ueber_jahreswechsel_nach(repo, monkeypatch):
+    zeit = [datetime(2027, 2, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-08": "2026-09-03T09:00:00+02:00"}})
+    assert monat.faellige_monate() == (["2026-11", "2026-12", "2027-01"], [])
+
+
+def test_monatsnachholen_laeuft_nach_fehlermonat_weiter(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "2026-08-03T10:00:00+02:00"}})
+    original = monat.befehl
+    aufrufe, fehler = [], [True]
+
+    def lauf(args):
+        if args.monat is None:
+            return original(args)
+        aufrufe.append(args.monat)
+        if args.monat == "2026-09" and fehler and fehler.pop():
+            return 1
+        gesehen = kern.lesen(repo / "arbeit" / "gesehen.json", {}) or {}
+        gesehen.setdefault("uebergabe", {})[args.monat] = zeit[0].isoformat()
+        kern.schreiben(repo / "arbeit" / "gesehen.json", gesehen)
+        return 0
+
+    monkeypatch.setattr(monat, "befehl", lauf)
+    assert monat.befehl(_args()) == 1
+    assert aufrufe == ["2026-08", "2026-09", "2026-10"]
+    assert monat.befehl(_args()) == 0
+    assert aufrufe == ["2026-08", "2026-09", "2026-10", "2026-09"]
+
+
+def test_uebergabefehler_haelt_nur_diesen_monat_offen(repo, monkeypatch):
+    """Nur Uhr und unterste Versandschicht sind ersetzt; monat.befehl läuft echt."""
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _auszuege_bis_oktober(repo)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-08", "uebergabe": {"2026-07": "alt"}})
+    gesendet, kaputt = [], [True]
+
+    def senden(*args, **_kw):
+        gesendet.append(args[1])
+        fehler = args[1].startswith("Belege 09/") and bool(kaputt)
+        if fehler:
+            kaputt.pop()
+        return kern.Ergebnis("fehler" if fehler else "ok")
+
+    monkeypatch.setattr("belege.senden.senden", senden)
+    assert monat.befehl(_args()) == 1
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel"]
+    assert set(kern.lesen(repo / "arbeit" / "gesehen.json")["uebergabe"]) == {"2026-07", "2026-08", "2026-10"}
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 08/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel", "Belege 10/2026, Studio Beispiel", "Belege 09/2026, Studio Beispiel"]
+
+
+def test_kalenderweg_setzt_startgrenze_im_echten_monatsbefehl(repo, monkeypatch):
+    """Nur Uhr und Versandschicht sind ersetzt; auch Folge- und Jahreswechsel laufen echt."""
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _auszuege_bis_oktober(repo)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"uebergabe": {"2026-07": "alt"}})
+    gesendet = []
+    monkeypatch.setattr("belege.senden.senden", lambda *args, **_kw: gesendet.append(args[1]) or kern.Ergebnis("ok"))
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 10/2026, Studio Beispiel"]
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")] == ["Belege 10/2026, Studio Beispiel"]
+    zeit[0] = datetime(2027, 2, 5, 10, tzinfo=kern.zone())
+    (repo / "auszuege" / "2026.csv").write_text((repo / "auszuege" / "2026.csv").read_text(encoding="utf-8") + "02.11.2026;Bank;-1,00\n02.12.2026;Bank;-1,00\n02.01.2027;Bank;-1,00\n", encoding="utf-8")
+    assert monat.befehl(_args()) == 0
+    assert [x for x in gesendet if x.startswith("Belege")][-3:] == ["Belege 11/2026, Studio Beispiel", "Belege 12/2026, Studio Beispiel", "Belege 01/2027, Studio Beispiel"]
+
+
+def test_t1_fehlernder_november_haelt_dezember_nicht_auf(repo, monkeypatch):
+    zeit = [datetime(2027, 1, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    gesendet = _monat_lauf_vorbereiten(repo, monkeypatch)
+    auszug = repo / "auszuege" / "2026.csv"
+    auszug.write_text(auszug.read_text(encoding="utf-8") + "02.12.2026;Bank;-1,00\n", encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-10": "alt"}})
+
+    assert monat.befehl(_args()) == 0
+    assert [betreff for betreff, _ in gesendet] == ["Belege 12/2026, Studio Beispiel"]
+    assert "2026-11" not in kern.lesen(repo / "arbeit" / "gesehen.json")["uebergabe"]
+
+
+def test_t2_fehlernder_monat_meldet_pro_tag_nur_einmal(repo, monkeypatch):
+    zeit = [datetime(2027, 1, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _monat_lauf_vorbereiten(repo, monkeypatch)
+    auszug = repo / "auszuege" / "2026.csv"
+    auszug.write_text(auszug.read_text(encoding="utf-8") + "02.12.2026;Bank;-1,00\n", encoding="utf-8")
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"nachholen_ab_monat": "2026-11", "uebergabe": {"2026-10": "alt"}})
+
+    monat.befehl(_args())
+    monat.befehl(_args())
+    ereignisse = (repo / "arbeit" / "ereignisse" / "2027-01-05.jsonl").read_text(encoding="utf-8")
+    assert ereignisse.count("Übergabe für November wartet: Kontoauszug fehlt") == 1
+
+
+def test_takt_versucht_fehlenden_auszug_am_folgetag_und_uebergibt_nach_nachlieferung(repo, monkeypatch):
+    zeit = [datetime(2026, 11, 5, 10, tzinfo=kern.zone())]
+    _uhr(monkeypatch, zeit)
+    _uebergabe_einrichten(repo)
+    kern.schreiben(repo / "arbeit" / "gesehen.json", {"lauf": {"monat": "2026-10-03T09:00:00+02:00"}})
+    gesendet = []
+    monkeypatch.setattr(
+        "belege.senden.senden",
+        lambda *args, **_kw: gesendet.append(args[1]) or kern.Ergebnis("ok"),
+    )
+
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    (repo / "auszuege" / "2026.csv").write_text(
+        "Datum;Name;Betrag\n02.10.2026;Bank;-1,00\n", encoding="utf-8",
+    )
+    zeit[0] += timedelta(days=1)
+    takt._nachholen(_args())
+    takt._nachholen(_args())
+
+    gesehen = kern.lesen(repo / "arbeit" / "gesehen.json")
+    ereignisse = (repo / "arbeit" / "ereignisse" / "2026-11-05.jsonl").read_text(encoding="utf-8")
+    assert ereignisse.count("Übergabe für Oktober wartet: Kontoauszug fehlt") == 1
+    assert gesendet.count("Belege 10/2026, Studio Beispiel") == 1
+    assert gesehen["lauf"]["monat"].startswith("2026-11-03")
+    assert "monat" not in gesehen.get("lauf_fehlversuch", {})
+
+
+def _adressen_eintragen(repo, adressen):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'adresse = ""\nordner = ""',
+            f'adresse = ""\nadressen = {adressen}\nordner = ""',
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_monat_nachholen_gilt_mit_nur_getrennten_adressen_als_eingerichtet(repo):
+    _adressen_eintragen(repo, '{ eingang = "eingang@example.com", ausgang = "ausgang@example.com" }')
+
+    assert takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_ohne_jede_adresse_ist_nicht_eingerichtet(repo):
+    _adressen_eintragen(repo, '{ eingang = "", ausgang = "" }')
+
+    assert not takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_gilt_mit_firmenadresse_als_eingerichtet(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace('name = "Studio Beispiel"', 'name = "Firma A"', 1)
+        + '\n[[firma]]\nname = "Firma B"\nnamen = ["Firma B"]\nbereich = "Firma B"\nuebergabe = "b@example.com"\n',
+        encoding="utf-8",
+    )
+
+    assert takt._nachholen_eingerichtet("monat")
+
+
+def test_monat_nachholen_ordnerweg_ohne_ordner_ist_nicht_eingerichtet(repo):
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8").replace(
+            'weg = "mail"\nadresse = ""\nordner = ""', 'weg = "ordner"\nadresse = "steuer@example.com"\nordner = ""'),
+        encoding="utf-8",
+    )
+
+    assert not takt._nachholen_eingerichtet("monat")
