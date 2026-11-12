@@ -51,7 +51,8 @@ Zwischenstand jeweils als eine Zusammenfassung. Bereits ältere oder von Hand
 ausgelassene Monate werden nicht überraschend versendet.
 Scheitert eine Monatsübergabe, bleibt genau dieser Monat offen; spätere fällige
 Monate werden trotzdem übergeben. Der Takt versucht einen verpassten Solltermin
-höchstens einmal; Hand- und Kalenderläufe laufen weiterhin immer.
+frühestens 30 Minuten nach seiner Uhrzeit und höchstens einmal; Hand- und
+Kalenderläufe laufen weiterhin immer.
 
 ## Was es tut
 

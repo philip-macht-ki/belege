@@ -254,7 +254,7 @@ def test_b_startgrenze_sperrt_den_kalender_monatslauf_nicht(repo, monkeypatch):
     monkeypatch.setattr(monat, "befehl", lambda args: aufrufe.append(args) or 0)
 
     takt._nachholen(_args())
-    zeit[0] = datetime(2026, 12, 3, 9, tzinfo=kern.zone())
+    zeit[0] = datetime(2026, 12, 3, 9, 30, tzinfo=kern.zone())
     takt._nachholen(_args())
 
     assert len(aufrufe) == 1 and aufrufe[0].uebergabe
@@ -269,7 +269,7 @@ def test_c_startgrenze_sperrt_den_kalender_postenlauf_nicht(repo, monkeypatch):
     monkeypatch.setattr(posten, "befehl", lambda args: aufrufe.append(args) or 0)
 
     takt._nachholen(_args())
-    zeit[0] = datetime(2026, 11, 15, 7, tzinfo=kern.zone())
+    zeit[0] = datetime(2026, 11, 15, 7, 30, tzinfo=kern.zone())
     takt._nachholen(_args())
 
     assert len(aufrufe) == 1 and aufrufe[0].mail
@@ -332,7 +332,7 @@ def test_g_nachgeholter_postenlauf_nutzt_den_kalendereinstieg(repo, monkeypatch)
     ]
 
 
-def test_h_zeitgrenze_verbraucht_den_nachholversuch(repo, monkeypatch):
+def test_h_zeitgrenze_verbraucht_den_laufversuch(repo, monkeypatch):
     zeit = [datetime(2026, 11, 5, 10, 30, tzinfo=kern.zone())]
     _uhr(monkeypatch, zeit)
     _uebergabe_einrichten(repo)
@@ -394,7 +394,7 @@ def test_3c_hand_und_kalenderlauf_laufen_trotz_nachholen(repo, monkeypatch):
     takt._nachholen(_args())
     zeit[0] += timedelta(minutes=1)
     assert takt.befehl_tag(_args()) == 0
-    assert len(gesendet) == 2
+    assert len(gesendet) == 1
 
 
 def test_3d_handlauf_mit_anderer_uhrzeit_wird_nicht_uebersprungen(repo, monkeypatch):

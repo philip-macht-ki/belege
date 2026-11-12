@@ -316,7 +316,7 @@ def _nachholen_eingerichtet(name: str) -> bool:
 
 
 def _alte_laeufe_merken() -> None:
-    """Übernimmt vorhandene Altmerker, ohne nach einem Update alte Läufe zu duplizieren."""
+    """Setzt die Startgrenze eines Updates ohne alte Solltermine nachzuholen."""
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
     lauf = gesehen.setdefault("lauf", {})
     geaendert = False
@@ -324,33 +324,51 @@ def _alte_laeufe_merken() -> None:
         gesehen["nachholen_ab_monat"] = jetzt().strftime("%Y-%m")
         geaendert = True
     nachholen_ab = gesehen.setdefault("nachholen_ab", {})
-    if "tag" not in lauf and gesehen.get("bericht"):
-        lauf["tag"] = str(gesehen["bericht"])
-        geaendert = True
-    if "monat" not in lauf and (gesehen.get("uebergabe") or gesehen.get("monatsmail")):
-        lauf["monat"] = jetzt().isoformat(timespec="seconds")
-        geaendert = True
-    if "posten" not in lauf and any(str(s).startswith("posten:") for s in (gesehen.get("gesendet_teile") or {})):
-        lauf["posten"] = jetzt().isoformat(timespec="seconds")
-        geaendert = True
-    # Fehlt ein alter Merker ganz, ist das kein rückwirkend fälliger Lauf.  Die
-    # Startgrenze gehört ausdrücklich nicht zu ``lauf``: Nur ein wirklich
-    # ausgeführter Kalenderlauf darf dort stehen und spätere Termine sperren.
+    # Der letzte Solltermin vor dem Update zählt für jeden Lauf als versucht.
+    # Ein alter Bericht-/Mailmerker ist kein verlässlicher Termin und darf daher
+    # keinen zusätzlichen Tageslauf auslösen.
     for name in ("tag", "monat", "posten"):
         if name not in lauf and not str(nachholen_ab.get(name, "")):
             nachholen_ab[name] = jetzt().isoformat(timespec="seconds")
+            letzter = _letzter_solltermin(name)
+            if letzter:
+                lauf[name] = letzter.isoformat(timespec="seconds")
             geaendert = True
     if geaendert:
         schreiben(pfad("arbeit", "gesehen.json"), gesehen)
 
 
-def _versuch_merken(name: str, termin: datetime) -> bool:
+def _letzter_solltermin(name: str) -> datetime | None:
+    """Der letzte Solltermin strikt vor jetzt, für die Update-Migration."""
+    nun = jetzt()
+    if name == "tag":
+        stunde, minute = (int(x) for x in str(konfig("belege").get("takt", {}).get("tag_uhrzeit", "21:00")).split(":"))
+        soll = nun.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+        return soll if soll < nun else soll - timedelta(days=1)
+    if name == "monat":
+        soll = _monat_termin()
+        if soll >= nun:
+            erster = nun.replace(day=1) - timedelta(days=1)
+            tag = int(konfig("belege").get("uebergabe", {}).get("tag", 3))
+            return erster.replace(day=min(tag, erster.day), hour=9, minute=0, second=0, microsecond=0)
+        return soll
+    soll = _posten_termin()
+    if soll and soll < nun:
+        return soll
+    tag = 15 if nun.day > 15 else 1
+    if tag == 15:
+        return nun.replace(day=15, hour=7, minute=0, second=0, microsecond=0)
+    letzter_monat = nun.replace(day=1) - timedelta(days=1)
+    return letzter_monat.replace(day=15, hour=7, minute=0, second=0, microsecond=0)
+
+
+def _termin_merken(name: str, termin: datetime) -> bool:
     """Merkt genau einen Versuch für einen konkreten Solltermin."""
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
-    alt = _zeitwert(str((gesehen.get("nachholversuch", {}) or {}).get(name, "")))
+    alt = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
     if alt and alt >= termin:
         return False
-    gesehen.setdefault("nachholversuch", {})[name] = termin.isoformat(timespec="seconds")
+    gesehen.setdefault("laufversuch", {})[name] = termin.isoformat(timespec="seconds")
     schreiben(pfad("arbeit", "gesehen.json"), gesehen)
     return True
 
@@ -368,7 +386,7 @@ def _faellig(name: str, soll: datetime) -> bool:
     if gelaufen and gelaufen >= soll:
         return False
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
-    versuch = _zeitwert(str((gesehen.get("nachholversuch", {}) or {}).get(name, "")))
+    versuch = _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, "")))
     if versuch and versuch >= soll:
         return False
     ab = _zeitwert(str((gesehen.get("nachholen_ab", {}) or {}).get(name, "")))
@@ -376,7 +394,8 @@ def _faellig(name: str, soll: datetime) -> bool:
 
 
 def _faelliger_tag() -> bool:
-    return _faellig("tag", _tag_termin())
+    soll = _tag_termin()
+    return jetzt() >= soll + timedelta(minutes=30) and _faellig("tag", soll)
 
 
 def _tag_termin() -> datetime:
@@ -390,7 +409,8 @@ def _tag_termin() -> datetime:
 
 
 def _faelliger_monat() -> bool:
-    return jetzt() >= _monat_termin() and _faellig("monat", _monat_termin())
+    soll = _monat_termin()
+    return jetzt() >= soll + timedelta(minutes=30) and _faellig("monat", soll)
 
 
 def _monat_termin() -> datetime:
@@ -403,7 +423,7 @@ def _monat_termin() -> datetime:
 
 def _faellige_posten() -> bool:
     soll = _posten_termin()
-    return soll is not None and _faellig("posten", soll)
+    return soll is not None and jetzt() >= soll + timedelta(minutes=30) and _faellig("posten", soll)
 
 
 def _posten_termin() -> datetime | None:
@@ -414,11 +434,11 @@ def _posten_termin() -> datetime | None:
     return nun.replace(day=tage[-1], hour=7, minute=0, second=0, microsecond=0)
 
 
-def _versuch_vergessen(name: str, termin: datetime) -> None:
+def _termin_freigeben(name: str, termin: datetime) -> None:
     """Eine belegte Sperre ist kein Versuch und lässt denselben Termin offen."""
     gesehen = lesen(pfad("arbeit", "gesehen.json"), {}) or {}
-    if _zeitwert(str((gesehen.get("nachholversuch", {}) or {}).get(name, ""))) == termin:
-        del gesehen["nachholversuch"][name]
+    if _zeitwert(str((gesehen.get("laufversuch", {}) or {}).get(name, ""))) == termin:
+        del gesehen["laufversuch"][name]
         schreiben(pfad("arbeit", "gesehen.json"), gesehen)
 
 
@@ -451,12 +471,12 @@ def _nachholen(args) -> None:
               ("posten", _faellige_posten, _posten_termin, lambda: begrenzt("posten", posten_lauf)))
     for name, faellig, termin, ausfuehren in laeufe:
         soll = termin()
-        if not _nachholen_eingerichtet(name) or not faellig() or not _versuch_merken(name, soll):
+        if not _nachholen_eingerichtet(name) or not faellig() or not _termin_merken(name, soll):
             continue
         try:
             ergebnis = ausfuehren()
             if ergebnis is None:
-                _versuch_vergessen(name, soll)
+                _termin_freigeben(name, soll)
                 continue
             ok = ergebnis == 0 if name != "tag" else bool(ergebnis)
             if ok:
@@ -490,7 +510,7 @@ def befehl_tag(args) -> int:
         # Auch ein Kalenderlauf mit fehlerhaftem Schritt ist ein Versuch.  Der
         # Takt darf daraus keine Viertelstunden-Serie machen.  Hand- und
         # Kalenderläufe selbst werden dadurch nie übersprungen.
-        _versuch_merken("tag", termin)
+        _termin_merken("tag", termin)
     ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
     if ok and echt(args):
         # Ein Handlauf vor dem Termin erledigt keinen zukünftigen Kalenderlauf.

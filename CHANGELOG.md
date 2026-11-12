@@ -15,7 +15,8 @@ aktion: keine
   werden trotzdem übergeben. Fehlt nur ein Kontoauszug, wartet nur dieser Monat auf
   dessen Nachlieferung.
 - Der Takt versucht jeden verpassten Solltermin höchstens einmal, auch bei einem
-  Fehler. Hand- und Kalenderläufe bleiben davon unberührt und laufen immer.
+  Fehler, frühestens aber 30 Minuten nach dessen Uhrzeit. Hand- und
+  Kalenderläufe bleiben davon unberührt und laufen immer.
 
 ### Musst du etwas tun?
 

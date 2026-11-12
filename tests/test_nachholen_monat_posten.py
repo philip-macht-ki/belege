@@ -149,8 +149,8 @@ def test_nachholen_monat_bestimmt_den_stand_je_firma(repo, monkeypatch):
     assert monat.befehl(_args()) == 0
 
     assert [betreff for betreff, _ in gesendet] == [
-        "Belege 08/2026, Firma A", "Belege 10/2026, Firma A",
-        "Belege 08/2026, Firma B", "Belege 09/2026, Firma B", "Belege 10/2026, Firma B",
+        "Belege 08/2026, Firma A", "Belege 08/2026, Firma B",
+        "Belege 09/2026, Firma B", "Belege 10/2026, Firma A", "Belege 10/2026, Firma B",
     ]
 
 
