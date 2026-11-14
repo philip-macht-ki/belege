@@ -143,9 +143,47 @@ def _weg(datei: Path, grund: str, echt: bool) -> Ergebnis:
     return Ergebnis("ok", f"Nach {ziel} geschoben ({grund}).", {"pfad": str(ziel), "status": "zu_loeschen"})
 
 
-def eine(datei: Path, echt: bool) -> Ergebnis:
+def _mailtext_name(datei: Path) -> bool:
+    """Erkennt die deterministisch benannten PDFs aus einem Mailtext."""
+    m = DATUM_VORN.match(datei.name)
+    name = m.group(4) if m else datei.name
+    return bool(re.match(r"rechnung-aus-mailtext(?:_\d+)?\.pdf$", name, re.I))
+
+
+def _kopie(datei: Path, merker: dict) -> str:
+    """Prüft billige SHA-Kopien vor jeder normalen Nachsortierung."""
+    from .verarbeiten import _sha
+
+    sha = _sha(datei)
+    andere = (kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}).get(sha, {})
+    pfad = andere.get("pfad")
+    if pfad:
+        ziel = ablage_ordner() / str(pfad)
+        if ziel.exists() and ziel.resolve() != datei.resolve():
+            return f"Kopie von {ziel.name}"
+    if sha in merker["sha"]:
+        return f"Kopie von {merker['sha'][sha]}"
+    merker["sha"][sha] = datei.name
+    if _mailtext_name(datei):
+        from .text import auslesen
+
+        text = auslesen(datei).text.strip()
+        if not text:  # unlesbar ist nicht „gleich“
+            return ""
+        if text in merker["mailtext"]:
+            return f"Kopie von {merker['mailtext'][text]}"
+        merker["mailtext"][text] = datei.name
+    return ""
+
+
+def eine(datei: Path, echt: bool, merker: dict | None = None) -> Ergebnis:
     """Eine Datei aus Unsortiert nachsortieren."""
     from . import verarbeiten
+
+    merker = merker if merker is not None else {"sha": {}, "mailtext": {}}
+    grund = _kopie(datei, merker)
+    if grund:
+        return _weg(datei, grund, echt)
 
     bildtext = _bildtext(datei) if _ist_bild(datei) and datei.stat().st_size >= 20 * 1024 else ""
     grund = mailbild(datei, bildtext if _ist_bild(datei) else None)
@@ -186,11 +224,12 @@ def lauf(echt: bool) -> list[Ergebnis]:
 
     ergebnisse = []
     for o in ordner():
+        merker = {"sha": {}, "mailtext": {}}
         for datei in sorted(o.iterdir()):
             if not _erlaubt(datei):
                 continue
             try:
-                ergebnisse.append(eine(datei, echt))
+                ergebnisse.append(eine(datei, echt, merker))
             except kern.CloudGesperrt as fehler:
                 # Der Cloud-Ordner synchronisiert gerade: kein Fehler, der nächste Lauf versucht es wieder.
                 if echt:

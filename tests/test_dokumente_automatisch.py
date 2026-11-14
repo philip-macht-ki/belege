@@ -271,7 +271,7 @@ def test_postfach_dokument_markiert_mail_als_erledigt(repo, weg, monkeypatch):
     monkeypatch.setattr(takt, "_funde", lambda *_a: [fund])
     monkeypatch.setattr(takt, "_postfach_konten", lambda *_a: ["geschaeft"])
     erledigt = []
-    monkeypatch.setattr(quellen, "mail_erledigt", lambda konto, mail_id, echt: erledigt.append(mail_id))
+    monkeypatch.setattr(quellen, "mail_erledigt", lambda konto, mail_id, echt, *_a, **_k: erledigt.append(mail_id))
     monkeypatch.setattr(quellen, "lauf_abschliessen", lambda *_a: None)
     ergebnisse = takt.quelle_abarbeiten("postfach", Namespace(echt=True))
     assert ergebnisse[0].status == "ok"

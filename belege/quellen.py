@@ -91,7 +91,7 @@ def postfach_funde(konto: str, tage: int | None = None, echt: bool = False):
     Der Takt übernimmt bewusst die Schleife über mehrere Konten. Gesehene Mails
     werden erst nach erfolgreicher Verarbeitung über ``mail_erledigt`` markiert.
     """
-    from .postfach import oeffnen
+    from .postfach import MailFehlt, oeffnen
 
     postfach = oeffnen(konto)
     stand = _gesehen().get(konto, {})
@@ -105,12 +105,17 @@ def postfach_funde(konto: str, tage: int | None = None, echt: bool = False):
     if getattr(postfach, "weg", "") == "b":
         mails.extend(postfach.mit_label(str(konfiguration.get("label", "Beleg"))))
     bekannte = set(stand.get("mails", []))
+    kennungen = set(stand.get("kennungen", []))
     eindeutig = {mail.get("id"): mail for mail in mails if mail.get("id")}
     for mail_id, mail in eindeutig.items():
-        if mail_id in bekannte or ausgeschlossen(mail):
+        if mail_id in bekannte or (mail.get("message_id") and mail["message_id"] in kennungen) or ausgeschlossen(mail):
             continue
         ziel = _mail_tmp(konto, str(mail_id))
-        dateien = postfach.anhaenge(str(mail_id), ziel)
+        try:
+            dateien = postfach.anhaenge(str(mail_id), ziel)
+        except MailFehlt:
+            kern.log(f"Postfach {konto}: Mail {mail_id} übersprungen, nicht mehr im Postfach (verschoben oder gelöscht).")
+            continue
         for datei in dateien:
             if not _erlaubt(datei):
                 continue
@@ -132,18 +137,25 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
     """
     from . import rechnungslink
     from .abofalle import erkennen
+    from .postfach import MailFehlt
 
     max_mb = float(kern.konfig("belege").get("quellen", {}).get("rechnungslink_max_mb", 15))
     mailtext_an = bool(kern.konfig("belege").get("quellen", {}).get("rechnung_im_mailtext", True))
     bekannte = set(stand.get("mails", [])) | set(stand.get("links_geprueft", [])) | schon
+    kennungen = set(stand.get("kennungen", []))
     kandidaten: dict = {}
     for mail in _link_suche(postfach, konto, seit):
         mail_id = mail.get("id")
-        if mail_id and mail_id not in bekannte and not mail.get("anhaenge") and not ausgeschlossen(mail):
+        if (mail_id and mail_id not in bekannte and not (mail.get("message_id") and mail["message_id"] in kennungen)
+                and not mail.get("anhaenge") and not ausgeschlossen(mail)):
             kandidaten.setdefault(mail_id, mail)
     for mail_id, mail in kandidaten.items():
         try:
             voll = postfach.lesen(str(mail_id))
+        except MailFehlt:
+            kern.log(f"Rechnungslink {konto}:{mail_id} übersprungen, nicht mehr im Postfach (verschoben oder gelöscht).")
+            _link_geprueft(konto, str(mail_id), echt, str(mail.get("message_id") or ""))
+            continue
         except Exception as fehler:  # Netz weg: beim nächsten Lauf noch einmal
             kern.log(f"Rechnungslink {konto}:{mail_id} später noch einmal: Mail nicht lesbar ({fehler})")
             _link_offen(konto, str(mail_id), _mail_datum(mail), echt)
@@ -193,7 +205,7 @@ def _link_funde(postfach, konto: str, stand: dict, seit: date, schon: set, echt:
                 yield Fund(datei, "postfach", datei.name, _mail_datum(mail), kopf)
                 continue
         kern.log(f"Rechnungslink {konto}:{mail_id} übersprungen: {grund}")
-        _link_geprueft(konto, str(mail_id), echt)
+        _link_geprueft(konto, str(mail_id), echt, str(mail.get("message_id") or ""))
 
 
 def _link_suche(postfach, konto: str, seit: date) -> list[dict]:
@@ -227,7 +239,7 @@ def _link_suche(postfach, konto: str, seit: date) -> list[dict]:
     return alle
 
 
-def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:
+def _link_geprueft(konto: str, mail_id: str, echt: bool, message_id: str = "") -> None:
     """Merkt eine übersprungene Link-Mail, damit sie nicht jeden Lauf wiederkommt."""
     if not echt:
         return
@@ -236,6 +248,10 @@ def _link_geprueft(konto: str, mail_id: str, echt: bool) -> None:
     liste = daten.setdefault("links_geprueft", [])
     if mail_id not in liste:
         liste.append(mail_id)
+    if message_id:
+        kennungen = daten.setdefault("kennungen", [])
+        if message_id not in kennungen:
+            kennungen.append(message_id)
     (daten.get("offen") or {}).pop(mail_id, None)
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
@@ -314,7 +330,7 @@ def lauf_abschliessen(konto: str, liegen: dict[str, str], echt: bool) -> None:
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
 
 
-def mail_erledigt(konto: str, mail_id: str, echt: bool):
+def mail_erledigt(konto: str, mail_id: str, echt: bool, message_id: str = "", pflege: bool = True):
     """Merkt eine vollständig verarbeitete Mail nur mit ``--echt`` als erledigt vor."""
     if not echt:
         return
@@ -323,8 +339,14 @@ def mail_erledigt(konto: str, mail_id: str, echt: bool):
     mails = daten.setdefault("mails", [])
     if mail_id not in mails:
         mails.append(mail_id)
+    if message_id:
+        kennungen = daten.setdefault("kennungen", [])
+        if message_id not in kennungen:
+            kennungen.append(message_id)
     daten["stand"] = kern.jetzt().isoformat()
     kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+    if not pflege:
+        return
     from .postfach import oeffnen
 
     postfach = oeffnen(konto)

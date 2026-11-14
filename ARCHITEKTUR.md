@@ -62,7 +62,7 @@ arbeit/                   Laufzeit, nie im Git
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
-  gesehen.json            {"<konto>": {"mails": [message-id …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …]}
+  gesehen.json            {"<konto>": {"mails": [ordner:uid …], "kennungen": [Message-ID …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …]}
   aufraeumen.jsonl        jede echte Postfach-Aktion, mit Konto, ID, Regel und Ergebnis
   postfach-vorschlag.md   trocken erzeugte Gruppen und Regelvorschläge
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600
@@ -418,11 +418,15 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   stehen mit Datum in `gesehen.json[konto].offen` und halten das Fenster offen;
   `lauf` rückt erst vor, wenn keine mehr offen ist. Wäre eine offene Mail älter
   als `max_tage`, gibt es einmal ein `zweifel`-Ereignis, dann wird sie
-  losgelassen. Abzüglich `gesehen`. Anhänge: Endungen pdf,
+  losgelassen. Abzüglich der IDs in `gesehen` und ihrer nicht-leeren RFC-
+  `Message-ID` in `gesehen.json[konto].kennungen`. Anhänge: Endungen pdf,
   xml, jpg, jpeg, png, heic, tif, tiff, docx; Bilder unter 20 KB sind
   Signaturen/Logos. Weg B zusätzlich: Mails mit Label `[postfach].label`
   (Standard „Beleg“), ohne Zeitfenster, danach Label „Beleg/erledigt“. Eine
-  Mail gilt als gesehen erst, wenn alle ihre Anhänge verarbeitet sind.
+  Mail gilt sofort nach ihren vollständig verarbeiteten Anhängen als gesehen:
+  `ok`, `nichts` und `befund` genügen; nur bei ausschließlich `ok`/`nichts`
+  erfolgt die konfigurierte Postfachpflege. Fehler, spätere Versuche und
+  Cloud-Sperren bleiben offen.
 - **rechnungslinks** (Teil von postfach, Schalter `[quellen].rechnungslinks`,
   Standard `true`): Mails **ohne** Anhang im selben Zeitfenster, gesucht mit
   den Wörtern Rechnung, Invoice, Receipt, Beleg, Quittung (je Wort höchstens

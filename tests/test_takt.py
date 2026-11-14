@@ -35,7 +35,7 @@ def _falsche_module(monkeypatch, handy_kaputt=False, ergebnisse=None):
         return []
 
     quellen.handy_funde = handy
-    quellen.mail_erledigt = lambda konto, mail_id, echt: erledigt.append(mail_id)
+    quellen.mail_erledigt = lambda konto, mail_id, echt, *_a, **_k: erledigt.append(mail_id)
     quellen.lauf_abschliessen = lambda konto, liegen, echt: None
     verarbeiten = types.ModuleType("belege.verarbeiten")
     folge = iter(ergebnisse or [Ergebnis("ok"), Ergebnis("ok")])

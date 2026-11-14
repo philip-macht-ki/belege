@@ -1,5 +1,20 @@
 # Änderungen für dich
 
+## [1.19.7] – 14.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Wird eine Mail verschoben oder gelöscht, während belege gerade dein Postfach durchgeht, überspringt belege nur diese eine Mail und legt alle anderen Belege wie gewohnt ab. Vorher brach der ganze Postfach-Teil ab.
+- Kein Beleg wird mehr doppelt abgelegt. belege merkt sich jede Mail sofort, nachdem ihre Anhänge abgelegt sind, auch wenn der Beleg zum Ansehen in Unsortiert landet oder der Lauf danach abbricht. Rechnungen, die nur im Mailtext stehen, werden ebenfalls nur noch einmal abgelegt.
+- Verschiebst du eine Mail in einen anderen Ordner, erkennt belege sie wieder und holt sie nicht noch einmal.
+- Liegen in Unsortiert schon Kopien desselben Belegs, räumt das abendliche Nachsortieren sie nach `Unsortiert/Zu löschen`. Ein Exemplar bleibt liegen. Gelöscht wird nichts, den Ordner leerst du selbst. Die Kopien gehen dabei nicht mehr einzeln zur Prüfung an Claude, der Tagesbericht bleibt also schnell.
+
+### Musst du etwas tun?
+
+Nein. Doppelte Dateien mit `_2`, `_3` am Ende, die schon in deinen Monatsordnern liegen, fasst belege nicht an. Die kannst du von Hand löschen.
+
 ## [1.19.6] – 10.11.2026
 
 aktion: keine

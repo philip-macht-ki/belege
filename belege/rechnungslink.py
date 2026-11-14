@@ -12,6 +12,7 @@ import re
 import socket
 import ssl
 import time
+from datetime import datetime, timezone
 from email.message import Message
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
@@ -60,6 +61,13 @@ def mailtext_pdf(mail: dict, ziel: Path) -> Path:
     from fpdf import FPDF
 
     pdf = FPDF()
+    try:
+        zeit = datetime.fromisoformat(str(mail.get("datum", "")).replace("Z", "+00:00"))
+        if zeit.tzinfo is None:
+            zeit = zeit.replace(tzinfo=timezone.utc)
+    except ValueError:
+        zeit = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    pdf.set_creation_date(zeit)
     pdf.add_page()
     arial = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
     unicode_schrift = arial.exists()

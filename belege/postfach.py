@@ -40,6 +40,10 @@ class PostfachAbbruch(RuntimeError):
     """Die Verbindung zum Postfach bricht trotz Neuverbinden immer wieder ab."""
 
 
+class MailFehlt(RuntimeError):
+    """Eine zwischen Suche und Lesen verschobene oder gelöschte Mail."""
+
+
 def _verbindungsfehler(fehler: BaseException) -> bool:
     """Ist die Verbindung selbst kaputt (SSL-Abbruch, Zeitüberschreitung, Socket zu)?
 
@@ -283,15 +287,19 @@ def _anhaenge(nachricht) -> list[dict]:
 
 
 def _anhaenge_speichern(nachricht, ziel: Path) -> list[Path]:
-    """Speichert Anhänge einer Nachricht mit kollisionsfreien Namen."""
+    """Speichert Anhänge und verwendet eine vorhandene identische Kopie wieder."""
     ziel = Path(ziel)
     ziel.mkdir(parents=True, exist_ok=True)
     gespeichert = []
     for teil in nachricht.walk():
         if teil.get_content_disposition() != "attachment":
             continue
-        pfad = _freier_pfad(ziel, _text(teil.get_filename()))
-        pfad.write_bytes(teil.get_payload(decode=True) or b"")
+        inhalt = teil.get_payload(decode=True) or b""
+        name = _text(teil.get_filename())
+        pfad = ziel / _sicherer_name(name)
+        if not pfad.exists() or pfad.read_bytes() != inhalt:
+            pfad = _freier_pfad(ziel, name)
+            pfad.write_bytes(inhalt)
         gespeichert.append(pfad)
     return gespeichert
 
@@ -532,7 +540,7 @@ class ImapPostfach(Postfach):
         # Ist die Mail inzwischen verschoben oder gelöscht, liefert etwa iCloud nur [None].
         roh = next((teil[1] for teil in daten or [] if isinstance(teil, tuple) and len(teil) > 1), None)
         if not isinstance(roh, (bytes, bytearray)):
-            raise RuntimeError(f"Mail {ident} ist nicht mehr im Postfach (verschoben oder gelöscht).")
+            raise MailFehlt(f"Mail {ident} ist nicht mehr im Postfach (verschoben oder gelöscht).")
         return email.message_from_bytes(roh, policy=policy.default)
 
     def _ordner(self, flag: str, namen: list[str]) -> str:
