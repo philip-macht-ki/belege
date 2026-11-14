@@ -39,16 +39,16 @@ def _postfach_konten(args) -> list[str]:
             if k.get("belege", True) and (not gewuenscht or k.get("name") == gewuenscht)]
 
 
-def _funde(name: str, args) -> list:
-    """Sammelt die Funde einer Quelle (postfach, handy oder downloads)."""
+def _funde(name: str, args):
+    """Liefert Funde einer Quelle; das Postfach bleibt absichtlich ein Strom."""
     quellen = importlib.import_module("belege.quellen")
     if name != "postfach":
         quelle = getattr(quellen, f"{name}_funde")
         return list(quelle(echt=echt(args))) if name == "scan" else list(quelle())
-    funde = []
-    for konto in _postfach_konten(args):
-        funde.extend(quellen.postfach_funde(konto, getattr(args, "tage", None), echt(args)))
-    return funde
+    def strom():
+        for konto in _postfach_konten(args):
+            yield from quellen.postfach_funde(konto, getattr(args, "tage", None), echt(args))
+    return strom()
 
 
 def quelle_abarbeiten(name: str, args) -> list[Ergebnis]:
@@ -58,34 +58,55 @@ def quelle_abarbeiten(name: str, args) -> list[Ergebnis]:
     endete. So wird ein Anhang, der heute scheitert, morgen noch einmal versucht.
     """
     verarbeiten = importlib.import_module("belege.verarbeiten")
-    funde = _funde(name, args)
     ergebnisse = []
+    funde = _funde(name, args)
+    quellen = importlib.import_module("belege.quellen") if name == "postfach" else None
+    daten: dict[tuple[str, str], str] = {}
+    offene: dict[tuple[str, str], str] = {}
+    aktuelle_mail = None
+    mail_ergebnisse: list[Ergebnis] = []
+    mail_kopf = None
+
+    def abschliessen():
+        nonlocal mail_ergebnisse
+        if aktuelle_mail is None or not mail_ergebnisse:
+            return
+        konto, mail_id = aktuelle_mail
+        stati = {e.status for e in mail_ergebnisse}
+        if stati <= {"ok", "nichts", "befund"}:
+            message_id = str((mail_kopf or {}).get("message_id") or "")
+            # Ein Befund (etwa „Unsortiert“) liegt in der Ablage und kommt nicht wieder;
+            # im Postfach markiert oder verschoben wird aber nur eine ganz abgelegte Mail.
+            quellen.mail_erledigt(konto, mail_id, echt(args), message_id, pflege=stati <= {"ok", "nichts"})
+        else:
+            offene[(konto, mail_id)] = daten[(konto, mail_id)]
+
+    # Bricht der Strom oder die Verarbeitung ab (Zeitgrenze, Verbindung), bleibt die
+    # angefangene Mail offen; alle vorher abgeschlossenen sind schon gemerkt.
     for fund in funde:
+        schluessel = (fund.mail["konto"], fund.mail["id"]) if name == "postfach" and fund.mail else None
+        if schluessel != aktuelle_mail:
+            abschliessen()
+            aktuelle_mail, mail_ergebnisse, mail_kopf = schluessel, [], fund.mail
+        if schluessel:
+            daten[schluessel] = fund.eingang.isoformat()
         try:
-            ergebnisse.append(verarbeiten.verarbeite(fund, echt(args)))
+            ergebnis = verarbeiten.verarbeite(fund, echt(args))
         except CloudGesperrt as fehler:
             meldung = str(fehler)
             log(meldung)
             ereignis("cloud_gesperrt", meldung, quelle=fund.quelle, datei=fund.name)
-            ergebnisse.append(Ergebnis("cloud_gesperrt", meldung, {"quelle": fund.quelle}))
+            ergebnis = Ergebnis("cloud_gesperrt", meldung, {"quelle": fund.quelle})
+        ergebnisse.append(ergebnis)
+        if schluessel:
+            mail_ergebnisse.append(ergebnis)
 
     if name == "postfach":
-        quellen = importlib.import_module("belege.quellen")
-        je_mail: dict[tuple[str, str], bool] = {}
-        for fund, ergebnis in zip(funde, ergebnisse):
-            if not fund.mail:
-                continue
-            schluessel = (fund.mail["konto"], fund.mail["id"])
-            # Ein Befund (etwa „Unsortiert“) ist noch keine vollständige Ablage.
-            # Die Mail bleibt dann unverändert und kommt beim nächsten Lauf wieder.
-            je_mail[schluessel] = je_mail.get(schluessel, True) and ergebnis.status in {"ok", "nichts"}
-        for (konto, mail_id), alles_gut in je_mail.items():
-            if alles_gut:
-                quellen.mail_erledigt(konto, mail_id, echt(args))
+        abschliessen()
         # Offene Mails bleiben im Suchfenster; erst ohne offene rückt der Rückblick vor.
-        daten = {(f.mail["konto"], f.mail["id"]): f.eingang.isoformat() for f in funde if f.mail}
         for konto in _postfach_konten(args):
-            liegen = {i: daten[(k, i)] for (k, i), gut in je_mail.items() if k == konto and not gut}
+            # Nur harte Fehler halten die Mail offen; Befunde sind bewusst als gesehen markiert.
+            liegen = {i: datum for (k, i), datum in offene.items() if k == konto}
             quellen.lauf_abschliessen(konto, liegen, echt(args))
     return ergebnisse
 

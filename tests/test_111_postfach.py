@@ -86,11 +86,11 @@ def test_mailpflege_nur_echt_und_nur_bei_vollstaendiger_mail(repo, monkeypatch):
     erledigt = []
     monkeypatch.setattr(takt, "_funde", lambda *_: funde)
     monkeypatch.setattr("belege.verarbeiten.verarbeite", lambda fund, echt: kern.Ergebnis("ok") if fund.name == "a.pdf" else kern.Ergebnis("befund", "Unsortiert"))
-    monkeypatch.setattr("belege.quellen.mail_erledigt", lambda *args: erledigt.append(args))
+    monkeypatch.setattr("belege.quellen.mail_erledigt", lambda *args, **kwargs: erledigt.append((args, kwargs)))
     monkeypatch.setattr("belege.quellen.lauf_abschliessen", lambda *args: None)
     monkeypatch.setattr(takt, "_postfach_konten", lambda args: ["geschaeft"])
     takt.quelle_abarbeiten("postfach", SimpleNamespace(echt=True))
-    assert erledigt == []
+    assert erledigt == [(('geschaeft', 'm1', True, ''), {'pflege': False})]
     mail_erledigt("geschaeft", "m1", True)
     assert aufrufe == [("m1", "markieren", "Belege erledigt")]
 

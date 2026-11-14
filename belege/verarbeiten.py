@@ -36,6 +36,20 @@ def _speichere_index(index: dict) -> None:
     kern.schreiben(kern.pfad("arbeit", "index.json"), index)
 
 
+def _minimal_index(index: dict, fingerabdruck: str, ergebnis: kern.Ergebnis, fund: Fund) -> None:
+    """Sichert eine gerade abgelegte Datei, bevor spätere Zusatzschritte laufen."""
+    ziel = Path(ergebnis.daten["pfad"])
+    try:
+        pfad = str(ziel.relative_to(kern.ablage_ordner()))
+    except ValueError:
+        pfad = str(ziel)
+    index[fingerabdruck] = {
+        "pfad": pfad, "status": ergebnis.daten.get("status", ergebnis.status),
+        "quelle": fund.quelle, "am": kern.jetzt().isoformat(), "mail": fund.mail,
+    }
+    _speichere_index(index)
+
+
 def _aus_xml(daten: dict, fund: Fund) -> Einordnung:
     """Baut die sichere Einordnung einer ZUGFeRD-Rechnung aus ihren XML-Feldern."""
     from .einordnen import _aus_xml
@@ -192,6 +206,7 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
             hinweis = "Nicht als Beleg abgelegt und nicht an DATEV oder den Steuerberater gegeben; öffne sie nur, wenn du den Absender kennst."
             ergebnis = abofalle_ablegen(fund, aktiv_grund, echt, ordner="Vorsicht Datei prüfen", status="aktiv", hinweis=hinweis)
             if echt:
+                _minimal_index(index, fingerabdruck, ergebnis, fund)
                 ziel = Path(ergebnis.daten["pfad"])
                 kern.ereignis("zweifel", f"Vorsicht, PDF mit aktiven Inhalten ({aktiv_grund}): {fund.name} liegt unter {ziel}. {hinweis}",
                               quelle=fund.quelle, pfad=str(ziel), grund=aktiv_grund)
@@ -238,6 +253,7 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
             from .ablegen import abofalle_ablegen
             ergebnis = abofalle_ablegen(fund, grund, echt)
             if echt:
+                _minimal_index(index, fingerabdruck, ergebnis, fund)
                 ziel = Path(ergebnis.daten["pfad"])
                 kern.ereignis("zweifel", f"Vorsicht Abofalle: {fund.name} liegt unter {ziel}. Nicht unterschreiben, nicht zahlen.",
                               quelle=fund.quelle, pfad=str(ziel), grund=grund)
@@ -307,6 +323,7 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
                 relativ = ziel
             print(f"würde ablegen: {fund.name} → {relativ} ({einordnung.sicherheit}, {einordnung.quelle})")
             return ergebnis
+        _minimal_index(index, fingerabdruck, ergebnis, fund)
         ziel = Path(ergebnis.daten["pfad"])
         if begleit and ergebnis.status in {"ok", "befund"}:
             begleit_ziel = begleit[1]
