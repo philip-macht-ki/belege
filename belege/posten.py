@@ -103,7 +103,10 @@ def mailtext(zustand: dict) -> str:
         for x in sorted(gruppe, key=lambda e: (e.get("datum", ""), e["id"])):
             datum = date.fromisoformat(str(x.get("datum", ""))).strftime("%d.%m.%Y")
             name = x.get("name") or "dem Anbieter"
-            teile += [f"{datum} · {_euro(abs(float(x.get('betrag', 0))))} · {name}", hinweis(name),
+            betrag = _euro(abs(float(x.get("betrag", 0))))
+            if x.get("kurs_fehlt"):  # Fremdwährung ohne Kurs: nicht als Euro ausgeben
+                betrag = betrag.replace("€", str(x.get("waehrung", "")))
+            teile += [f"{datum} · {betrag} · {name}", hinweis(name),
                       f"[{x['id'][:8]}] → ", ""]
         return teile
 

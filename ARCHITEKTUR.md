@@ -558,7 +558,7 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   Posten heißen `entfallen` und werden bei Wiederkehr normal bewertet.
 - Vor jeder Posten-Mail prüft `nachpruefen()` die höchstens zwölf Monate mit
   `offen`, `wartet_mensch` oder `angefragt` leise erneut, ohne Nachsuche,
-  Ereignis oder Ausgabedatei. Die Mail enthält nur `offen` und `wartet_mensch`,
+  Ereignis oder Ausgabedatei; `entfallen` setzt nur der Monatslauf. Die Mail enthält nur `offen` und `wartet_mensch`,
   getrennt nach Abbuchungen und Zahlungseingängen. Antworten mit Kurz-ID oder
   `--klaeren` verstehen privat, kein Beleg, liegt ab, liegt bei, andere Firma
   und Einnahme; Antworten erzeugen weiter nur Regelvorschläge.
