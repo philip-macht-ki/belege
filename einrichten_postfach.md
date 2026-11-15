@@ -26,7 +26,10 @@ Claude liest nur Kopfdaten und führt erst nach dem Trockenlauf etwas aus.
    `uv run belege aufraeumen vorschlag --tage 28`
 
    Lies `arbeit/postfach-vorschlag.md` gemeinsam mit dem Nutzer. Er entscheidet,
-   welche Absender, Domains und Betreffe Regeln erhalten. Ausgeschlossene und
+   welche Absender, Domains und Betreffe Regeln erhalten. Für wiederkehrende
+   Aufgaben kann eine Regel zusätzlich `und kalender: Titel, Tag` enthalten;
+   der Agent schickt dann eine Kalenderdatei an die eigene Berichtsadresse.
+   Ausgeschlossene und
    eigene Belege-Mails bleiben außen vor.
 
 2. Bestehende Ordnung ansehen

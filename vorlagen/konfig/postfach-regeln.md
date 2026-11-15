@@ -30,6 +30,11 @@ Aktionen:
     melden -> nennt sie im Tagesbericht
     melden, sofort -> meldet sie zusätzlich sofort an dich
     liegen lassen -> tut nichts und nennt sie unter „Braucht dich“
+    kalender: Löhne überweisen, 20. -> schickt dir eine Kalenderdatei für diesen Tag
+    entwurf: Danke, die Löhne kommen am 20. und kalender: Löhne überweisen, 20. -> führt die Aktion aus und schickt zusätzlich die Kalenderdatei
+
+Für den Tag gehen `15.` (der nächste 15.), `15.12.`, `15.12.2026`, `2026-12-15`,
+`morgen` sowie `in 3 tagen` (oder `in 1 tag`).
 
 Zustandsregeln (beantwortet, erledigt, gelesen, älter als …) dürfen nur
 archivieren oder in einen Ordner verschieben:
