@@ -8,6 +8,8 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+from facturx import get_xml_from_pdf
+
 from . import kern
 from .dokumente import VertraulichGescheitert
 from .urteil import Unerreichbar
@@ -64,25 +66,30 @@ def _aus_xml(daten: dict, fund: Fund) -> Einordnung:
 
 def _zugferd(fund: Fund) -> tuple[Einordnung, Text, dict] | None:
     """Liest eine eingebettete ZUGFeRD-XML, ohne das PDF selbst zu verändern."""
-    from facturx import get_xml_from_pdf
     from .xrechnung import zugferd_in
 
     if fund.datei.suffix.lower() != ".pdf" or not zugferd_in(fund.datei):
         return None
-    xml = get_xml_from_pdf(fund.datei.read_bytes(), check_xsd=False)
-    if isinstance(xml, tuple):  # factur-x liefert (dateiname, xml_bytes)
-        xml = xml[1]
-    if not xml:
-        raise ValueError("Im ZUGFeRD-PDF wurde keine XML-Rechnung gefunden.")
-    xml_datei = kern.pfad("arbeit", "tmp", f"{_sha(fund.datei)}.xml")
-    xml_datei.parent.mkdir(parents=True, exist_ok=True)
-    xml_datei.write_bytes(xml)
-    from .xrechnung import lesen, sichttext
+    try:
+        xml = get_xml_from_pdf(fund.datei.read_bytes(), check_xsd=False)
+        if isinstance(xml, tuple):  # factur-x liefert (dateiname, xml_bytes)
+            xml = xml[1]
+        if not xml:
+            raise ValueError("Keine XML-Rechnung gefunden.")
+        xml_datei = kern.pfad("arbeit", "tmp", f"{_sha(fund.datei)}.xml")
+        xml_datei.parent.mkdir(parents=True, exist_ok=True)
+        xml_datei.write_bytes(xml)
+        from .xrechnung import lesen, sichttext
 
-    daten = lesen(xml_datei)
-    daten["xml_datei"] = xml_datei
-    einordnung = _aus_xml(daten, fund)
-    return einordnung, Text(sichttext(daten), "xml", 1), daten
+        daten = lesen(xml_datei)
+        daten["xml_datei"] = xml_datei
+        einordnung = _aus_xml(daten, fund)
+        return einordnung, Text(sichttext(daten), "xml", 1), daten
+    except kern.CloudGesperrt:
+        raise  # Der Cloud-Ordner hält die Datei fest: später noch einmal, kein Rückfall.
+    except Exception:  # Die bloße Namensnennung im PDF ist keine E-Rechnung.
+        kern.log(f"{fund.name}: nennt eine E-Rechnung, enthält aber keine lesbare; wird wie ein normales PDF eingeordnet.")
+        return None
 
 
 def _begleit_einordnung(fund: Fund, text: Text, index: dict) -> tuple[Einordnung, Path] | None:
@@ -148,6 +155,56 @@ def _firma_aus_lieferant(einordnung: Einordnung, index: dict) -> Einordnung:
         return einordnung
     firma = next(iter(firmen))
     return replace(einordnung, firma=firma, grund=f"{einordnung.grund} Lieferant bisher nur bei {firma}.".strip())
+
+
+def _betrag_text(betrag: float, waehrung: str) -> str:
+    """Formatiert einen Betrag für den Dublettenhinweis deutschsprachig."""
+    text = f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{text} €" if waehrung == "EUR" else f"{text} {waehrung}"
+
+
+def _gleiches_fund_paar(neu: dict, anderer: dict) -> bool:
+    """Erkennt XML-Sichtfassungen und zugehörige Begleit-PDFs."""
+    neu_xml, anderer_xml = neu.get("xml"), anderer.get("xml")
+    if neu_xml and neu_xml == anderer_xml:
+        return True
+    return any(str(eintrag.get("pfad") or "").endswith("_Begleit.pdf") for eintrag in (neu, anderer))
+
+
+def _moegliche_dublette(neu: dict, index: dict, text: Text) -> dict | None:
+    """Findet höchstens einen ähnlich abgelegten, aber andersartigen Beleg."""
+    from .monat import _ist_quittung, _normal
+
+    # Vertrauliche Belege nennt kein Bericht beim Dateinamen, also auch kein Hinweis.
+    if neu.get("datum") is None or neu.get("betrag") is None or neu.get("vertraulich"):
+        return None
+    waehrung = str(neu.get("waehrung") or "EUR").upper()
+    lieferant = _normal(str(neu.get("lieferant") or ""))
+    normaler_text = _normal(text.text)
+    kandidaten = sorted(
+        (eintrag for eintrag in index.values()
+         if eintrag is not neu and eintrag.get("status") == "abgelegt" and not eintrag.get("vertraulich")),
+        key=lambda eintrag: str(eintrag.get("pfad") or ""),
+    )
+    for anderer in kandidaten:
+        if (_gleiches_fund_paar(neu, anderer)
+                or kern.firma_von(neu) != kern.firma_von(anderer)
+                or neu.get("art") != anderer.get("art")
+                or neu.get("datum") != anderer.get("datum")
+                or str(anderer.get("waehrung") or "EUR").upper() != waehrung
+                or anderer.get("betrag") is None):
+            continue
+        try:
+            gleicher_betrag = abs(float(neu["betrag"]) - float(anderer["betrag"])) <= 0.01
+        except (TypeError, ValueError):
+            continue
+        anderer_lieferant = _normal(str(anderer.get("lieferant") or ""))
+        namensbezug = lieferant == anderer_lieferant or (
+            len(anderer_lieferant) >= 4 and anderer_lieferant in normaler_text
+        )
+        if gleicher_betrag and namensbezug and _ist_quittung(neu) == _ist_quittung(anderer):
+            return anderer
+    return None
 
 
 def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Ergebnis:
@@ -356,6 +413,13 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
             daten["befund"] = str(befund_pfad.relative_to(kern.ablage_ordner()))
         index[fingerabdruck] = daten
         _speichere_index(index)
+        anderer = None
+        ablage = kern.konfig("belege").get("ablage", {})
+        if daten["status"] == "abgelegt" and ablage.get("dublettenhinweis", True):
+            anderer = _moegliche_dublette(daten, index, text)
+            if anderer:
+                daten["moegliche_dublette"] = anderer["pfad"]
+                _speichere_index(index)
         _original_erledigt(fund)
         if echt:
             entwurf_angelegt = False
@@ -401,6 +465,13 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
                           lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), waehrung=daten.get("waehrung"), firma=daten.get("firma"),
                           grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt,
                           pruefung_neu=anbieter_neu)
+            if anderer:
+                betrag = _betrag_text(float(daten["betrag"]), str(daten.get("waehrung") or "EUR"))
+                kern.ereignis(
+                    "zweifel",
+                    f"Möglicherweise doppelt: {daten['pfad']} und {anderer['pfad']} haben dasselbe Datum und denselben Betrag ({betrag}). Ist es derselbe Vorgang, etwa eine Fahrt und die Rechnung des Fahrers, lösch eine der beiden Dateien.",
+                    pfad=daten["pfad"], anderer_pfad=anderer["pfad"], firma=daten.get("firma"),
+                )
             if geheim and geheim.vertraulich:
                 kern.ereignis("vertraulich", f"{fund.name} nur auf deinem Mac gelesen ({geheim.grund}), "
                               f"liegt unter {daten['pfad']}. Bitte kurz ansehen, ob Name und Ordner stimmen.",

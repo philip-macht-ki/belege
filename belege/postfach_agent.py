@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import inspect
 import re
+import calendar
+import hashlib
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parseaddr
 
 from . import kern
@@ -47,19 +49,91 @@ def _bedingungen(text: str) -> list[str]:
     return _teilen(text, " und ")
 
 
-def _aktion(text: str, nummer: int, fehler: list[str]) -> tuple[str, str] | None:
+def _kalendertag(text: str) -> date | None:
+    """Liest eine erlaubte Tagesangabe relativ zum heutigen Lauftag."""
+    heute = kern.jetzt().date()
+    niedrig = text.strip().lower()
+    if niedrig == "morgen":
+        return heute + timedelta(days=1)
+    versatz = re.fullmatch(r"in\s+(\d+)\s+tag(?:en)?", niedrig)
+    if versatz:
+        return heute + timedelta(days=int(versatz.group(1)))
+    for muster in (r"(\d{4})-(\d{1,2})-(\d{1,2})", r"(\d{1,2})\.(\d{1,2})\.(\d{4})"):
+        treffer = re.fullmatch(muster, niedrig)
+        if treffer:
+            teile = tuple(map(int, treffer.groups()))
+            try:
+                return date(*teile) if "-" in niedrig else date(teile[2], teile[1], teile[0])
+            except ValueError:
+                return None
+    treffer = re.fullmatch(r"(\d{1,2})\.(?:(\d{1,2})\.)?", niedrig)
+    if not treffer:
+        return None
+    tag, monat = map(lambda wert: int(wert) if wert else None, treffer.groups())
+    if not 1 <= tag <= 31:
+        return None
+    if monat:
+        if not 1 <= monat <= 12:
+            return None
+        for jahr in range(heute.year, heute.year + 9):
+            try:
+                kandidat = date(jahr, monat, tag)
+            except ValueError:
+                continue
+            if kandidat >= heute:
+                return kandidat
+        return None
+    monat, jahr = heute.month, heute.year
+    tag_im_monat = min(tag, calendar.monthrange(jahr, monat)[1])
+    if tag_im_monat < heute.day:
+        monat += 1
+        if monat == 13:
+            monat, jahr = 1, jahr + 1
+        tag_im_monat = min(tag, calendar.monthrange(jahr, monat)[1])
+    return date(jahr, monat, tag_im_monat)
+
+
+def _kalender(text: str, nummer: int, fehler: list[str]) -> tuple[str, str] | None:
+    """Trennt Kalendertitel und Tagesangabe am letzten Komma."""
+    if "," not in text:
+        fehler.append(f"Zeile {nummer}: kalender: braucht Titel und Tag")
+        return None
+    titel, tag = text.rsplit(",", 1)
+    titel, tag = titel.strip(), tag.strip()
+    if not titel or not tag:
+        fehler.append(f"Zeile {nummer}: kalender: braucht Titel und Tag")
+        return None
+    if _kalendertag(tag) is None:
+        fehler.append(f"Zeile {nummer}: kalender: unbekanntes oder unmögliches Tagformat {tag}")
+        return None
+    return titel, tag
+
+
+def _aktion(text: str, nummer: int, fehler: list[str]) -> tuple[str, str, str, str] | None:
     """Prüft und normalisiert die Aktion einer einzelnen Regel."""
     niedrig = text.strip().lower()
+    if niedrig.startswith("kalender:"):
+        kalender = _kalender(text.split(":", 1)[1], nummer, fehler)
+        return ("kalender", "", *kalender) if kalender else None
+    trennungen = list(re.finditer(r"\s+und\s+kalender:\s*", text.strip(), flags=re.I))
+    teile = [text.strip()[:trennungen[-1].start()], text.strip()[trennungen[-1].end():]] if trennungen else [text.strip()]
+    kalender_titel = kalender_tag = ""
+    if len(teile) == 2:
+        kalender = _kalender(teile[1], nummer, fehler)
+        if not kalender:
+            return None
+        kalender_titel, kalender_tag = kalender
+        text, niedrig = teile[0], teile[0].lower()
     for art in ("ordner", "label", "entwurf"):
         if niedrig.startswith(f"{art}:"):
             wert = text.split(":", 1)[1].strip()
             if wert:
-                return art, wert
+                return art, wert, kalender_titel, kalender_tag
             fehler.append(f"Zeile {nummer}: {art}: braucht einen Wert")
             return None
     normalisiert = re.sub(r",\s*", ", ", niedrig)
     if normalisiert in AKTIONEN:
-        return normalisiert, ""
+        return normalisiert, "", kalender_titel, kalender_tag
     fehler.append(f"Zeile {nummer}: unbekannte Aktion {text.strip()}")
     return None
 
@@ -109,7 +183,7 @@ def regeln(datei=None):
         if not all(_bedingung_gueltig(teil) for teil in _bedingungen(bedingung)):
             fehler.append(f"Zeile {nummer}: unbekannte Bedingung {bedingung}")
             continue
-        art, wert = aktion
+        art, wert, kalender_titel, kalender_tag = aktion
         if art in {"ordner", "label"}:
             from .postfach import ziel_gesperrt
             if ziel_gesperrt(wert):
@@ -119,8 +193,8 @@ def regeln(datei=None):
         if any(teil.strip().lower().startswith("text:") for teil in teile_bedingung) and lesen != "text":
             fehler.append(f'Zeile {nummer}: text: braucht lesen = "text" in [aufraeumen]')
             continue
-        regel = {"nr": nummer, "bedingung": bedingung, "aktion": art, "wert": wert, "text": roh[2:].strip()}
-        if _zustandsregel(regel) and art not in {"archivieren", "ordner"}:
+        regel = {"nr": nummer, "bedingung": bedingung, "aktion": art, "wert": wert, "kalender_titel": kalender_titel, "kalender_tag": kalender_tag, "text": roh[2:].strip()}
+        if _zustandsregel(regel) and (art not in {"archivieren", "ordner"} or kalender_titel):
             fehler.append(f"Zeile {nummer}: Zustandsregeln dürfen nur archivieren oder ordner: verwenden")
             continue
         gefundene.append(regel)
@@ -227,6 +301,87 @@ def _mail_ignorieren(mail: dict, bekannte: set[str], eigene: set[str]) -> bool:
     return mail.get("id") in bekannte or ausgeschlossen(mail) or _eigene_mail(mail, eigene)
 
 
+def _ics_text(wert: str) -> str:
+    """Maskiert freien Text nach RFC 5545."""
+    return str(wert).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+
+
+def _ics_zeile(zeile: str) -> str:
+    """Faltet eine iCalendar-Zeile auf höchstens 75 Oktette."""
+    teile, aktuell, groesse = [], "", 0
+    grenze = 75
+    for zeichen in zeile:
+        byte = len(zeichen.encode("utf-8"))
+        if aktuell and groesse + byte > grenze:
+            teile.append(aktuell)
+            aktuell, groesse, grenze = " ", 1, 75
+        aktuell += zeichen
+        groesse += byte
+    teile.append(aktuell)
+    return "\r\n".join(teile)
+
+
+def _termin_uid(konto: str, mail: dict, titel: str, tag: str) -> str:
+    """Gibt die stabile Kennung eines aus einer Mail entstandenen Termins zurück."""
+    roh = "\0".join((konto, str(mail.get("id", "")), titel, tag)).encode("utf-8")
+    return hashlib.sha256(roh).hexdigest() + "@belege"
+
+
+def _termindatei(konto: str, mail: dict, titel: str, tag: str) -> tuple[str, date, tuple[str, str]]:
+    """Baut die Kalenderdatei erst für den tatsächlichen Versand."""
+    termin = _kalendertag(tag)
+    assert termin is not None
+    uid = _termin_uid(konto, mail, titel, tag)
+    privat = not bool(kern.konfig("belege").get("aufraeumen", {}).get("betreffe_im_bericht", True))
+    absender = str(mail.get("von", "")).rsplit("@", 1)[-1] if privat else str(mail.get("von", ""))
+    betreff = "" if privat else str(mail.get("betreff", ""))
+    beschreibung = f"Aus Mail von {absender}" + (f" – {betreff}" if betreff else "") + f". Termin am {termin:%d.%m.%Y}."
+    stempel = kern.jetzt().astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ende = termin + timedelta(days=1)
+    zeilen = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//belege//Postfach-Agent//DE", "METHOD:PUBLISH",
+        "BEGIN:VEVENT", f"UID:{uid}", f"DTSTAMP:{stempel}", f"DTSTART;VALUE=DATE:{termin:%Y%m%d}",
+        f"DTEND;VALUE=DATE:{ende:%Y%m%d}", f"SUMMARY:{_ics_text(titel)}", f"DESCRIPTION:{_ics_text(beschreibung)}",
+        "BEGIN:VALARM", "TRIGGER:PT9H", "ACTION:DISPLAY", "DESCRIPTION:Erinnerung", "END:VALARM", "END:VEVENT", "END:VCALENDAR",
+    ]
+    inhalt = "\r\n".join(_ics_zeile(zeile) for zeile in zeilen) + "\r\n"
+    from .ablegen import sauber
+    name = f"{termin:%Y-%m-%d}_{sauber(titel) or 'Termin'}.ics"
+    return uid, termin, (name, inhalt)
+
+
+def _termin_verschicken(konto: str, mail: dict, regel: dict) -> str:
+    """Schickt einen Kalendertermin an die Berichtsadresse und merkt dessen UID."""
+    uid, termin, datei = _termindatei(konto, mail, regel["kalender_titel"], regel["kalender_tag"])
+    merker_pfad = kern.pfad("arbeit", "termine.json")
+    gemerkt = kern.lesen(merker_pfad, {}) or {}
+    if uid in set(gemerkt.get("uids", [])):
+        return f"Termin am {termin:%d.%m.} bereits verschickt"
+    from .bericht import empfaenger
+    from .senden import senden
+    pfad = kern.pfad("arbeit", "termine", datei[0])
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    pfad.write_text(datei[1], encoding="utf-8", newline="")
+    privat = not bool(kern.konfig("belege").get("aufraeumen", {}).get("betreffe_im_bericht", True))
+    absender = str(mail.get("von", "")).rsplit("@", 1)[-1] if privat else str(mail.get("von", ""))
+    betreff_mail = "" if privat else str(mail.get("betreff", ""))
+    text = f"Diese Erinnerung stammt aus einer Mail von {absender}" + (f" mit dem Betreff „{betreff_mail}“" if betreff_mail else "") + f". Sie gilt für den {termin:%d.%m.%Y}.\n\nKlick auf den Anhang, dann steht der Termin in deinem Kalender."
+    betreff = re.sub(r"\b\d+(?:[.,]\d{1,2})?\s*€", "", regel["kalender_titel"])
+    try:
+        ergebnis = senden(empfaenger(), f"Termin: {betreff} am {termin:%d.%m.%Y}", text, [pfad], True, konto)
+    except Exception as fehler:
+        return f"Termin nicht verschickt: {fehler}"[:220]
+    # senden legt bei einer nicht freigegebenen Adresse nur einen Entwurf an (Status befund).
+    entwurf = ergebnis.status == "befund" and "Entwurf" in ergebnis.meldung
+    if ergebnis.status != "ok" and not entwurf:
+        return f"Termin nicht verschickt: {ergebnis.meldung}"[:220]
+    gemerkt["uids"] = list(dict.fromkeys([*gemerkt.get("uids", []), uid]))[-5000:]
+    kern.schreiben(merker_pfad, gemerkt)
+    if entwurf:
+        return f"Termin am {termin:%d.%m.} liegt als Entwurf bereit (eigene Adresse in [senden] erlaubt eintragen)"
+    return f"Termin am {termin:%d.%m.} verschickt"
+
+
 def _aktion_ausfuehren(postfach, konto: str, mail: dict, regel: dict) -> str:
     """Führt eine erlaubte Aktion aus; Antworten bleiben stets Entwürfe."""
     aktion, ziel = regel["aktion"], regel["wert"]
@@ -253,7 +408,7 @@ def _aktion_ausfuehren(postfach, konto: str, mail: dict, regel: dict) -> str:
         else:
             betreff = re.sub(r"\b\d+(?:[.,]\d{1,2})?\s*€", "", str(mail.get("betreff", "")))
             senden(empfaenger(), f"Belege-Postfach: {betreff[:100]}", f"{mail.get('von', '')} – {mail.get('betreff', '')}", [], True, konto)
-    return "gemeldet" if aktion.startswith("melden") else "liegen gelassen"
+    return "Termin vorgemerkt" if aktion == "kalender" else ("gemeldet" if aktion.startswith("melden") else "liegen gelassen")
 
 
 def _kurzfassung(mail: dict) -> dict:
@@ -316,6 +471,9 @@ def _konto_laufen(konto: dict, alle: list[dict], gesehen: dict, echt: bool, rest
         aktion = regel["aktion"]
         zusatz = " (erledigt)" if durchlauf == "erledigt" else ""
         ausgabe.append(f"würde {aktion}{zusatz}: {mail.get('von') or mail.get('von_name')} – {mail.get('betreff', '')} (Regel: {regel['text']})")
+        if regel.get("kalender_titel"):
+            termin = _kalendertag(regel["kalender_tag"])
+            ausgabe.append(f"würde Termin {regel['kalender_titel']} am {termin:%d.%m.%Y} verschicken")
         if not echt:
             zaehler[aktion] += 1
             continue
@@ -334,6 +492,11 @@ def _konto_laufen(konto: dict, alle: list[dict], gesehen: dict, echt: bool, rest
             text = f"Postfach-Agent: {domain} – {aktion}: {ergebnis}" if privat else f"Postfach-Agent: {mail.get('von', '')} – {mail.get('betreff', '')}: {ergebnis}"
             kern.ereignis("fehler", text[:300], konto=konto["name"], id=mail["id"])
             continue
+        if regel.get("kalender_titel"):
+            termin_ergebnis = _termin_verschicken(konto["name"], mail, regel)
+            ergebnis += ", " + termin_ergebnis
+            if termin_ergebnis.startswith("Termin nicht verschickt:"):
+                kern.log(f"Postfach-Agent: {termin_ergebnis}")
         # Reihenfolge: erst das Protokoll (zum Rückgängigmachen), dann sofort merken,
         # damit ein Abbruch keinen zweiten Entwurf erzeugt, zuletzt der Bericht.
         _protokoll(konto["name"], mail, regel, aktion, regel["wert"], ergebnis, durchlauf, neue_id)

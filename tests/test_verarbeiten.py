@@ -225,6 +225,152 @@ def test_e_rechnung_mit_xml_geht_durch(tmp_path):
     assert not aktive_pdf_inhalte(datei)[0]
 
 
+def _beleg_einordnung(lieferant="Taxi Müller", *, datum=date(2026, 10, 3), betrag=23.4, waehrung="EUR",
+                      beschreibung="Fahrt"):
+    """Baut eine sichere Einordnung für Dubletten- und ZUGFeRD-Verhaltenstests."""
+    from belege.typen import Einordnung
+
+    return Einordnung(True, "eingang", "betrieb", datum, lieferant, beschreibung, betrag,
+                      waehrung, "hoch", "Testregel.", "regel")
+
+
+def _normaler_pdf_fund(repo, name, inhalt=b"%PDF normal"):
+    """Legt einen einfachen PDF-Fund für den normalen Einordnungsweg an."""
+    datei = repo / name
+    datei.write_bytes(inhalt)
+    return Fund(datei, "handy", name, date(2026, 10, 3))
+
+
+def test_zugferd_namensnennung_ohne_xml_wird_normal_abgelegt(repo, monkeypatch):
+    """Ein bloßer Factur-X-Dateiname im PDF darf keinen dauerhaften Fehler auslösen."""
+    fund = _normaler_pdf_fund(repo, "scheinbar-zugferd.pdf", b"%PDF factur-x.xml")
+    logs = []
+    monkeypatch.setattr("belege.verarbeiten.get_xml_from_pdf", lambda *_a, **_k: None)
+    monkeypatch.setattr("belege.verarbeiten.kern.log", logs.append)
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("normale Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_a, **_k: _beleg_einordnung())
+    assert verarbeiten.verarbeite(fund, True).status == "ok"
+    assert verarbeiten.verarbeite(fund, True).status == "nichts"
+    assert "nennt eine E-Rechnung, enthält aber keine lesbare" in logs[0]
+
+
+def test_zugferd_namensnennung_mit_lesefehler_wird_normal_abgelegt(repo, monkeypatch):
+    """Eine Ausnahme der Factur-X-Bibliothek fällt auf die normale Einordnung zurück."""
+    fund = _normaler_pdf_fund(repo, "fehler-zugferd.pdf", b"%PDF factur-x.xml")
+    monkeypatch.setattr("belege.verarbeiten.get_xml_from_pdf", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("kaputt")))
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("normale Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_a, **_k: _beleg_einordnung())
+    assert verarbeiten.verarbeite(fund, True).status == "ok"
+
+
+def test_zugferd_namensnennung_mit_kaputter_xml_wird_normal_abgelegt(repo, monkeypatch):
+    """Eine nicht lesbare angehängte XML ist ebenfalls kein ZUGFeRD-Erfolg."""
+    fund = _normaler_pdf_fund(repo, "kaputte-xml.pdf", b"%PDF factur-x.xml")
+    monkeypatch.setattr("belege.verarbeiten.get_xml_from_pdf", lambda *_a, **_k: b"<kaputt")
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("normale Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_a, **_k: _beleg_einordnung())
+    assert verarbeiten.verarbeite(fund, True).status == "ok"
+
+
+def test_echte_eingebettete_zugferd_rechnung_bleibt_xml_quelle(repo):
+    """Eine tatsächlich eingebettete, lesbare XML nutzt weiter den XML-Weg."""
+    from facturx import generate_from_file
+    from pypdf import PdfWriter
+
+    xml = b"""<rsm:CrossIndustryInvoice xmlns:rsm=\"urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100\"
+    xmlns:ram=\"urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100\"
+    xmlns:udt=\"urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100\">
+    <rsm:ExchangedDocument><ram:ID>RE-7</ram:ID><ram:TypeCode>380</ram:TypeCode><ram:IssueDateTime><udt:DateTimeString>20261003</udt:DateTimeString></ram:IssueDateTime></rsm:ExchangedDocument>
+    <rsm:SupplyChainTradeTransaction><ram:ApplicableHeaderTradeAgreement><ram:SellerTradeParty><ram:Name>Taxi Mueller</ram:Name></ram:SellerTradeParty><ram:BuyerTradeParty><ram:Name>Studio Beispiel</ram:Name></ram:BuyerTradeParty></ram:ApplicableHeaderTradeAgreement>
+    <ram:ApplicableHeaderTradeSettlement><ram:SpecifiedTradeSettlementHeaderMonetarySummation><ram:GrandTotalAmount currencyID=\"EUR\">23.40</ram:GrandTotalAmount></ram:SpecifiedTradeSettlementHeaderMonetarySummation></ram:ApplicableHeaderTradeSettlement>
+    <ram:IncludedSupplyChainTradeLineItem><ram:SpecifiedTradeProduct><ram:Name>Fahrt</ram:Name></ram:SpecifiedTradeProduct><ram:SpecifiedLineTradeSettlement><ram:SpecifiedTradeSettlementLineMonetarySummation><ram:LineTotalAmount>23.40</ram:LineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation></ram:SpecifiedLineTradeSettlement></ram:IncludedSupplyChainTradeLineItem></rsm:SupplyChainTradeTransaction></rsm:CrossIndustryInvoice>"""
+    basis = repo / "sicht.pdf"
+    datei = repo / "echt-zugferd.pdf"
+    writer = PdfWriter(); writer.add_blank_page(100, 100); writer.add_attachment("factur-x.xml", xml)
+    with basis.open("wb") as offen:
+        writer.write(offen)
+    generate_from_file(str(basis), xml, flavor="factur-x", level="basic", check_xsd=False, output_pdf_file=str(datei))
+    # Der Generator maskiert PDF-Namen; die vorhandene Schnellprüfung sucht den
+    # unmaskierten Dateinamen, wie er bei den Kunden-PDFs vorkommt.
+    datei.write_bytes(datei.read_bytes() + b"\n% factur-x.xml\n")
+    fund = Fund(datei, "handy", datei.name, date(2026, 10, 3))
+    assert verarbeiten._zugferd(fund)[0].quelle == "xml"
+    ergebnis = verarbeiten.verarbeite(fund, True)
+    assert ergebnis.status == "ok"
+
+
+def _zwei_belege(repo, monkeypatch, *, zweiter_lieferant="FREE NOW", zweiter_text="Taxi Müller",
+                 zweiter_betrag=23.4, zweites_datum=date(2026, 10, 3), zweite_waehrung="EUR",
+                 zweite_beschreibung="Fahrt"):
+    """Legt zwei absichtlich verschiedene Dateien mit gezielt gepatchter Einordnung ab."""
+    erster = _normaler_pdf_fund(repo, "taxi.pdf", b"%PDF Taxi")
+    zweiter = _normaler_pdf_fund(repo, "freedom.pdf", b"%PDF Free Now")
+    einordnungen = iter((
+        _beleg_einordnung(),
+        _beleg_einordnung(zweiter_lieferant, datum=zweites_datum, betrag=zweiter_betrag,
+                           waehrung=zweite_waehrung, beschreibung=zweite_beschreibung),
+    ))
+    texte = iter((Text("Taxi Müller", "klartext", 1), Text(zweiter_text, "klartext", 1)))
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_a, **_k: next(einordnungen))
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: next(texte))
+    assert verarbeiten.verarbeite(erster, True).status == "ok"
+    assert verarbeiten.verarbeite(zweiter, True).status == "ok"
+
+
+def test_dublettenhinweis_bei_namensbezug(repo, monkeypatch):
+    """Zwei Taxibelege mit Namensbezug bekommen genau einen vorsichtigen Hinweis."""
+    from belege import kern
+
+    _zwei_belege(repo, monkeypatch)
+    eintraege = list(json.loads((repo / "arbeit" / "index.json").read_text()).values())
+    neuer = next(e for e in eintraege if e["lieferant"] == "FREE NOW")
+    assert "Taxi-Müller_Fahrt.pdf" in neuer["moegliche_dublette"]
+    zweifel = [e for e in kern.ereignisse() if e["art"] == "zweifel"]
+    assert len(zweifel) == 1
+    assert "Möglicherweise doppelt" in zweifel[0]["text"] and "23,40 €" in zweifel[0]["text"]
+
+
+def test_dublettenhinweis_ohne_namensbezug_bleibt_aus(repo, monkeypatch):
+    _zwei_belege(repo, monkeypatch, zweiter_text="Fahrt mit unbekanntem Anbieter")
+    assert "moegliche_dublette" not in next(e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values()
+                                            if e["lieferant"] == "FREE NOW")
+
+
+def test_dublettenhinweis_bei_abweichendem_betrag_oder_datum_bleibt_aus(repo, monkeypatch):
+    _zwei_belege(repo, monkeypatch, zweiter_lieferant="Taxi Müller", zweiter_betrag=23.9)
+    assert not any("moegliche_dublette" in e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values())
+
+
+def test_dublettenhinweis_bei_abweichendem_datum_bleibt_aus(repo, monkeypatch):
+    _zwei_belege(repo, monkeypatch, zweiter_lieferant="Taxi Müller", zweites_datum=date(2026, 10, 4))
+    assert not any("moegliche_dublette" in e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values())
+
+
+def test_dublettenhinweis_bei_abweichender_waehrung_bleibt_aus(repo, monkeypatch):
+    _zwei_belege(repo, monkeypatch, zweiter_lieferant="Taxi Müller", zweite_waehrung="USD")
+    assert not any("moegliche_dublette" in e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values())
+
+
+def test_dublettenhinweis_rechnung_und_quittung_bleibt_aus(repo, monkeypatch):
+    _zwei_belege(repo, monkeypatch, zweiter_lieferant="Taxi Müller", zweite_beschreibung="Zahlungsquittung")
+    assert not any("moegliche_dublette" in e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values())
+
+
+def test_dublettenhinweis_schalter_und_trockenlauf(repo, monkeypatch):
+    from belege import kern
+
+    toml = repo / "konfig" / "belege.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace("dublettenhinweis = true", "dublettenhinweis = false"), encoding="utf-8")
+    _zwei_belege(repo, monkeypatch)
+    assert not any("moegliche_dublette" in e for e in json.loads((repo / "arbeit" / "index.json").read_text()).values())
+
+    trocken = _normaler_pdf_fund(repo, "trocken.pdf", b"%PDF trocken")
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_a, **_k: _beleg_einordnung())
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("Taxi Müller", "klartext", 1))
+    assert verarbeiten.verarbeite(trocken, False).status == "nichts"
+    assert not any(e["art"] == "zweifel" and "trocken.pdf" in e["text"] for e in kern.ereignisse())
+
+
 def test_fremder_anhang_im_pdf_wird_angehalten(tmp_path):
     from pypdf import PdfWriter
     from belege.abofalle import aktive_pdf_inhalte

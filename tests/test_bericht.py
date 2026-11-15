@@ -69,3 +69,13 @@ def test_nicht_gesendeter_bericht_kommt_wieder(repo, monkeypatch):
     bericht.befehl(Namespace(echt=True))
     assert "bericht" not in (kern.lesen(repo / "arbeit" / "gesehen.json", {}) or {})
     assert bericht.neue_ereignisse()
+
+
+def test_dublettenhinweis_steht_unter_bitte_ansehen():
+    """Ein Dublettenhinweis bleibt neben dem Ablage-Ereignis sichtbar."""
+    text, _ = bericht.text_und_betreff([
+        {"art": "abgelegt", "text": "abgelegt", "daten": {}},
+        {"art": "zweifel", "text": "Möglicherweise doppelt: neu.pdf und alt.pdf", "daten": {}},
+    ])
+    assert "Bitte ansehen\n- Möglicherweise doppelt" in text
+    assert "Abgelegt (1)" in text

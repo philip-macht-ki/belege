@@ -60,6 +60,8 @@ beispiel/                 Musterbetrieb (erzeugt von `belege beispiel`)
 arbeit/                   Laufzeit, nie im Git
   index.json              Belegverzeichnis, siehe unten
   kurse.json              EZB-Referenzkurse nach Tag und ISO-Währung, Cache für Fremdwährungen
+  termine.json            bereits verschickte Kalender-UIDs des Postfach-Agenten
+  termine/                erzeugte iCalendar-Anhänge des Postfach-Agenten
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
@@ -194,6 +196,7 @@ class Einordnung:
   "art": "eingang", "bereich": "betrieb", "firma": "Studio Beispiel", "sicherheit": "hoch", "status": "abgelegt | unsortiert | befund",
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>",
+  "moegliche_dublette": "<relativer Pfad eines ähnlichen abgelegten Belegs, optional>",
   "befund": "<relativer Pfad zur .befund.txt oder null>",
   "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]},
   "hinweise": ["Buchhaltungshinweis …"]}}
@@ -201,6 +204,10 @@ class Einordnung:
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 `nichts` („liegt schon unter …“), keine zweite Ablage.
+Bei `[ablage].dublettenhinweis = true` (Standard, auch bei fehlendem Schlüssel)
+bleiben verschiedene Dateien immer abgelegt; bei gleichem Betrieb, Art, Datum,
+Währung, Betrag und vorsichtigem Lieferantenbezug erhält nur der neue Eintrag einen
+`moegliche_dublette`-Pfad und der Tagesbericht einen Zweifel-Hinweis.
 Alte Betriebs-Einträge ohne `firma` zählen bei aktivem `[[firma]]` zur
 Hauptfirma (zuerst `[betrieb]`, wenn sie als Firma übernommen wurde, sonst die
 erste `[[firma]]`).
@@ -223,12 +230,19 @@ die erste passende Regel gewinnt. Das Format lautet `- <Bedingung> -> <Aktion>`
 oder mit `→`. Bedingungen sind `von:`, `betreff:`, `newsletter`, `anhang` und
 `sonst`, verknüpft mit ` und ` außerhalb von Anführungszeichen. Aktionen sind
 `archivieren`, `ordner: Name`, `label: Name`, `entwurf: Text`, `melden`,
-`melden, sofort` und `liegen lassen`. Mit `lesen = "kopf"` liest der Agent nur
+`melden, sofort`, `liegen lassen` und `kalender: Titel, Tag`. Mit `lesen = "kopf"` liest der Agent nur
 Kopfdaten; bei `lesen = "text"` höchstens 4000 Zeichen Klartext für Textregeln
 und unverbindliche Kurzfassungen. Zustandsregeln (`beantwortet`, `erledigt`,
 `gelesen`, `älter als N tage`) laufen danach in einem zweiten Durchlauf und
 dürfen nur archivieren oder verschieben. `ordnung()` und `zuordnung()` lesen
 Ordner, Labels und bestehende Absenderzuordnungen ohne Änderungen.
+
+`kalender: <Titel>, <Tag>` ist eine eigene Aktion oder ein Zusatz nach einer
+anderen Aktion (`… und kalender: <Titel>, <Tag>`). Sie sendet an die
+Berichtsadresse eine iCalendar-Datei als ganztägigen Termin; zulässig sind
+`15.`, `15.12.`, `15.12.2026`, `2026-12-15`, `morgen` und `in N tagen`.
+Die stabile UID aus Konto, Mail, Titel und Tag wird in `arbeit/termine.json`
+gemerkt; der Kalender-Zusatz ist in Zustandsregeln nicht erlaubt.
 
 Echte Aktionen stehen je Mail in `arbeit/aufraeumen.jsonl` (Zeit, Konto, ID,
 Absender, gekürzter Betreff, Regel, Aktion, Ziel, Ergebnis, nach MOVE `neue_id`).
