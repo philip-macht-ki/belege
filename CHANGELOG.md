@@ -1,5 +1,19 @@
 # Änderungen für dich
 
+## [1.19.9] – 15.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Ein PDF, das eine E-Rechnung nur erwähnt, aber keine enthält, bleibt nicht mehr hängen. Bisher scheiterte so eine Rechnung bei jedem Lauf wieder und stand jedes Mal als Fehler im Tagesbericht. Jetzt wird sie wie jedes andere PDF gelesen und abgelegt.
+- Hinweis auf mögliche Dubletten: Kommen zu einem Vorgang zwei verschiedene PDFs, etwa die Fahrtrechnung der Taxi-App und die Rechnung des Fahrers, legt belege weiter beide ab und schreibt im Tagesbericht unter „Bitte ansehen“ dazu, dass Datum und Betrag gleich sind. Du entscheidest, welche bleibt. Gelöscht oder zusammengeführt wird nichts von selbst.
+- Postfach-Agent: neue Aktion `kalender`. Eine Regel kann dir einen Termin schicken, allein oder zusätzlich zu einer anderen Aktion, zum Beispiel `-> entwurf: Danke, kommt am 20. und kalender: Löhne überweisen, 20.` Du bekommst eine Mail an dich selbst mit einer Kalenderdatei. Ein Klick auf den Anhang trägt den Termin mit Erinnerung um 9 Uhr in deinen Kalender ein, in Outlook, im Apple Kalender und im Google Kalender. belege braucht dafür keinen Zugriff auf deinen Kalender.
+
+### Musst du etwas tun?
+
+Nein. Wenn du die Kalender-Aktion nutzen willst, sag deinem Claude zum Beispiel: „Leg im Postfach-Agenten eine Regel an, die mir bei Mails von … einen Termin am 20. schickt.“ Den Dubletten-Hinweis schaltest du mit `dublettenhinweis = false` unter `[ablage]` in `konfig/belege.toml` ab.
+
 ## [1.19.8] – 15.11.2026
 
 aktion: keine
