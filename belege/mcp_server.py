@@ -156,6 +156,19 @@ def stichwort_regel(wort: str, bereich: str = "privat", echt: bool = False) -> d
     return {"trocken": False, "status": "ok" if code == 0 else "fehler", "meldung": ausgabe.getvalue().strip()}
 
 
+def posten_klaeren(kennung: str, grund: str, echt: bool = False) -> dict:
+    """Klärt einen offenen Posten aus dem Gespräch, mit Kurz-ID oder Suchtext."""
+    from .posten import GRUENDE, klaeren
+    if grund not in GRUENDE:
+        raise ValueError("grund muss privat, kein-beleg, andere-firma, einnahme oder liegt-ab sein")
+    import io
+    from contextlib import redirect_stdout
+    ausgabe = io.StringIO()
+    with redirect_stdout(ausgabe):
+        code = klaeren([kennung], grund, echt)
+    return {"trocken": not echt, "status": "ok" if code == 0 else "fehler", "meldung": ausgabe.getvalue().strip()}
+
+
 def fristen(tage: int = 365) -> dict:
     """Zeigt kommende Fristen im gegebenen Zeitraum und alle unklaren zur Prüfung."""
     from .dokumente import fristen_liste
@@ -272,6 +285,7 @@ def befehl(args) -> int:
         ),
         (belege_anfrage, "Prüft einen kopierten Text mit Belegnachfragen trocken. Parameter: text."),
         (stichwort_regel, "Erstellt den Entwurf einer Stichwortregel. Parameter: wort, bereich."),
+        (posten_klaeren, "Klärt einen offenen Posten aus dem Gespräch. Parameter: kennung, grund, echt."),
         (
             fristen,
             "Zeigt kommende Fristen aus Verträgen und Versicherungen sowie alle, die "
