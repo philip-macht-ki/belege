@@ -59,6 +59,7 @@ konfig/waechter.md        Wächter-Regeln in Klartext, eine je Zeile ("- ...")
 beispiel/                 Musterbetrieb (erzeugt von `belege beispiel`)
 arbeit/                   Laufzeit, nie im Git
   index.json              Belegverzeichnis, siehe unten
+  kurse.json              EZB-Referenzkurse nach Tag und ISO-Währung, Cache für Fremdwährungen
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
@@ -178,7 +179,7 @@ class Einordnung:
     lieferant: str                # bei Ausgang: der Kunde
     beschreibung: str             # 1–4 Wörter, z. B. "Rechnung-Software-Abo"
     betrag: float | None          # Brutto, positiv
-    waehrung: str                 # "EUR"
+    waehrung: str                 # ISO-Code der Rechnungswährung, z. B. "EUR" oder "USD"
     sicherheit: str               # "hoch" | "mittel" | "niedrig"
     grund: str                    # ein Satz, warum
     quelle: str                   # "regel" | "urteil" | "xml" | "rueckfall"
@@ -495,6 +496,10 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   `Betrag`, Name nur in `Beschreibung`, kein Soll/Haben): Belastungen stehen
   dort positiv und werden beim Lesen umgedreht. Danach gilt überall: Ausgabe
   negativ.
+- Fremdwährungszeilen tragen `waehrung`, `originalbetrag`, bei EZB-Umrechnung
+  `umgerechnet`, andernfalls `kurs_fehlt`; der sichtbare `betrag` bleibt Euro.
+  Der einzige zusätzliche Netzabruf ist die EZB-Referenzkurs-XML; sie wird in
+  `arbeit/kurse.json` nach Tag zwischengespeichert (`https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml`, für ältere Tage `eurofxref-hist.xml`).
 - Ohne `--auszug` liest der Abgleich **alle** CSV-Dateien im Auszugsordner mit
   Buchungen im Monat (Girokonto und Kreditkarte nebeneinander). Dieselbe
   Buchung (Datum, Betrag, Name, Zweck) zählt nur einmal (`buchungen_aus`).

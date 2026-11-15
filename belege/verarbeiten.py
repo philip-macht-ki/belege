@@ -398,7 +398,7 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
             art = "zweifel" if befund else ("abgelegt" if daten["status"] == "abgelegt" else "unsortiert")
             text = f"{fund.name} liegt jetzt unter {daten['pfad']}"
             kern.ereignis(art, text, quelle=fund.quelle, pfad=daten["pfad"], datum=daten.get("datum"),
-                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), firma=daten.get("firma"),
+                          lieferant=daten.get("lieferant"), betrag=daten.get("betrag"), waehrung=daten.get("waehrung"), firma=daten.get("firma"),
                           grund=daten.get("grund"), pruefung=daten.get("pruefung"), entwurf=entwurf_angelegt,
                           pruefung_neu=anbieter_neu)
             if geheim and geheim.vertraulich:

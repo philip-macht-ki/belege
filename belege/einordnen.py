@@ -81,8 +81,8 @@ def pruefe(antwort: object, firmennamen: set[str] | None = None) -> str | None:
         return "bereich muss betrieb oder privat sein."
     if antwort["sicherheit"] not in {"hoch", "mittel", "niedrig"}:
         return "sicherheit muss hoch, mittel oder niedrig sein."
-    if antwort["waehrung"] != "EUR":
-        return "waehrung muss EUR sein."
+    if not isinstance(antwort["waehrung"], str) or not re.fullmatch(r"[A-Z]{3}", antwort["waehrung"]):
+        return "waehrung muss ein ISO-Code aus drei Großbuchstaben sein."
     if antwort["datum"] is not None:
         if not isinstance(antwort["datum"], str):
             return "datum muss JJJJ-MM-TT oder null sein."
@@ -436,7 +436,7 @@ def _rueckfall(
         ),
         "beschreibung": beschreibung,
         "betrag": _betrag(inhalt),
-        "waehrung": "EUR",
+        "waehrung": _waehrung_aus_text(inhalt),
         "sicherheit": "mittel" if ((regel or zahlungsname or (eigener and ist_beleg) or erkannt) and ist_beleg)
         else "niedrig",
         "grund": "Feste Regel erkannt."
@@ -444,6 +444,18 @@ def _rueckfall(
         else "Ohne Modell nur vorsichtig erkannt.",
         "firma": "unklar" if firma_unklar else erkannt or (firmen()[0]["name"] if len(firmen()) == 1 else "unklar"),
     }
+
+
+def _waehrung_aus_text(text: str) -> str:
+    """Erkennt im regelbasierten Rückfall die ausdrücklich genannte Währung."""
+    if not re.search(r"€|\bEUR\b", text, re.I):
+        if re.search(r"\$|\bUSD\b|\bUS\$", text, re.I):
+            return "USD"
+        if re.search(r"\bCHF\b", text, re.I):
+            return "CHF"
+        if re.search(r"£|\bGBP\b", text, re.I):
+            return "GBP"
+    return "EUR"
 
 
 def _aus_xml(fund: Fund) -> Einordnung | None:

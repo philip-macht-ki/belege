@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import kern, monatsmail
+from . import kern, monatsmail, kurse
 
 
 def _monatsname(monat: str) -> str:
@@ -24,6 +24,7 @@ BEKANNTE = {
     "zweck": ("verwendungszweck", "buchungstext"),
     "soll_haben": ("soll/haben", "soll haben", "soll", "haben"),
     "originalbetrag": ("originalbetrag", "betrag in fremdwaehrung", "fremdbetrag"),
+    "waehrung": ("waehrung", "währung", "currency"),
 }
 
 
@@ -259,10 +260,60 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
                 }
             if buchung["originalbetrag"] is None:
                 buchung["originalbetrag"] = _originalbetrag_aus_text(f'{buchung["name"]} {buchung["zweck"]}')
+            # PayPal nennt die Umrechnung je nach Export in Name, Zweck oder Buchungstext.
+            buchung["_zeile"] = " ".join(str(wert) for wert in zeile.values() if wert).casefold()
+            waehrung = str(zeile.get(spalten.get("waehrung") or "", "")).strip().upper()
+            if waehrung and waehrung != "EUR":
+                buchung["waehrung"] = waehrung
+                buchung["originalbetrag"] = menge
+                eurobetrag = kurse.in_euro(menge, waehrung, tag)
+                if eurobetrag is None:
+                    buchung["kurs_fehlt"] = True
+                else:
+                    buchung["betrag"] = eurobetrag
+                    buchung["umgerechnet"] = True
             if konto_spalte and zeile.get(konto_spalte, "").strip():
                 buchung["konto"] = zeile[konto_spalte].strip()
             ergebnis.append(buchung)
+    _paypal_umrechnungen(ergebnis)
     return ergebnis, karte
+
+
+def _paypal_umrechnungen(buchungen: list[dict]) -> None:
+    """Setzt bei PayPal-Zahlungen in Fremdwährung den wirklich abgebuchten Euro-Betrag ein.
+
+    PayPal liefert zur Zahlung (-1145,00 USD) zwei Zeilen „Currency Conversion“:
+    +1145,00 USD und -1054,55 EUR. Die Zahlung bekommt den Euro-Betrag, die beiden
+    Umrechnungszeilen fallen weg. Was sich nicht eindeutig paaren lässt, bleibt stehen.
+    """
+    benutzt: set[int] = set()
+
+    def tage(a: dict, b: dict) -> int:
+        return abs((date.fromisoformat(a["datum"]) - date.fromisoformat(b["datum"])).days)
+
+    for nr, zahlung in enumerate(buchungen):
+        if not zahlung.get("waehrung") or _ist_umrechnung(zahlung):
+            continue
+        frei = [i for i, x in enumerate(buchungen)
+                if i not in benutzt and _ist_umrechnung(x) and tage(x, zahlung) <= 3]
+        fremd = [i for i in frei if buchungen[i].get("waehrung") == zahlung["waehrung"]
+                 and abs(buchungen[i]["originalbetrag"] + zahlung["originalbetrag"]) <= .01]
+        euro = [i for i in frei if not buchungen[i].get("waehrung")
+                and (buchungen[i]["betrag"] < 0) == (zahlung["originalbetrag"] < 0)]
+        if not fremd or not euro:
+            continue
+        naechste = lambda liste: min(liste, key=lambda i: abs(i - nr))  # noqa: E731
+        zahlung["betrag"] = buchungen[naechste(euro)]["betrag"]
+        zahlung.pop("umgerechnet", None)
+        zahlung.pop("kurs_fehlt", None)
+        benutzt.update({naechste(fremd), naechste(euro)})
+    buchungen[:] = [x for i, x in enumerate(buchungen) if i not in benutzt]
+    for buchung in buchungen:
+        buchung.pop("_zeile", None)
+
+
+def _ist_umrechnung(buchung: dict) -> bool:
+    return any(wort in buchung.get("_zeile", "") for wort in ("currency conversion", "währungsumrechnung", "waehrungsumrechnung"))
 
 
 ORIGINAL_IM_TEXT = re.compile(r"(?:originalbetrag|original amount|betrag in fremdw(?:ä|ae)hrung)\s*:?\s*"
@@ -323,7 +374,21 @@ def buchungen_aus(dateien: list[Path], monat: str | None) -> list[dict]:
                 continue
             gesehen[schluessel] = in_datei[schluessel]
             ergebnis.append(buchung)
+    for buchung in list(ergebnis):
+        if not buchung.get("umgerechnet"):
+            continue
+        for andere in ergebnis:
+            if andere is buchung or andere.get("umgerechnet") or andere["datum"] != buchung["datum"]:
+                continue
+            if _erste_woerter(andere["name"]) == _erste_woerter(buchung["name"]) and abs(abs(andere["betrag"]) - abs(buchung["betrag"])) <= abs(andere["betrag"]) * .05:
+                ergebnis.remove(buchung)
+                break
     return ergebnis
+
+
+def _erste_woerter(name: str) -> tuple[str, ...]:
+    """Die ersten zwei Namenswörter für die Kurs-Dublette."""
+    return tuple(re.findall(r"[\wäöüß]+", name.casefold())[:2])
 
 
 def _dublettenschluessel(buchung: dict, karte: bool) -> tuple:
@@ -515,6 +580,7 @@ def abgleichen(buchungen_liste: list[dict], index: dict, firma: str | None = Non
             and (firma is None or kern.firma_von(beleg) == firma)
             and beleg.get("art") == art
             and _beleg_betrag(beleg) is not None
+            and (str(beleg.get("waehrung", "EUR")) == "EUR" or not buchung.get("waehrung") or str(beleg.get("waehrung")) == str(buchung.get("waehrung")))
             and abs(abs(buchung.get("originalbetrag") if buchung.get("originalbetrag") is not None else buchung["betrag"]) - _beleg_betrag(beleg)) <= 0.01
             and _im_fenster(beleg.get("datum"), tag)
         ]
@@ -549,18 +615,33 @@ def abgleichen(buchungen_liste: list[dict], index: dict, firma: str | None = Non
             eintrag["status"] = "zugeordnet"
             eintrag["beleg"] = passende[0][0]
             benutzt.add(passende[0][0])
+        elif not kandidaten:
+            # Beleg in Fremdwährung, die Bank nennt nur Euro: zum EZB-Kurs des Buchungstags
+            # umrechnen. 5 % Spielraum für Kartenkurs und Gebühr; nur ein einziger Treffer zählt.
+            fremd, ohne_kurs = [], False
+            for sha, beleg in index.items():
+                if (sha in benutzt or str(beleg.get("waehrung") or "EUR") == "EUR"
+                        or buchung.get("originalbetrag") is not None
+                        or beleg.get("status") != "abgelegt" or beleg.get("bereich") != "betrieb"
+                        or beleg.get("art") != art or beleg.get("betrag") is None
+                        or (firma is not None and kern.firma_von(beleg) != firma)
+                        or not _im_fenster(beleg.get("datum"), tag) or not _gleicher_name(beleg, buchung)):
+                    continue
+                eurobetrag = kurse.in_euro(float(beleg["betrag"]), str(beleg["waehrung"]), tag)
+                if eurobetrag is None:
+                    ohne_kurs = True
+                elif abs(abs(buchung["betrag"]) - abs(eurobetrag)) <= abs(eurobetrag) * .05:
+                    fremd.append(sha)
+            if len(fremd) == 1:
+                eintrag["status"] = "zugeordnet"
+                eintrag["beleg"] = fremd[0]
+                eintrag["hinweis"] = "Fremdwährung, zum EZB-Kurs umgerechnet"
+                benutzt.add(fremd[0])
+            else:
+                # Mehrere passende oder kein Kurs: nur ein Hinweis, nie eine Zuordnung.
+                eintrag["status"] = "pruefen" if fremd or ohne_kurs else "fehlt"
         elif kandidaten:
             eintrag["status"] = "pruefen"
-        else:
-            # Ohne Originalbetrag bleibt Fremdwährung nur ein Hinweis, niemals Zuordnung.
-            fremd = any(
-                str(beleg.get("waehrung", "EUR")) != "EUR"
-                and beleg.get("betrag") is not None
-                and abs(abs(buchung["betrag"]) - float(beleg["betrag"])) <= abs(float(beleg["betrag"])) * .03
-                and _gleicher_name(beleg, buchung)
-                for beleg in index.values()
-            )
-            eintrag["status"] = "pruefen" if fremd else "fehlt"
         ergebnis.append(eintrag)
     _sammelrechnungen(ergebnis, index, benutzt, firma)
     _dauerbelege(ergebnis)
@@ -658,7 +739,13 @@ def _tag(iso: str) -> str:
 
 def _zeile(buchung: dict) -> str:
     zweck = f" · {buchung['zweck']}" if buchung.get("zweck") else ""
-    return f"- {_tag(buchung['datum'])} · {euro(buchung['betrag'])} · {buchung['name']}{zweck}"
+    if buchung.get("kurs_fehlt"):
+        betrag = f"{abs(buchung['betrag']):.2f} {buchung.get('waehrung', '')} (nicht umgerechnet)".replace(".", ",")
+    else:
+        betrag = euro(buchung["betrag"])
+        if buchung.get("umgerechnet"):
+            betrag += f" (umgerechnet aus {abs(buchung['originalbetrag']):.2f} {buchung['waehrung']})".replace(".", ",")
+    return f"- {_tag(buchung['datum'])} · {betrag} · {buchung['name']}{zweck}"
 
 
 def offene_posten_text(monat: str, ergebnis: list[dict]) -> str:

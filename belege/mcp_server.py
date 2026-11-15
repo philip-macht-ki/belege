@@ -128,8 +128,9 @@ def belege_suchen(
             "status": eintrag.get("status"),
         })
     treffer.sort(key=lambda t: t["datum"] or "", reverse=True)
-    summe = round(sum(t["betrag"] or 0 for t in treffer), 2)
-    return {"anzahl": len(treffer), "summe": summe, "treffer": treffer[: min(max, 50)]}
+    euro_treffer = [t for t in treffer if (t.get("waehrung") or "EUR") == "EUR"]
+    summe = round(sum(t["betrag"] or 0 for t in euro_treffer), 2)
+    return {"anzahl": len(treffer), "summe": summe, "fremdwaehrungsbelege": len(treffer) - len(euro_treffer), "treffer": treffer[: min(max, 50)]}
 
 
 def belege_anfrage(text: str) -> dict:

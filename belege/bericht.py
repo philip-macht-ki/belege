@@ -60,7 +60,7 @@ def _zeile_beleg(e: dict) -> str:
     if d.get("lieferant"):
         teile.append(str(d["lieferant"]))
     if d.get("betrag") is not None:
-        teile.append(f"{float(d['betrag']):.2f} €".replace(".", ","))
+        teile.append(f"{float(d['betrag']):.2f} {d.get('waehrung') or 'EUR'}".replace("EUR", "€").replace(".", ","))
     return "- " + (" ".join(teile) or e.get("text", ""))
 
 
@@ -128,7 +128,8 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
                 pass
             if not d.get("lieferant"):  # reines Entwurfsereignis nicht doppelt nennen
                 continue
-            betrag = f" {float(d['betrag']):.2f} €".replace(".", ",") if d.get("betrag") is not None else ""
+            waehrung = d.get("waehrung") or "EUR"
+            betrag = f" {float(d['betrag']):.2f} {waehrung}".replace("EUR", "€").replace(".", ",") if d.get("betrag") is not None else ""
             punkte = ", ".join(d.get("pruefung", {}).get("punkte", []))
             zeilen.append(f"- {d.get('lieferant', 'Unbekannt')}{betrag}: {punkte} (Entwurf: {'ja' if d.get('entwurf') else 'nein'})")
         if zeilen:
