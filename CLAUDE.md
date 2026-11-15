@@ -22,6 +22,13 @@ nicht `abgleich.json` oder Tabellen. Sagt sie „Hol die fehlenden Belege“:
 und schreibt Anfragen an Lieferanten nur als Entwurf. Danach in zwei, drei
 Sätzen sagen, was jetzt da ist und was offen bleibt.
 
+Klärt die Person einen Posten im Gespräch (privat, kein Beleg nötig, andere Firma,
+Einnahme, Beleg liegt schon ab), trag das sofort ein, damit die Rückfrage-Mail nicht
+noch einmal fragt: `uv run belege posten --klaeren NUMMER-ODER-SUCHTEXT --grund
+privat|kein-beleg|andere-firma|einnahme|liegt-ab --echt`. `uv run belege posten` zeigt
+alle Posten mit Nummer. Ein Suchtext wie „paypal“ klärt alle offenen Posten, die ihn
+im Namen oder Zweck tragen; erst ohne `--echt` ansehen, was getroffen wird.
+
 ## Wenn etwas nicht läuft
 
 `uv run belege pruefen` → `uv run belege status` → `arbeit/logs/<datum>.log` → `arbeit/urteile.jsonl`.

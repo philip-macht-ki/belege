@@ -76,6 +76,8 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--zwischenstand", action="store_true")
     argumente.add_argument("--mail", action="store_true")
     argumente.add_argument("--antworten", action="store_true")
+    argumente.add_argument("--klaeren", action="append", metavar="KENNUNG")
+    argumente.add_argument("--grund", choices=("privat", "kein-beleg", "andere-firma", "einnahme", "liegt-ab"))
     argumente.add_argument("--tage", type=int)
     argumente.add_argument("--monate", type=int, default=3)
     argumente.add_argument("--vorschau", metavar="DATEI")

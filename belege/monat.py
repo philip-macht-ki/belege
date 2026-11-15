@@ -1168,13 +1168,13 @@ def befehl(args) -> int:
             if getattr(args, "anfragen", False):
                 _anfragen(daten_firma, kern.echt(args))
         from .posten import fortschreiben
-        fortschreiben(alle_daten)
+        fortschreiben(alle_daten, monat if not getattr(args, "_firma", None) else None)
         monatsmail.senden(monat, monatsmail.text(monat, je_firma, index, mehrere=True), args)
         return int(fehlgeschlagen)
     daten = abgleichen(buchungen_aus(auszuege, monat), index)
     _nachsuche(daten, args)
     from .posten import fortschreiben
-    fortschreiben(daten)
+    fortschreiben(daten, monat)
     mahnungen = _mahnungen()
     ziel = kern.pfad("arbeit", "monat", monat)
     _schreibe_ausgaben(ziel, monat, daten, mahnungen)

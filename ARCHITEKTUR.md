@@ -275,7 +275,7 @@ Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger(
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
 | `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
-| `posten.py` | `belege posten [--mail [--echt] | --antworten]` |
+| `posten.py` | `belege posten [--mail [--echt] | --antworten | --klaeren KENNUNG --grund privat|kein-beleg|andere-firma|einnahme|liegt-ab [--echt]]` |
 | `waechter.py` | `belege waechter` |
 | `bericht.py` | `belege bericht` (Tagesbericht per Mail an sich selbst), `belege status` |
 | `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Nachsortieren + Bericht) |
@@ -547,9 +547,16 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   (Adresse aus der letzten Mail dieses Absenders im Postfach, sonst ohne
   Empfänger), nie gesendet.
 - `arbeit/posten.json` merkt jede Buchung unter SHA-1 aus Konto, Datum, Betrag
-  und normalisiertem Zweck. Menschliche Klärungen bleiben über Monatsläufe
-  erhalten. Die Posten-Mail enthält nur `offen` und `wartet_mensch`; Antworten
-  mit Kurz-ID erzeugen nur Regelvorschläge in `arbeit/regel_vorschlaege.toml`.
+  und normalisiertem Zweck. Fest sind `geklaert`, `regel`, `zugeordnet` und
+  `nachgeholt`; `angefragt` und `wartet_mensch` werden beim nächsten Abgleich
+  neu bewertet. Nicht mehr im nichtleeren Monatsauszug enthaltene, nicht feste
+  Posten heißen `entfallen` und werden bei Wiederkehr normal bewertet.
+- Vor jeder Posten-Mail prüft `nachpruefen()` die höchstens zwölf Monate mit
+  `offen`, `wartet_mensch` oder `angefragt` leise erneut, ohne Nachsuche,
+  Ereignis oder Ausgabedatei. Die Mail enthält nur `offen` und `wartet_mensch`,
+  getrennt nach Abbuchungen und Zahlungseingängen. Antworten mit Kurz-ID oder
+  `--klaeren` verstehen privat, kein Beleg, liegt ab, liegt bei, andere Firma
+  und Einnahme; Antworten erzeugen weiter nur Regelvorschläge.
 - Ist `konfig/konten.toml` ausgefüllt, prüft der Lauf jedes ab `aktiv_ab` aktive
   Konto auf eine Monatsdatei bzw. Buchungen. Fehlmeldungen wiederholen sich
   frühestens nach sieben Tagen; eine Nachlieferung erzeugt Entwarnung.
