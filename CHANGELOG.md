@@ -1,5 +1,24 @@
 # Änderungen für dich
 
+## [1.19.8] – 15.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Rechnungen in Dollar, Franken oder Pfund stehen jetzt mit ihrer Währung im Verzeichnis, also „23,80 USD“ statt fälschlich „23,80 €“. Im Tagesbericht steht die Währung dabei.
+- Kontoauszüge mit Währungsspalte (etwa aus MoneyMoney): Eine Zahlung in Fremdwährung zählt nicht mehr als Euro. Bei PayPal nimmt belege den wirklich abgebuchten Euro-Betrag aus der Umrechnungszeile. Nennt das Konto keinen Euro-Betrag (etwa SumUp über MoneyMoney), rechnet belege mit dem Tageskurs der Europäischen Zentralbank um und schreibt „umgerechnet“ dazu. Dafür ruft belege einmal am Tag die Kursliste der EZB ab; ohne Netz bleibt der Betrag als Fremdwährung gekennzeichnet stehen.
+- Steht dieselbe Zahlung in zwei Auszügen, einmal in Euro und einmal in Dollar, zählt sie nur noch einmal.
+- Beleg in Dollar, Abbuchung in Euro: belege ordnet beide zu, wenn Name und Zeitraum passen und der umgerechnete Betrag bis auf wenige Prozent stimmt.
+- Die Rückfrage-Mail am 1. und 15. fragt deutlich weniger. Vorher schaut belege für alle offenen Monate noch einmal nach, was inzwischen im Ordner liegt oder durch eine deiner Regeln (`ohne_beleg`) erledigt ist.
+- Posten aus einem Kontoauszug, den du ersetzt oder gekürzt hast, verschwinden beim nächsten Monatslauf aus der Liste.
+- Was du mit Claude im Gespräch klärst („das war privat“, „dafür gibt es keinen Beleg“), trägt Claude jetzt direkt ein. Die Mail fragt dann nicht noch einmal.
+- Die Mail trennt Abbuchungen und Zahlungseingänge. Neues Antwortwort „liegt ab“: Der Beleg ist schon im Ordner, frag nicht mehr. „liegt bei“ heißt weiter: Ich reiche ihn nach.
+
+### Musst du etwas tun?
+
+Nein. Belege in Fremdwährung, die schon vor dem Update abgelegt wurden, behalten ihren alten Eintrag in Euro; neue bekommen die richtige Währung. Am Abgleich mit dem Konto ändert das nichts, dort zählt weiter der Betrag auf der Rechnung.
+
 ## [1.19.7] – 14.11.2026
 
 aktion: keine

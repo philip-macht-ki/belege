@@ -59,6 +59,7 @@ konfig/waechter.md        Wächter-Regeln in Klartext, eine je Zeile ("- ...")
 beispiel/                 Musterbetrieb (erzeugt von `belege beispiel`)
 arbeit/                   Laufzeit, nie im Git
   index.json              Belegverzeichnis, siehe unten
+  kurse.json              EZB-Referenzkurse nach Tag und ISO-Währung, Cache für Fremdwährungen
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
@@ -178,7 +179,7 @@ class Einordnung:
     lieferant: str                # bei Ausgang: der Kunde
     beschreibung: str             # 1–4 Wörter, z. B. "Rechnung-Software-Abo"
     betrag: float | None          # Brutto, positiv
-    waehrung: str                 # "EUR"
+    waehrung: str                 # ISO-Code der Rechnungswährung, z. B. "EUR" oder "USD"
     sicherheit: str               # "hoch" | "mittel" | "niedrig"
     grund: str                    # ein Satz, warum
     quelle: str                   # "regel" | "urteil" | "xml" | "rueckfall"
@@ -275,7 +276,7 @@ Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger(
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
 | `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
-| `posten.py` | `belege posten [--mail [--echt] | --antworten]` |
+| `posten.py` | `belege posten [--mail [--echt] | --antworten | --klaeren KENNUNG --grund privat|kein-beleg|andere-firma|einnahme|liegt-ab [--echt]]` |
 | `waechter.py` | `belege waechter` |
 | `bericht.py` | `belege bericht` (Tagesbericht per Mail an sich selbst), `belege status` |
 | `takt.py` | `belege takt` (Postfach + Handy + Wächter), `belege tag` (Downloads + Nachsortieren + Bericht) |
@@ -495,6 +496,10 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   `Betrag`, Name nur in `Beschreibung`, kein Soll/Haben): Belastungen stehen
   dort positiv und werden beim Lesen umgedreht. Danach gilt überall: Ausgabe
   negativ.
+- Fremdwährungszeilen tragen `waehrung`, `originalbetrag`, bei EZB-Umrechnung
+  `umgerechnet`, andernfalls `kurs_fehlt`; der sichtbare `betrag` bleibt Euro.
+  Der einzige zusätzliche Netzabruf ist die EZB-Referenzkurs-XML; sie wird in
+  `arbeit/kurse.json` nach Tag zwischengespeichert (`https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml`, für ältere Tage `eurofxref-hist.xml`).
 - Ohne `--auszug` liest der Abgleich **alle** CSV-Dateien im Auszugsordner mit
   Buchungen im Monat (Girokonto und Kreditkarte nebeneinander). Dieselbe
   Buchung (Datum, Betrag, Name, Zweck) zählt nur einmal (`buchungen_aus`).
@@ -547,9 +552,16 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   (Adresse aus der letzten Mail dieses Absenders im Postfach, sonst ohne
   Empfänger), nie gesendet.
 - `arbeit/posten.json` merkt jede Buchung unter SHA-1 aus Konto, Datum, Betrag
-  und normalisiertem Zweck. Menschliche Klärungen bleiben über Monatsläufe
-  erhalten. Die Posten-Mail enthält nur `offen` und `wartet_mensch`; Antworten
-  mit Kurz-ID erzeugen nur Regelvorschläge in `arbeit/regel_vorschlaege.toml`.
+  und normalisiertem Zweck. Fest sind `geklaert`, `regel`, `zugeordnet` und
+  `nachgeholt`; `angefragt` und `wartet_mensch` werden beim nächsten Abgleich
+  neu bewertet. Nicht mehr im nichtleeren Monatsauszug enthaltene, nicht feste
+  Posten heißen `entfallen` und werden bei Wiederkehr normal bewertet.
+- Vor jeder Posten-Mail prüft `nachpruefen()` die höchstens zwölf Monate mit
+  `offen`, `wartet_mensch` oder `angefragt` leise erneut, ohne Nachsuche,
+  Ereignis oder Ausgabedatei; `entfallen` setzt nur der Monatslauf. Die Mail enthält nur `offen` und `wartet_mensch`,
+  getrennt nach Abbuchungen und Zahlungseingängen. Antworten mit Kurz-ID oder
+  `--klaeren` verstehen privat, kein Beleg, liegt ab, liegt bei, andere Firma
+  und Einnahme; Antworten erzeugen weiter nur Regelvorschläge.
 - Ist `konfig/konten.toml` ausgefüllt, prüft der Lauf jedes ab `aktiv_ab` aktive
   Konto auf eine Monatsdatei bzw. Buchungen. Fehlmeldungen wiederholen sich
   frühestens nach sieben Tagen; eine Nachlieferung erzeugt Entwarnung.

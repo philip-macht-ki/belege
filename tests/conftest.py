@@ -75,6 +75,17 @@ def kein_netz_fuer_rechnungslinks(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def kein_netz_fuer_kurse(monkeypatch):
+    """EZB-Kurse werden in Tests ausschließlich über einen gepatchten Abruf geliefert."""
+    from belege import kurse
+
+    def _verboten(*_a, **_k):
+        raise AssertionError("Test hat versucht, EZB-Kurse wirklich zu laden")
+
+    monkeypatch.setattr(kurse, "_laden", _verboten)
+
+
+@pytest.fixture(autouse=True)
 def kein_starter_auffrischen(monkeypatch):
     """Ein Testlauf von `takt` fasst nie die echten Starter in ~/.local/bin an."""
     from belege import takt
