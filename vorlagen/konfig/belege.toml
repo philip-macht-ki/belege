@@ -41,6 +41,8 @@ erlaubt = ""
 [ablage]
 # Teil 1 arbeitet nur in ~/Belege. Cloud-Ordner kommen erst in Teil 3 dazu.
 ordner = "~/Belege"
+# Meldet nur mögliche Dubletten mit gleichem Datum und Betrag, legt aber immer beide ab.
+dublettenhinweis = true
 bereich_betrieb = "Betrieb"
 bereich_privat = "Privat"
 privat = true

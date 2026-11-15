@@ -194,6 +194,7 @@ class Einordnung:
   "art": "eingang", "bereich": "betrieb", "firma": "Studio Beispiel", "sicherheit": "hoch", "status": "abgelegt | unsortiert | befund",
   "quelle": "postfach", "mail": {"konto": "geschaeft", "von": "…", "id": "…"} , "am": "<iso>",
   "xml": "<relativer Pfad oder null>",
+  "moegliche_dublette": "<relativer Pfad eines ähnlichen abgelegten Belegs, optional>",
   "befund": "<relativer Pfad zur .befund.txt oder null>",
   "pruefung": {"status": "ok | befund", "punkte": ["fehlende oder unklare Angabe …"]},
   "hinweise": ["Buchhaltungshinweis …"]}}
@@ -201,6 +202,10 @@ class Einordnung:
 
 Fingerabdruck = SHA-256 über die Dateibytes. Ist er schon im Index: Ergebnis
 `nichts` („liegt schon unter …“), keine zweite Ablage.
+Bei `[ablage].dublettenhinweis = true` (Standard, auch bei fehlendem Schlüssel)
+bleiben verschiedene Dateien immer abgelegt; bei gleichem Betrieb, Art, Datum,
+Währung, Betrag und vorsichtigem Lieferantenbezug erhält nur der neue Eintrag einen
+`moegliche_dublette`-Pfad und der Tagesbericht einen Zweifel-Hinweis.
 Alte Betriebs-Einträge ohne `firma` zählen bei aktivem `[[firma]]` zur
 Hauptfirma (zuerst `[betrieb]`, wenn sie als Firma übernommen wurde, sonst die
 erste `[[firma]]`).
