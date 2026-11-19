@@ -27,6 +27,8 @@ lohn = ["Gehalt", "Lohn"]
 abgaben = ["Finanzamt", "Krankenkasse", "AOK", "Berufsgenossenschaft", "Gemeinde", "Stadtkasse"]
 bank = ["Kontoführung", "Entgelt", "Zinsen"]
 abschlag = ["Abschlag"]
+# Höchstens so viele Rechnungsanfragen (Entwürfe, je Lieferant einer) pro Lauf.
+# anfragen_max = 20
 
 # Weiche „vertraulich“ (Arzt, Gericht, Personal, Mandanten): Solche Belege und
 # Dokumente liest nur dein Mac, kein Cloud-Modell. Feste Wörter sind eingebaut.

@@ -139,9 +139,107 @@ def test_anfragen_sind_immer_entwuerfe(repo, monkeypatch):
     entwuerfe, gesendet = [], []
     monkeypatch.setattr("belege.senden.entwurf", lambda *a, **k: entwuerfe.append(a) or kern.Ergebnis("ok"))
     monkeypatch.setattr("belege.senden.senden", lambda *a, **k: gesendet.append(a) or kern.Ergebnis("ok"))
+    monkeypatch.setattr("belege.postfach.oeffnen", lambda *a, **k: _Postfach({"kopierzentrum": "info@kopierzentrum.de"}))
     monat.befehl(_args(monat=monat_wert, anfragen=True, echt=True))
     assert len(entwuerfe) == 1 and "34,00" in entwuerfe[0][1]
+    assert entwuerfe[0][0] == "info@kopierzentrum.de"
     assert gesendet == []
+
+
+class _Postfach:
+    """Postfach-Attrappe: von:<wort> findet die hinterlegte Absenderadresse."""
+
+    def __init__(self, adressen):
+        self.adressen = adressen
+        self.suchen_aufrufe = []
+
+    def suchen(self, abfrage="", max=20, **_):
+        self.suchen_aufrufe.append(abfrage)
+        wort = abfrage.removeprefix("von:")
+        return [{"von": adr} for schluessel, adr in self.adressen.items() if schluessel.startswith(wort)][:max]
+
+
+def _fehlt(tag, betrag, name, zweck=""):
+    return {"datum": tag, "betrag": betrag, "name": name, "zweck": zweck, "status": "fehlt"}
+
+
+def _anfragen_lauf(repo, monkeypatch, daten, adressen, echt=True):
+    entwuerfe = []
+    monkeypatch.setattr("belege.senden.entwurf", lambda *a, **k: entwuerfe.append(a) or kern.Ergebnis("ok"))
+    monkeypatch.setattr("belege.postfach.oeffnen", lambda *a, **k: _Postfach(adressen))
+    monat._anfragen(daten, echt)
+    return entwuerfe
+
+
+def test_anfragen_dubletten_ein_entwurf_je_lieferant(repo, monkeypatch, capsys):
+    """Martina, 18.11.2026: 4 identische Entwürfe an Sunny Cars. Jetzt einer, jede Zahlung einmal."""
+    daten = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Buchung 4711") for _ in range(4)] + [
+        _fehlt("2026-05-10", -80.0, "Sunny Cars GmbH", "Buchung 4802")]
+    entwuerfe = _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "service@sunnycars.de"})
+    assert len(entwuerfe) == 1
+    an, betreff, text = entwuerfe[0][:3]
+    assert an == "service@sunnycars.de" and "2 Zahlungen" in betreff
+    assert text.count("120,00") == 1 and "80,00" in text and "Buchung 4711" in text
+
+
+def test_anfragen_merken_sich_frueheren_lauf(repo, monkeypatch):
+    daten = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH")]
+    assert len(_anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"})) == 1
+    assert _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"}) == []
+
+
+def test_anfragen_trocken_merkt_sich_nichts(repo, monkeypatch):
+    daten = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH")]
+    _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"}, echt=False)
+    assert len(_anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"})) == 1
+
+
+def test_anfragen_nie_an_paypal(repo, monkeypatch, capsys):
+    """PayPal stellt keine Rechnung: Händler aus dem Zweck, sonst keine Anfrage."""
+    daten = [
+        _fehlt("2026-04-01", -59.0, "PayPal Europe S.a.r.l. et Cie S.C.A",
+               "1043XY PP.4711.PP . Sunny Cars GmbH, Ihr Einkauf bei Sunny Cars GmbH"),
+        _fehlt("2026-04-02", -12.0, "PayPal Europe S.a.r.l. et Cie S.C.A", "1043XZ PP.4712.PP . , Ihr Einkauf bei"),
+        _fehlt("2026-04-03", -9.0, "PAYPAL", "Abbuchung"),
+    ]
+    entwuerfe = _anfragen_lauf(repo, monkeypatch, daten,
+                               {"paypal": "service@paypal.de", "sunny": "info@sunnycars.de"})
+    assert [e[0] for e in entwuerfe] == ["info@sunnycars.de"]
+    assert "Zahlungsdienst ohne erkennbaren Händler" in capsys.readouterr().out
+
+
+def test_anfragen_nimmt_keine_zahlungsdienst_adresse(repo, monkeypatch):
+    """Findet die Suche nach dem Händler nur PayPal-Mails, bleibt der Entwurf aus."""
+    daten = [_fehlt("2026-04-01", -59.0, "Sunshine Studio")]
+    assert _anfragen_lauf(repo, monkeypatch, daten, {"sunshine": "service@paypal.de"}) == []
+
+
+def test_anfragen_nur_abbuchungen_und_nie_ohne_adresse(repo, monkeypatch):
+    daten = [_fehlt("2026-04-01", 500.0, "Kunde AG", "Rechnung 12"),
+             _fehlt("2026-04-02", -30.0, "Unbekannt Handel")]
+    assert _anfragen_lauf(repo, monkeypatch, daten, {"kunde": "buchhaltung@kunde.de"}) == []
+
+
+def test_anfragen_hoechstens_grenze_je_lauf(repo, monkeypatch, capsys):
+    daten = [_fehlt("2026-04-01", -float(n + 1), f"Lieferant{n:02d} Handel") for n in range(25)]
+    adressen = {f"lieferant{n:02d}": f"rechnung@lieferant{n:02d}.de" for n in range(25)}
+    assert len(_anfragen_lauf(repo, monkeypatch, daten, adressen)) == 20
+    assert "Weitere 5 Lieferanten" in capsys.readouterr().out
+    # Der nächste Lauf holt den Rest nach.
+    assert len(_anfragen_lauf(repo, monkeypatch, daten, adressen)) == 5
+
+
+def test_paypal_autorisierung_ist_keine_buchung(tmp_path):
+    """Mietwagen-Kaution als PayPal-Autorisierung: kein Geld geflossen, kein Beleg nötig."""
+    datei = tmp_path / "paypal.csv"
+    datei.write_text(
+        "Datum,Name,Typ,Status,Betrag\n"
+        "02.03.2026,Sunny Cars GmbH,Allgemeine Autorisierung,Ausstehend,\"-300,00\"\n"
+        "02.03.2026,Sunny Cars GmbH,Allgemeine Zahlung,Abgeschlossen,\"-120,00\"\n"
+        "03.03.2026,Sunny Cars GmbH,Allgemeine Zahlung,Storniert,\"-120,00\"\n",
+        encoding="utf-8",
+    )
+    assert [b["betrag"] for b in monat.buchungen(datei, "2026-03")] == [-120.0]
 
 
 def test_monat_praezision_alias_referenz_und_fremdwaehrung(repo):

@@ -242,6 +242,8 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
     vorzeichen = -1 if karte else 1
     ergebnis = []
     for zeile in leser:
+        if _keine_zahlung(zeile):
+            continue
         try:
             tag = _datum(zeile[spalten["datum"]])
             menge = vorzeichen * _betrag(
@@ -277,6 +279,24 @@ def _buchungen_und_format(datei: Path, monat: str | None) -> tuple[list[dict], b
             ergebnis.append(buchung)
     _paypal_umrechnungen(ergebnis)
     return ergebnis, karte
+
+
+_KEIN_GELDFLUSS_TYP = re.compile(r"autori[sz]ierung|authori[sz]ation", re.I)
+_KEIN_GELDFLUSS_STATUS = {"ausstehend", "storniert", "abgelehnt", "pending", "denied", "voided", "canceled", "cancelled"}
+
+
+def _keine_zahlung(zeile: dict) -> bool:
+    """PayPal-Exporte enthalten Vormerkungen, die nie Geld bewegen: Autorisierungen (etwa die
+    Kaution beim Mietwagen), stornierte und abgelehnte Vorgänge. Sie brauchen keinen Beleg."""
+    for spalte, wert in zeile.items():
+        if not spalte or not isinstance(wert, str):
+            continue
+        name = _normal(spalte)
+        if name in {"typ", "type", "transaktionstyp", "transaction type"} and _KEIN_GELDFLUSS_TYP.search(wert):
+            return True
+        if name in {"status", "transaktionsstatus", "transaction status"} and _normal(wert) in _KEIN_GELDFLUSS_STATUS:
+            return True
+    return False
 
 
 def _paypal_umrechnungen(buchungen: list[dict]) -> None:
@@ -1127,28 +1147,145 @@ def _uebergabe(monat: str, ziel: Path, index: dict, ergebnis: list[dict], args, 
     return True
 
 
+# Zahlungsdienste wickeln nur ab; die Rechnung kommt vom Händler dahinter.
+ZAHLUNGSDIENSTE = (
+    "paypal", "klarna", "stripe", "sumup", "adyen", "mollie", "unzer", "sofort", "giropay",
+    "amazon payments", "google pay", "apple pay", "payone", "computop", "ratepay", "afterpay",
+    "zettle", "paydirekt", "wero", "worldline", "nexi", "concardis",
+)
+_FUELLWOERTER = {"der", "die", "das", "und", "the", "www", "von", "fuer", "for", "mit", "bei", "ihr", "einkauf"}
+
+
+def _ist_zahlungsdienst(text: str) -> bool:
+    raum = f" {_normal(text)} "
+    return any(f" {wort} " in raum for wort in ZAHLUNGSDIENSTE)
+
+
+def _haendler(buchung: dict) -> str:
+    """Der Händler, der die Rechnung schreibt. Bei PayPal & Co. steht er nur im Zweck.
+
+    Findet sich kein Händler, kommt "" zurück: dann gibt es niemanden, den man fragen kann.
+    """
+    name = (buchung.get("name") or "").strip()
+    if name and not _ist_zahlungsdienst(name):
+        return name
+    zweck = buchung.get("zweck") or ""
+    for muster in (
+        r"(?:ihr einkauf bei|einkauf bei|purchase at|zahlung an|payment to)\s+([^,;/]+)",
+        r"\bPP\.\d+\.PP\s*\.?\s*([^,;/]+)",
+    ):
+        treffer = re.search(muster, zweck, re.I)
+        if treffer:
+            kandidat = treffer[1].strip(" .")
+            if _normal(kandidat) and not _ist_zahlungsdienst(kandidat):
+                return kandidat
+    return ""
+
+
+def _suchwort(haendler: str) -> str:
+    """Das erste tragende Wort des Händlernamens für die Postfachsuche."""
+    return next((w for w in _normal(haendler).split() if len(w) >= 3 and w not in _FUELLWOERTER), "")
+
+
+def _adresse(postfach, haendler: str) -> str:
+    """Absenderadresse einer echten Mail des Händlers, nie die eines Zahlungsdienstes."""
+    wort = _suchwort(haendler)
+    if not wort:
+        return ""
+    for treffer in postfach.suchen(f"von:{wort}", max=5) or []:
+        von = treffer.get("von", "")
+        if von and not _ist_zahlungsdienst(von.split("@")[-1].replace(".", " ")):
+            return von
+    return ""
+
+
+def _anfrage_schluessel(buchung: dict, haendler: str) -> str:
+    return f"{buchung['datum']}|{abs(float(buchung['betrag'])):.2f}|{_normal(haendler)}"
+
+
 def _anfragen(daten: list[dict], echt: bool) -> None:
-    """Legt für jede fehlende Ausgabe einen Rechnungsentwurf an, nie eine Sendung."""
+    """Legt Rechnungsanfragen an Lieferanten an, nur als Entwurf, nie als Sendung.
+
+    Vorsichtig, weil ein Jahreslauf sonst Hunderte Entwürfe erzeugt (Martina, 18.11.2026):
+    nur Abbuchungen, ein Entwurf je Lieferant mit allen seinen Zahlungen, nie an einen
+    Zahlungsdienst wie PayPal, nie ohne gefundene Adresse, nie zweimal für dieselbe Zahlung
+    (auch nicht über mehrere Läufe), und höchstens `anfragen_max` Entwürfe je Lauf.
+    """
     from .postfach import oeffnen
     from .senden import entwurf
 
+    grenze = int(kern.konfig("regeln").get("monat", {}).get("anfragen_max", 20))
+    gesehen = kern.lesen(kern.pfad("arbeit", "gesehen.json"), {}) or {}
+    schon = gesehen.get("anfragen", {})
     postfach = oeffnen()
-    for buchung in (x for x in daten if x["status"] == "fehlt"):
-        wort = next(iter(_normal(buchung["name"]).split()), "")
-        treffer = postfach.suchen(f"von:{wort}", max=1) if wort else []
-        an = treffer[0].get("von", "") if treffer else ""
-        tag = date.fromisoformat(buchung["datum"])
-        text = (
-            f"Guten Tag,\n\nbitte schicken Sie mir die Rechnung zur Zahlung vom {tag:%d.%m.%Y} "
-            f"über {euro(buchung['betrag'])} als PDF. Verwendungszweck: {buchung['zweck']}\n\nDanke."
+    gruppen: dict[str, dict] = {}
+    ohne_haendler, ohne_adresse, bereits = [], [], 0
+    adressen: dict[str, str] = {}
+    for buchung in (x for x in daten if x["status"] == "fehlt" and float(x["betrag"]) < 0):
+        haendler = _haendler(buchung)
+        if not haendler:
+            ohne_haendler.append(buchung)
+            continue
+        schluessel = _anfrage_schluessel(buchung, haendler)
+        if schluessel in schon:
+            bereits += 1
+            continue
+        kurz = _normal(haendler)
+        if kurz not in adressen:
+            adressen[kurz] = _adresse(postfach, haendler)
+        an = adressen[kurz]
+        if not an:
+            ohne_adresse.append(buchung)
+            continue
+        gruppe = gruppen.setdefault(an.lower(), {"an": an, "haendler": haendler, "posten": {}})
+        # Dieselbe Zahlung zweimal (zwei Auszüge, zwei Exporte) wird nur einmal erfragt.
+        gruppe["posten"].setdefault(schluessel, buchung)
+
+    angelegt = 0
+    for nummer, gruppe in enumerate(gruppen.values()):
+        if nummer >= grenze:
+            break
+        posten = sorted(gruppe["posten"].values(), key=lambda x: x["datum"])
+        zeilen = "\n".join(
+            f"- {date.fromisoformat(b['datum']):%d.%m.%Y} über {euro(abs(b['betrag']))}"
+            + (f", Verwendungszweck: {b['zweck']}" if b.get("zweck") else "")
+            for b in posten
         )
-        entwurf(
-            an,
-            f"Rechnung zur Zahlung vom {tag:%d.%m.%Y} über {euro(buchung['betrag'])}",
-            text,
-            [],
-            echt,
-        )
+        if len(posten) == 1:
+            b = posten[0]
+            tag = date.fromisoformat(b["datum"])
+            betreff = f"Rechnung zur Zahlung vom {tag:%d.%m.%Y} über {euro(abs(b['betrag']))}"
+            text = (f"Guten Tag,\n\nbitte schicken Sie mir die Rechnung zu dieser Zahlung als PDF:\n"
+                    f"{zeilen}\n\nDanke.")
+        else:
+            betreff = f"Rechnungen zu {len(posten)} Zahlungen"
+            text = (f"Guten Tag,\n\nbitte schicken Sie mir die Rechnungen zu diesen Zahlungen als PDF:\n"
+                    f"{zeilen}\n\nDanke.")
+        ergebnis = entwurf(gruppe["an"], betreff, text, [], echt)
+        if echt and getattr(ergebnis, "status", "ok") == "ok":
+            angelegt += 1
+            stempel = kern.jetzt().isoformat(timespec="seconds")
+            for schluessel in gruppe["posten"]:
+                schon[schluessel] = stempel
+    if echt and angelegt:
+        gesehen["anfragen"] = schon
+        kern.schreiben(kern.pfad("arbeit", "gesehen.json"), gesehen)
+
+    wort = "Entwürfe angelegt" if echt else "Entwürfe würden angelegt"
+    print(f"ok: Rechnungsanfragen: {min(len(gruppen), grenze)} {wort} (je Lieferant einer).")
+    if len(gruppen) > grenze:
+        print(f"Weitere {len(gruppen) - grenze} Lieferanten beim nächsten Lauf "
+              f"(höchstens {grenze} je Lauf, `anfragen_max` unter [monat] in konfig/regeln.toml).")
+    if bereits:
+        print(f"{bereits} Zahlungen schon früher angefragt, nicht noch einmal.")
+    for titel, liste in (("Über einen Zahlungsdienst ohne erkennbaren Händler, keine Anfrage", ohne_haendler),
+                         ("Keine Mail des Lieferanten im Postfach, keine Anfrage", ohne_adresse)):
+        if liste:
+            print(f"{titel} ({len(liste)}):")
+            for b in liste[:10]:
+                print(f"  - {_tag(b['datum'])} {euro(abs(b['betrag']))} {b['name']}")
+            if len(liste) > 10:
+                print(f"  … und {len(liste) - 10} weitere (stehen in fehlt_noch.csv).")
 
 
 def _ereignis_einmal(text: str) -> None:

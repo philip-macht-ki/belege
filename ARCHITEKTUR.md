@@ -65,7 +65,7 @@ arbeit/                   Laufzeit, nie im Git
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
-  gesehen.json            {"<konto>": {"mails": [ordner:uid …], "kennungen": [Message-ID …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …]}
+  gesehen.json            {"<konto>": {"mails": [ordner:uid …], "kennungen": [Message-ID …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …], "anfragen": {"<datum>|<betrag>|<händler>": iso}}
   aufraeumen.jsonl        jede echte Postfach-Aktion, mit Konto, ID, Regel und Ergebnis
   postfach-vorschlag.md   trocken erzeugte Gruppen und Regelvorschläge
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600
@@ -562,9 +562,12 @@ Scheitert alles: bester Kandidat mit Mindestmenge, sonst `stufe="leer"`. Ganz oh
   `"ordner"` → Kopie nach `[uebergabe].ordner/<JJJJ-MM>/`.
   `[uebergabe].nur_pdf_tif = true` (DATEV) → nur PDF anhängen, XML trotzdem
   im Ordner behalten.
-- `--anfragen`: je `fehlt`-Buchung ein **Entwurf** an den Lieferanten
-  (Adresse aus der letzten Mail dieses Absenders im Postfach, sonst ohne
-  Empfänger), nie gesendet.
+- `--anfragen`: nur Abbuchungen mit Status `fehlt`; je Lieferant ein **Entwurf**
+  mit allen seinen Zahlungen (Adresse aus einer Mail dieses Absenders im Postfach;
+  ohne Adresse kein Entwurf, nur Liste). Zahlungsdienste (PayPal, Klarna, Stripe …)
+  sind nie Empfänger; bei ihnen zählt der Händler aus dem Verwendungszweck, sonst
+  keine Anfrage. Angefragtes merkt `gesehen.json["anfragen"]`, nie erneut.
+  Höchstens `[monat] anfragen_max` (20) Entwürfe je Lauf, nie gesendet.
 - `arbeit/posten.json` merkt jede Buchung unter SHA-1 aus Konto, Datum, Betrag
   und normalisiertem Zweck. Fest sind `geklaert`, `regel`, `zugeordnet` und
   `nachgeholt`; `angefragt` und `wartet_mensch` werden beim nächsten Abgleich
@@ -785,8 +788,8 @@ belege jahr [--jahr JJJJ] [--anfragen] [--paket] [--uebergabe] [--echt]
   Diese Dateien schreibt auch der Trockenlauf (nur lesen und rechnen, wie `monat`).
 - Ausgabezeile: `ok: 2026: 12 Monate, 9 mit Kontoauszug, 104 Buchungen,
   88 zugeordnet, 6 prüfen, 7 fehlen noch (312,40 €), 3 ohne Kontoauszug`.
-- `--anfragen`: für jede fehlende Ausgabe des Jahres ein Entwurf wie bei
-  `monat --anfragen`, nie eine Sendung.
+- `--anfragen`: Entwürfe wie bei `monat --anfragen` (je Lieferant einer, höchstens
+  `anfragen_max` je Lauf, schon Angefragtes nie erneut), nie eine Sendung.
 - `--paket`: `arbeit/jahr/<JJJJ>/paket/<MM>/` mit den Belegen je Monat über
   `monat.paket_packen()`, dazu die Jahresausgaben im Paketordner. Nur mit `--echt`.
   Das Paket ist eine Arbeitskopie unter `arbeit/` und wird bei jedem Lauf neu
