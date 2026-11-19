@@ -1200,7 +1200,9 @@ def _adresse(postfach, haendler: str) -> str:
 
 
 def _anfrage_schluessel(buchung: dict, haendler: str) -> str:
-    return f"{buchung['datum']}|{abs(float(buchung['betrag'])):.2f}|{_normal(haendler)}"
+    """Kennzeichen einer Zahlung über Läufe hinweg; der Zweck trennt verschiedene Vorgänge."""
+    return (f"{buchung['datum']}|{abs(float(buchung['betrag'])):.2f}|{_normal(haendler)}"
+            f"|{_normal(buchung.get('zweck') or '')}")
 
 
 def _anfragen(daten: list[dict], echt: bool) -> None:
@@ -1221,13 +1223,21 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
     gruppen: dict[str, dict] = {}
     ohne_haendler, ohne_adresse, bereits = [], [], 0
     adressen: dict[str, str] = {}
+    # Dateiübergreifende Dubletten hat buchungen_aus schon entfernt. Was jetzt noch
+    # gleich aussieht, sind echte Zahlungen (zweimal derselbe Betrag am selben Tag):
+    # jede zählt, die zweite bekommt "#2".
+    vorkommen: dict[str, int] = {}
     for buchung in (x for x in daten if x["status"] == "fehlt" and float(x["betrag"]) < 0):
         haendler = _haendler(buchung)
         if not haendler:
             ohne_haendler.append(buchung)
             continue
-        schluessel = _anfrage_schluessel(buchung, haendler)
-        if schluessel in schon:
+        grund = _anfrage_schluessel(buchung, haendler)
+        vorkommen[grund] = vorkommen.get(grund, 0) + 1
+        schluessel = grund if vorkommen[grund] == 1 else f"{grund}#{vorkommen[grund]}"
+        # Schlüssel aus 1.19.10 (ohne Zweck) gelten weiter für die erste Zahlung.
+        alt = grund.rsplit("|", 1)[0]
+        if schluessel in schon or (vorkommen[grund] == 1 and alt in schon):
             bereits += 1
             continue
         kurz = _normal(haendler)
@@ -1238,18 +1248,22 @@ def _anfragen(daten: list[dict], echt: bool) -> None:
             ohne_adresse.append(buchung)
             continue
         gruppe = gruppen.setdefault(an.lower(), {"an": an, "haendler": haendler, "posten": {}})
-        # Dieselbe Zahlung zweimal (zwei Auszüge, zwei Exporte) wird nur einmal erfragt.
-        gruppe["posten"].setdefault(schluessel, buchung)
+        gruppe["posten"][schluessel] = (grund, buchung)
 
     angelegt = 0
     for nummer, gruppe in enumerate(gruppen.values()):
         if nummer >= grenze:
             break
-        posten = sorted(gruppe["posten"].values(), key=lambda x: x["datum"])
+        # Gleiche Zahlungen stehen als eine Zeile mit "2×" im Entwurf.
+        zeilen_je_grund: dict[str, list] = {}
+        for grund, b in gruppe["posten"].values():
+            zeilen_je_grund.setdefault(grund, [0, b])[0] += 1
+        posten = [b for _, b in gruppe["posten"].values()]
         zeilen = "\n".join(
-            f"- {date.fromisoformat(b['datum']):%d.%m.%Y} über {euro(abs(b['betrag']))}"
+            f"- {f'{anzahl}× ' if anzahl > 1 else ''}"
+            f"{date.fromisoformat(b['datum']):%d.%m.%Y} über {euro(abs(b['betrag']))}"
             + (f", Verwendungszweck: {b['zweck']}" if b.get("zweck") else "")
-            for b in posten
+            for anzahl, b in sorted(zeilen_je_grund.values(), key=lambda x: x[1]["datum"])
         )
         if len(posten) == 1:
             b = posten[0]

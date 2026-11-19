@@ -1,5 +1,17 @@
 # Änderungen für dich
 
+## [1.19.11] – 19.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Rechnungsanfragen: Zwei echte Zahlungen am selben Tag über denselben Betrag an denselben Lieferanten zählen jetzt als zwei. Im Entwurf stehen sie als eine Zeile mit „2×“, und keine geht verloren. Zahlungen mit unterschiedlichem Verwendungszweck stehen einzeln drin.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.19.10] – 19.11.2026
 
 aktion: keine
