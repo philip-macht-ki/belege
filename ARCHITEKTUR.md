@@ -65,7 +65,7 @@ arbeit/                   Laufzeit, nie im Git
   posten.json             offene Posten nach stabiler SHA-1-ID
   konten.json             Meldestand fehlender Kontoauszüge
   regel_vorschlaege.toml  nur vorgeschlagene, nie automatisch aktive Regeln
-  gesehen.json            {"<konto>": {"mails": [ordner:uid …], "kennungen": [Message-ID …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …], "anfragen": {"<datum>|<betrag>|<händler>": iso}}
+  gesehen.json            {"<konto>": {"mails": [ordner:uid …], "kennungen": [Message-ID …], "stand": iso}, "waechter:<konto>": {...}, "aufraeumen:<konto>": {"ids": [message-id …], "stand": iso}, "aufraeumen:takt": {"stand": iso}, "downloads_gemeldet": [sha …], "anfragen": {"<datum>|<betrag>|<händler>|<zweck>[#n]": iso}}
   aufraeumen.jsonl        jede echte Postfach-Aktion, mit Konto, ID, Regel und Ergebnis
   postfach-vorschlag.md   trocken erzeugte Gruppen und Regelvorschläge
   geheim/                 Weg-B-Zugänge (google_client.json, <konto>_lesen.json, <konto>_schreiben.json), Microsoft (<konto>_microsoft.json), chmod 600

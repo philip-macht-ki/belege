@@ -178,8 +178,34 @@ def test_anfragen_dubletten_ein_entwurf_je_lieferant(repo, monkeypatch, capsys):
     entwuerfe = _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "service@sunnycars.de"})
     assert len(entwuerfe) == 1
     an, betreff, text = entwuerfe[0][:3]
-    assert an == "service@sunnycars.de" and "2 Zahlungen" in betreff
-    assert text.count("120,00") == 1 and "80,00" in text and "Buchung 4711" in text
+    assert an == "service@sunnycars.de"
+    assert text.count("120,00") == 1 and "4× 02.03.2026" in text and "80,00" in text and "Buchung 4711" in text
+    assert "5 Zahlungen" in betreff
+
+
+def test_anfragen_gleiche_zahlungen_bleiben_getrennt_gemerkt(repo, monkeypatch):
+    """Zwei echte Zahlungen gleich nach Tag, Betrag, Händler: nach einer Anfrage für eine
+    kommt die neu hinzugekommene zweite trotzdem noch dran."""
+    eine = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Miete")]
+    zwei = eine + [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Miete")]
+    adressen = {"sunny": "a@sunnycars.de"}
+    assert len(_anfragen_lauf(repo, monkeypatch, eine, adressen)) == 1
+    entwuerfe = _anfragen_lauf(repo, monkeypatch, zwei, adressen)
+    assert len(entwuerfe) == 1 and "120,00" in entwuerfe[0][2] and "2×" not in entwuerfe[0][2]
+    assert _anfragen_lauf(repo, monkeypatch, zwei, adressen) == []
+
+
+def test_anfragen_verschiedener_zweck_sind_zwei_zahlungen(repo, monkeypatch):
+    daten = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Buchung A"),
+             _fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Buchung B")]
+    text = _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"})[0][2]
+    assert "Buchung A" in text and "Buchung B" in text
+
+
+def test_anfragen_alter_schluessel_aus_1_19_10_gilt(repo, monkeypatch):
+    kern.schreiben(repo / "arbeit/gesehen.json", {"anfragen": {"2026-03-02|120.00|sunny cars": "x"}})
+    daten = [_fehlt("2026-03-02", -120.0, "Sunny Cars GmbH", "Miete")]
+    assert _anfragen_lauf(repo, monkeypatch, daten, {"sunny": "a@sunnycars.de"}) == []
 
 
 def test_anfragen_merken_sich_frueheren_lauf(repo, monkeypatch):
