@@ -1,5 +1,24 @@
 # Änderungen für dich
 
+## [1.19.10] – 19.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Rechnungsanfragen an Lieferanten (`--anfragen`) sind jetzt deutlich vorsichtiger. Bisher konnte ein Jahreslauf Hunderte Entwürfe auf einmal anlegen, mit Dubletten und mit Entwürfen an PayPal. Jetzt gilt:
+  - ein Entwurf je Lieferant, darin alle seine offenen Zahlungen als Liste; dieselbe Zahlung steht nur einmal drin,
+  - was schon einmal angefragt wurde, fragt belege nie wieder an, auch nicht beim nächsten Lauf,
+  - nie an PayPal, Klarna, Stripe und andere Zahlungsdienste. Bei einer PayPal-Zahlung fragt belege den Händler, der im Verwendungszweck steht; steht dort keiner, gibt es keine Anfrage,
+  - kein Entwurf ohne Empfänger: findet belege keine Mail des Lieferanten in deinem Postfach, steht der Posten nur in der Liste am Ende,
+  - nur für Abbuchungen, nie für Zahlungseingänge,
+  - höchstens 20 Entwürfe je Lauf; der Rest kommt beim nächsten Lauf.
+- PayPal-Exporte: Vormerkungen ohne Geldfluss (Autorisierungen wie die Kaution beim Mietwagen, stornierte und abgelehnte Vorgänge) zählen nicht mehr als Buchung und landen nicht mehr in der Liste der fehlenden Belege.
+
+### Musst du etwas tun?
+
+Nein. Wenn du mehr oder weniger als 20 Entwürfe je Lauf willst, trag `anfragen_max = 40` unter `[monat]` in `konfig/regeln.toml` ein. Tipp: Vor `belege jahr --anfragen --echt` einmal ohne `--echt` laufen lassen, dann siehst du, wen belege anschreiben würde.
+
 ## [1.19.9] – 15.11.2026
 
 aktion: keine
