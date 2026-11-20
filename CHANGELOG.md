@@ -1,5 +1,17 @@
 # Änderungen für dich
 
+## [1.20.0] – 20.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Datenschutz: Die automatischen Läufe können jetzt über ein Cloud-Konto in der EU laufen, mit Claude über Amazon Bedrock oder mit ChatGPT über Microsoft Azure. Wie das geht, steht in einrichten_eu.md. Am einfachsten sagst du deinem Agenten: Philip macht KI, richte mit mir den Datenschutz ein.
+
+### Musst du etwas tun?
+
+Nein. Ohne Eintrag in deiner .env läuft alles wie bisher.
+
 ## [1.19.11] – 19.11.2026
 
 aktion: keine

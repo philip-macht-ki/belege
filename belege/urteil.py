@@ -182,10 +182,35 @@ def _anthropic_post(schluessel: str, auftrag: str, modell: str):
 # Codex läuft nur lesend und ohne Netz in einem leeren Arbeitsordner, ohne
 # Nutzerkonfiguration und Regeln; seine Antwort wird als JSON geprüft. Er kann
 # dennoch Dateien lesen: `lokal` ist deshalb der private Weg, `claude` Standard.
+def _codex_azure() -> list[str]:
+    """EU-Weg über Microsoft Azure (Datenschutzstufe D mit ChatGPT).
+
+    Steht AZURE_OPENAI_BASE_URL in .env, fragt belege Codex über dieses Azure-Konto
+    statt über das ChatGPT-Abo. Weil `--ignore-user-config` die config.toml des
+    Nutzers bewusst übergeht, kommt der Anbieter hier als `-c` mit. Der Schlüssel
+    steht als AZURE_OPENAI_API_KEY in .env; Codex liest ihn selbst aus der Umgebung.
+    """
+    url = os.environ.get("AZURE_OPENAI_BASE_URL", "").strip()
+    if not url:
+        return []
+    if not os.environ.get("AZURE_OPENAI_API_KEY", "").strip():
+        raise KeinUrteil("AZURE_OPENAI_BASE_URL steht in .env, aber AZURE_OPENAI_API_KEY fehlt.")
+    return [
+        "-c", 'model_provider="azure"',
+        "-c", 'model_providers.azure.name="Azure OpenAI"',
+        "-c", f"model_providers.azure.base_url={json.dumps(url)}",
+        "-c", 'model_providers.azure.env_key="AZURE_OPENAI_API_KEY"',
+        "-c", 'model_providers.azure.wire_api="responses"',
+    ]
+
+
 def _codex(auftrag: str, modell: str) -> str:
     """Fragt Codex aus einem leeren Ordner, ohne Netz, Konfig oder Regeln."""
     if not shutil.which("codex"):
         raise KeinUrteil("Der Befehl `codex` fehlt. Codex installieren und anmelden.")
+    azure = _codex_azure()
+    if azure and not modell:
+        raise KeinUrteil("Für Azure fehlt in konfig/belege.toml unter [urteil] modell_codex, der Name des Deployments.")
     with tempfile.TemporaryDirectory() as tmp:
         ausgabe = Path(tmp) / "antwort.json"
         cmd = [
@@ -195,6 +220,7 @@ def _codex(auftrag: str, modell: str) -> str:
         ]
         if modell:
             cmd[2:2] = ["-m", modell]
+        cmd[2:2] = azure
         try:
             r = subprocess.run(
                 cmd, input=f"{SYSTEMTEXT}\n\n{auftrag}", capture_output=True,
