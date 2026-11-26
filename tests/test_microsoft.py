@@ -210,6 +210,7 @@ def test_nur_lesen_schuetzt_entwurf_senden_und_aufraeumen(monkeypatch):
         box._senden("a@b.example", "Betreff", "Text", [])
     assert "nur zum Lesen" in box.aufraeumen("1", "ordner", "Rechnungen")
     assert "nur zum Lesen" in box.nach_ablage("1", "markieren", "Belege erledigt")
+    assert "nur zum Lesen" in box.zurueckholen({"id": "1", "aktion": "ordner"})
     assert box.sitzung.aufrufe == []
 
 

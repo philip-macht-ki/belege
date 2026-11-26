@@ -70,7 +70,7 @@ def _imap_antwortet(host: str, port: int = 993) -> bool:
         with socket.create_connection((host, port), timeout=5) as roh:
             with ssl.create_default_context().wrap_socket(roh, server_hostname=host) as tls:
                 return tls.recv(200).startswith(b"* OK")
-    except (OSError, ssl.SSLError):
+    except (OSError, ssl.SSLError, UnicodeError):
         return False
 
 
@@ -81,13 +81,13 @@ def _smtp_antwortet(host: str) -> str:
             with ssl.create_default_context().wrap_socket(roh, server_hostname=host) as tls:
                 if tls.recv(200).startswith(b"220"):
                     return f"{host}:465"
-    except (OSError, ssl.SSLError):
+    except (OSError, ssl.SSLError, UnicodeError):
         pass
     try:
         with socket.create_connection((host, 587), timeout=5) as roh:
             if roh.recv(200).startswith(b"220"):
                 return f"{host}:587"
-    except OSError:
+    except (OSError, UnicodeError):
         pass
     return ""
 
@@ -118,12 +118,15 @@ def _ausprobieren(domain: str, mx_liste: list[str]) -> tuple[str, str]:
 def erkennen(adresse: str, ausprobieren: bool = True) -> dict:
     """Art, Weg, Server und nächster Schritt zu einer Mailadresse."""
     adresse = adresse.strip().lower()
-    if "@" not in adresse or "." not in adresse.rsplit("@", 1)[-1]:
+    domain = adresse.rsplit("@", 1)[-1] if "@" in adresse else ""
+    labels = domain.split(".")
+    if len(labels) < 2 or not all(labels) or any(" " in x for x in labels):
         raise ValueError(f"{adresse!r} ist keine Mailadresse.")
-    domain = adresse.rsplit("@", 1)[-1]
     ergebnis = {"adresse": adresse, "art": "", "weg": "", "imap_server": "", "smtp_server": "", "hinweis": "", "sicher": True}
 
-    if domain == "outlook.com" or domain.startswith(("hotmail.", "live.", "outlook.", "msn.")):
+    from .microsoft import _privat
+
+    if _privat(adresse):
         ergebnis.update(
             art="Microsoft, privates Konto (Outlook.com)",
             weg="microsoft",
@@ -158,7 +161,7 @@ def erkennen(adresse: str, ausprobieren: bool = True) -> dict:
 
     for mx in mx_liste:
         for kennung, imap, smtp in postfach.HOSTER_NACH_MX:
-            if mx.endswith(kennung) or kennung.endswith(".") and kennung in mx:
+            if postfach.hoster_passt(mx, kennung):
                 name = HOSTER_NAMEN.get(kennung, kennung)
                 ergebnis.update(
                     art=f"eigene Domain bei {name}", weg="a",

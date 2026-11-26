@@ -152,8 +152,8 @@ Nennt `erkennen` einen Anmeldenamen, der nicht die Adresse ist (Kabelplus,
 Mittwald, 1blu), trägt Claude ihn beim Postfach als `benutzer = "…"` ein.
 
 Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
-Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
-Hetzner am MX-Eintrag, alle übrigen über die öffentliche Anbieterliste von
+Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl,
+Hetzner, Kabelplus, A1, Magenta, domainfactory, Mittwald und 1blu am MX-Eintrag, alle übrigen über die öffentliche Anbieterliste von
 Thunderbird. `uv run belege pruefen` zeigt danach, ob die Anmeldung klappt.
 Meldet belege, dass die Server unbekannt sind, fragt Claude nach dem Anbieter,
 schlägt dessen IMAP- und SMTP-Server in der Hilfe des Anbieters nach und trägt
