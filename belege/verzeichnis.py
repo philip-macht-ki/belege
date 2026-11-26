@@ -41,9 +41,16 @@ ZUSATZ = re.compile(r"^(?P<stamm>.+?)(?:_(?P<nummer>\d+))?$")
 def _datei(eintrag: dict) -> Path | None:
     """Datei eines Eintrags, nur wenn der Pfad relativ ist und in der Ablage bleibt."""
     pfad = str(eintrag.get("pfad") or "")
-    if not pfad or Path(pfad).is_absolute() or ".." in Path(pfad).parts:
+    teil = Path(pfad)
+    # anchor fängt auch Windows-Pfade wie "\\x.pdf" oder "C:x.pdf" ab, die nicht absolut heißen.
+    if not pfad or teil.is_absolute() or teil.anchor or teil.drive or ".." in teil.parts:
         return None
-    return ablage_ordner() / pfad
+    datei = ablage_ordner() / teil
+    try:
+        datei.resolve().relative_to(ablage_ordner().resolve())
+    except (OSError, ValueError):
+        return None
+    return datei
 
 
 def _pruefbar(eintrag: dict) -> bool:

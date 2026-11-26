@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 
@@ -168,11 +169,14 @@ def test_pfade_ausserhalb_der_ablage_bleiben_unangetastet(repo, monkeypatch, tmp
     vorlage = next(iter(index.values()))
     index["absolut"] = {**vorlage, "pfad": str(fremd)}
     index["hinaus"] = {**vorlage, "pfad": "../weg/b.pdf"}
+    index["wurzel"] = {**vorlage, "pfad": "\\anderswo.pdf" if os.name == "nt" else "/anderswo.pdf"}
+    (repo / "ablage" / "link").symlink_to(tmp_path, target_is_directory=True) if os.name != "nt" else None
+    index["verlinkt"] = {**vorlage, "pfad": "link/anderswo.pdf"}
     (repo / "arbeit" / "index.json").write_text(json.dumps(index), encoding="utf-8")
     (repo / "ablage" / innen).unlink()
     verzeichnis.lauf(True)
     nachher = _index(repo)
-    assert {"absolut", "hinaus"} <= set(nachher)
+    assert {"absolut", "hinaus", "wurzel", "verlinkt"} <= set(nachher)
     assert innen in [e["pfad"] for e in nachher.values()]  # Duplikat nur außerhalb: bleibt
 
 
