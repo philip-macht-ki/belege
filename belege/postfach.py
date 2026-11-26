@@ -1291,6 +1291,16 @@ HOSTER_NACH_MX = (
 )
 
 
+def hoster_passt(mx: str, kennung: str) -> bool:
+    """MX gehört zum Hoster: ganzer Name oder Endung an einer Punktgrenze.
+
+    Kennungen mit Punkt am Ende (``ionos.``) treffen jedes Label, etwa ``mx00.ionos.de``.
+    """
+    if kennung.endswith("."):
+        return mx.startswith(kennung) or f".{kennung}" in mx
+    return mx == kennung or mx.endswith("." + kennung)
+
+
 def _mx(domain: str) -> list[str]:
     """Die MX-Rechner einer Domain, ohne Zusatzpaket über dig vom Mac."""
     try:
@@ -1357,7 +1367,7 @@ def server_erkennen(domain: str) -> tuple[str, str]:
                 "siehe einrichten.md, Abschnitt Microsoft-Postfach."
             )
         for kennung, imap, smtp in HOSTER_NACH_MX:
-            if mx.endswith(kennung) or kennung.endswith(".") and kennung in mx:
+            if hoster_passt(mx, kennung):
                 return imap.replace("{mx}", mx), smtp.replace("{mx}", mx)
     imap, smtp = _ispdb(domain)
     if not (imap and smtp) and mx_liste:

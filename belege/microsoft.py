@@ -68,8 +68,13 @@ def rechte(konto: dict | None) -> list[str]:
 
 
 def _privat(adresse: str) -> bool:
-    domain = adresse.rsplit("@", 1)[-1].lower()
-    return domain == "outlook.com" or domain.startswith(PRIVATE_DOMAINS)
+    """outlook.com, hotmail.de, live.co.uk …, aber nicht live.firma.de."""
+    teile = adresse.rsplit("@", 1)[-1].lower().split(".")
+    return (
+        f"{teile[0]}." in PRIVATE_DOMAINS
+        and 1 <= len(teile[1:]) <= 2
+        and all(0 < len(x) <= 3 for x in teile[1:])
+    )
 
 
 def admin_link(konto: dict) -> str:
@@ -540,6 +545,8 @@ class MicrosoftPostfach(Postfach):
             raise
 
     def zurueckholen(self, eintrag: dict) -> str:
+        if nur_lesen(getattr(self, "konto", None)):
+            return "nicht zurückgeholt: nur zum Lesen verbunden"
         ident = str(eintrag.get("neue_id") or eintrag.get("id") or "")
         if eintrag.get("aktion") in {"archivieren", "ordner"}:
             self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": "inbox"})

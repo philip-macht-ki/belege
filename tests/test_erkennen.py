@@ -85,3 +85,22 @@ def test_imap_meldet_mit_benutzer_an(monkeypatch):
     postfach.ImapPostfach({**konto, "benutzer": "x1234a00"})._imap()
     postfach.ImapPostfach(konto)._imap()
     assert gesehen == ["x1234a00", "rechnungen@ktp.at"]
+
+
+def test_hoster_nur_an_punktgrenze():
+    assert postfach.hoster_passt("smx01.a1.net", "a1.net")
+    assert not postfach.hoster_passt("mail.xa1.net", "a1.net")
+    assert not postfach.hoster_passt("mx2.evil1blu.de", "1blu.de")
+    assert postfach.hoster_passt("mx00.ionos.de", "ionos.")
+    assert postfach.hoster_passt("mx.kundenserver.de", "kundenserver.de")
+
+
+def test_firmendomain_mit_live_ist_nicht_privat(netz):
+    netz([])
+    assert erkennen.erkennen("info@live.firma.de")["weg"] == "a"
+    assert erkennen.erkennen("anna@hotmail.co.uk")["weg"] == "microsoft"
+
+
+def test_kaputte_domain_ist_keine_adresse():
+    with pytest.raises(ValueError):
+        erkennen.erkennen("a@foo..de")
