@@ -349,7 +349,7 @@ class MicrosoftPostfach(Postfach):
         seit = _seit_aus(abfrage, seit)
         bis = _datum_aus(abfrage, "bis:", None)
         suche = _graph_suche(abfrage)
-        felder = "id,subject,from,toRecipients,receivedDateTime,hasAttachments,bodyPreview,internetMessageId,parentFolderId"
+        felder = "id,subject,from,replyTo,toRecipients,receivedDateTime,hasAttachments,bodyPreview,internetMessageId,parentFolderId"
         nur_eingang = bool(self.konto.get("nur_posteingang"))
         ausgelassen = set() if nur_eingang else self._ausgelassene_ordner()
         if suche:
