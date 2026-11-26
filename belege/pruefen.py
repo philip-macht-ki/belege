@@ -58,7 +58,7 @@ def _imap(k):
     (server, port), _ = _server(str(k.get("adresse", "")).rpartition("@")[2].lower(), k)
     p = imaplib.IMAP4_SSL(server, port, timeout=15)
     try:
-        p.login(k.get("adresse", ""), pw)
+        p.login(str(k.get("benutzer", "") or "").strip() or k.get("adresse", ""), pw)
     finally:
         try:
             p.logout()
@@ -342,10 +342,12 @@ def befehl(args) -> int:
                         f"belege anmelden --konto {name} --rechte beides ausführen.",
                     )
             elif weg == "microsoft":
-                from .microsoft import token
+                from .microsoft import MicrosoftPostfach, nur_lesen, token
 
+                zugang = False
                 try:
                     token(k)
+                    zugang = True
                     z("GRUEN", f"Postfach {name}: Microsoft-Zugang erneuert")
                 except Exception as e:
                     z(
@@ -353,9 +355,27 @@ def befehl(args) -> int:
                         f"Postfach {name}: Microsoft-Zugang fehlt oder abgelaufen",
                         f"belege anmelden --microsoft {name} ausführen ({e}).",
                     )
-                if str(k.get("nach_ablage", "aus")).lower() != "aus":
+                if zugang:
+                    # Ein gültiger Zugang heißt noch nicht, dass belege wirklich liest.
+                    try:
+                        befund = MicrosoftPostfach(k).kurzbefund()
+                        angemeldet = befund["adresse"] or "unbekannt"
+                        if befund["neueste_mit_anhang"]:
+                            z("GRUEN", f"Postfach {name}: liest als {angemeldet}, neueste Mail mit Anhang vom {befund['neueste_mit_anhang']}")
+                        else:
+                            z("GELB", f"Postfach {name}: liest als {angemeldet}, aber keine Mail mit Anhang in 90 Tagen",
+                              "Prüfen, ob das das richtige Postfach ist (uv run belege suchen rechnung).")
+                        adresse = str(k.get("adresse", "")).lower()
+                        if befund["adresse"] and adresse and befund["adresse"].lower() != adresse:
+                            z("GELB", f"Postfach {name}: angemeldet als {befund['adresse']}, eingetragen ist {adresse}",
+                              f"Mit der richtigen Adresse neu anmelden: belege anmelden --microsoft {name}")
+                    except Exception as e:
+                        z("GELB", f"Postfach {name}: Microsoft antwortet, Lesen klappt aber nicht",
+                          f"belege anmelden --microsoft {name} ausführen ({str(e)[:160]}).")
+                schreibt = str(k.get("nach_ablage", "aus")).lower() != "aus" or bool(k.get("aufraeumen"))
+                if nur_lesen(k) and schreibt:
                     z("GELB", "Markieren bei Microsoft braucht neue Anmeldung mit Schreibrecht",
-                      f"belege anmelden --microsoft {name} ausführen, falls Mail.ReadWrite noch nicht bestätigt ist.")
+                      f'Beim Postfach microsoft_rechte = "voll" eintragen und belege anmelden --microsoft {name} ausführen.')
             else:
                 z(
                     "GELB",

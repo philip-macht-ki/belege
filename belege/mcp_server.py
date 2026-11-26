@@ -44,6 +44,15 @@ def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[d
     return treffer
 
 
+def postfach_erkennen(adresse: str) -> dict:
+    """Sagt zu einer Mailadresse, wo das Postfach liegt und welcher Weg passt."""
+    from .erkennen import erkennen, naechster_schritt
+
+    ergebnis = erkennen(adresse)
+    ergebnis["naechster_schritt"] = naechster_schritt(ergebnis)
+    return ergebnis
+
+
 def lesen(ident: str, konto: str | None = None) -> dict:
     """Liest eine Mail und kürzt ihren Text auf 8.000 Zeichen für sichere
     Ergebnisse."""
@@ -251,6 +260,12 @@ def befehl(args) -> int:
             "Sucht Mails. Weg A: Wörter sowie von:, betreff:, seit:JJJJ-MM-TT. "
             "Weg B: Gmail-Syntax, etwa from:mara@studio-beispiel.example "
             "has:attachment.",
+        ),
+        (
+            postfach_erkennen,
+            "Sagt zu einer Mailadresse, wo das Postfach liegt (Microsoft 365, Outlook.com, "
+            "Hoster) und welcher Weg passt. Vor jeder Postfach-Einrichtung zuerst aufrufen; "
+            "„Outlook“ ist oft nur das Programm. Parameter: adresse.",
         ),
         (
             lesen,

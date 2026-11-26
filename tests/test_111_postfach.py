@@ -149,9 +149,15 @@ def test_pruefen_warnt_bei_microsoft_nur_mit_aktiver_mailpflege(repo, monkeypatc
     toml = repo / "konfig" / "belege.toml"
     toml.write_text(toml.read_text(encoding="utf-8").replace('weg = "ordner"', 'weg = "microsoft"'), encoding="utf-8")
     monkeypatch.setattr("belege.microsoft.token", lambda konto: "zugang")
+    monkeypatch.setattr("belege.microsoft.MicrosoftPostfach.kurzbefund", lambda self: {"adresse": "", "neueste_mit_anhang": "2026-11-20"})
     pruefen.befehl(None)
     assert "Markieren bei Microsoft braucht neue Anmeldung" not in capsys.readouterr().out
     toml.write_text(toml.read_text(encoding="utf-8").replace("waechter = true", 'waechter = true\nnach_ablage = "markieren"'), encoding="utf-8")
+    pruefen.befehl(None)
+    ausgabe = capsys.readouterr().out
+    assert "Markieren bei Microsoft braucht neue Anmeldung" not in ausgabe
+    assert "neueste Mail mit Anhang vom 2026-11-20" in ausgabe
+    toml.write_text(toml.read_text(encoding="utf-8").replace('nach_ablage = "markieren"', 'nach_ablage = "markieren"\nmicrosoft_rechte = "lesen"'), encoding="utf-8")
     pruefen.befehl(None)
     assert "GELB: Markieren bei Microsoft braucht neue Anmeldung" in capsys.readouterr().out
 

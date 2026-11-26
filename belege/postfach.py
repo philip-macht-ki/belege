@@ -311,6 +311,8 @@ class Postfach:
         self.konto = konto
         self.name = konto["name"]
         self.adresse = konto.get("adresse", "")
+        # Manche Hoster (Kabelplus, Mittwald, 1blu) melden mit einer Postfachnummer an.
+        self.benutzer = str(konto.get("benutzer", "") or "").strip() or self.adresse
         self.weg = konto.get("weg", "a")
 
     def mit_label(self, label: str) -> list[dict]:
@@ -524,7 +526,7 @@ class ImapPostfach(Postfach):
     def _imap(self):
         try:
             verbindung = imaplib.IMAP4_SSL(self.imap_host, self.imap_port, timeout=ZEITLIMIT)
-            verbindung.login(self.adresse, self.passwort)
+            verbindung.login(self.benutzer, self.passwort)
             return verbindung
         except Exception as fehler:
             raise RuntimeError(f"{ANMELDE_HINWEIS} ({fehler})") from fehler
@@ -1030,12 +1032,12 @@ class ImapPostfach(Postfach):
         nachricht = _nachricht(an, betreff, text, anhaenge, self.adresse)
         if self.smtp_port == 465:
             with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=ZEITLIMIT) as server:
-                server.login(self.adresse, self.passwort)
+                server.login(self.benutzer, self.passwort)
                 server.send_message(nachricht)
         else:
             with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=ZEITLIMIT) as server:
                 server.starttls()
-                server.login(self.adresse, self.passwort)
+                server.login(self.benutzer, self.passwort)
                 server.send_message(nachricht)
         return nachricht["Message-ID"] or betreff
 
@@ -1278,6 +1280,14 @@ HOSTER_NACH_MX = (
     ("mailbox.org", "imap.mailbox.org:993", "smtp.mailbox.org:465"),
     ("posteo.de", "posteo.de:993", "posteo.de:465"),
     ("icloud.com", "imap.mail.me.com:993", "smtp.mail.me.com:587"),
+    # Stand 26.11.2026 aus den Hilfeseiten der Anbieter. Kabelplus nennt offiziell
+    # nur 143/25; 993 und 465 antworten aber verschlüsselt (gemessen).
+    ("kabsi.at", "imap.kabelplus.at:993", "mail.kabelplus.at:465"),
+    ("a1.net", "securemail.a1.net:993", "securemail.a1.net:587"),
+    ("mymagenta.at", "mail.mymagenta.at:993", "mail.mymagenta.at:465"),
+    ("ispgateway.de", "sslin.df.eu:993", "sslout.df.eu:465"),
+    ("agenturserver.de", "mail.agenturserver.de:993", "mail.agenturserver.de:465"),
+    ("1blu.de", "imap.1blu.de:993", "smtp.1blu.de:465"),
 )
 
 

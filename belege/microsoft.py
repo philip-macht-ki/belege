@@ -36,7 +36,8 @@ from .postfach import (
 
 # Öffentliche Kennung der gemeinsamen App „belege“ in Microsoft Entra
 # (Deern & Jung, Multi-Tenant, öffentlicher Client, Redirect http://localhost,
-# Graph delegiert Mail.ReadWrite, Mail.Send, User.Read, ohne Device-Code).
+# Graph delegiert Mail.ReadWrite, Mail.Send, User.Read, ohne Device-Code;
+# Mail.Read für microsoft_rechte = "lesen" fragt MSAL dynamisch an).
 # Kein Geheimnis: Sie steht in jedem Anmeldelink. Wer lieber seine eigene App
 # nutzt, trägt client_id und tenant_id beim Postfach ein (einrichten.md).
 CLIENT_ID = "a11ea9e7-fd6a-4a41-a5bc-4192d5e3ecb2"
@@ -44,6 +45,81 @@ ANMELDUNG = "https://login.microsoftonline.com/"
 GRAPH = "https://graph.microsoft.com/v1.0"
 # Lesen samt Anhängen und Entwürfe brauchen Mail.ReadWrite, der Tagesbericht Mail.Send.
 RECHTE = ["Mail.ReadWrite", "Mail.Send", "User.Read"]
+# `microsoft_rechte = "lesen"` beim Postfach: nur lesen, kleinere Zustimmung.
+# Ohne Eintrag bleibt es bei allen Rechten, damit bestehende Zugänge gültig bleiben
+# (eine Zustimmung zu Mail.ReadWrite deckt Mail.Read nicht ab).
+NUR_LESEN = ["Mail.Read", "User.Read"]
+PRIVATE_DOMAINS = ("outlook.", "hotmail.", "live.", "msn.")
+
+NUR_LESEN_TEXT = (
+    "Dieses Microsoft-Postfach ist nur zum Lesen verbunden. Für Entwürfe, Verschieben "
+    'und Senden beim Postfach microsoft_rechte = "voll" eintragen und einmal neu anmelden: '
+    "uv run belege anmelden --microsoft {name}"
+)
+
+
+def nur_lesen(konto: dict | None) -> bool:
+    return str((konto or {}).get("microsoft_rechte", "")).strip().lower() == "lesen"
+
+
+def rechte(konto: dict | None) -> list[str]:
+    """Die Graph-Rechte, die dieses Postfach anfragt."""
+    return list(NUR_LESEN if nur_lesen(konto) else RECHTE)
+
+
+def _privat(adresse: str) -> bool:
+    domain = adresse.rsplit("@", 1)[-1].lower()
+    return domain == "outlook.com" or domain.startswith(PRIVATE_DOMAINS)
+
+
+def admin_link(konto: dict) -> str:
+    """Link, mit dem ein Admin der Firma einmal für alle zustimmt.
+
+    Verzeichnis: tenant_id der eigenen App, sonst die Firmendomain der Adresse,
+    sonst `organizations` (der Admin meldet sich dann in seinem Verzeichnis an).
+    """
+    from urllib.parse import urlencode
+
+    adresse = str(konto.get("adresse", "")).strip().lower()
+    verzeichnis = str(konto.get("tenant_id", "")).strip()
+    if not verzeichnis and "@" in adresse and not _privat(adresse):
+        verzeichnis = adresse.rsplit("@", 1)[-1]
+    verzeichnis = verzeichnis or "organizations"
+    abfrage = urlencode(
+        {
+            "client_id": client_id(konto),
+            "scope": " ".join(f"https://graph.microsoft.com/{r}" for r in rechte(konto)),
+            "redirect_uri": "http://localhost",
+        }
+    )
+    return f"{ANMELDUNG}{verzeichnis}/v2.0/adminconsent?{abfrage}"
+
+
+def admin_hilfe(konto: dict) -> int:
+    """Gibt den Zustimmungslink und einen kurzen Text für den Admin aus. Sendet nichts."""
+    adresse = str(konto.get("adresse", ""))
+    if _privat(adresse):
+        print(
+            "Das ist ein privates Microsoft-Konto. Dort gibt es keinen Admin, du stimmst "
+            f"beim Anmelden selbst zu: uv run belege anmelden --microsoft {konto['name']}"
+        )
+        return 0
+    link = admin_link(konto)
+    print("Link für den Admin deiner Firma (einmal öffnen, anmelden, „Akzeptieren“):")
+    print(link)
+    print()
+    print("Text zum Weiterschicken:")
+    print(
+        "Hallo, ich möchte meine Rechnungen automatisch aus meinem Postfach "
+        f"{adresse or ''} ablegen lassen (Programm „belege“, läuft nur auf meinem Rechner). "
+        "Dafür braucht es einmal deine Zustimmung als Admin: Bitte öffne diesen Link, "
+        "melde dich mit deinem Admin-Konto an und klicke auf „Akzeptieren“. Danach zeigt "
+        "der Browser eine leere Seite oder „Verbindung fehlgeschlagen“, das ist normal.\n"
+        + link
+    )
+    print()
+    print(f"Danach: uv run belege anmelden --microsoft {konto['name']}")
+    return 0
 
 OHNE_CLIENT = (
     "Für dieses Microsoft-Postfach ist keine App-Kennung eingetragen. Leg deine eigene "
@@ -104,7 +180,7 @@ def token(konto: dict) -> str:
     konten = app.get_accounts()
     adresse = str(konto.get("adresse", "")).lower()
     passend = [k for k in konten if str(k.get("username", "")).lower() == adresse] or konten
-    ergebnis = app.acquire_token_silent(RECHTE, account=passend[0]) if passend else None
+    ergebnis = app.acquire_token_silent(rechte(konto), account=passend[0]) if passend else None
     _cache_sichern(konto["name"], cache)
     if not ergebnis or "access_token" not in ergebnis:
         raise RuntimeError(
@@ -134,13 +210,13 @@ def anmelden(konto: dict) -> int:
         flush=True,
     )
     ergebnis = app.acquire_token_interactive(
-        RECHTE,
+        rechte(konto),
         login_hint=konto.get("adresse") or None,
         prompt="select_account",
         timeout=600,
     )
     if "access_token" not in ergebnis:
-        print(f"fehler: Anmeldung nicht abgeschlossen. {_fehlertext(ergebnis)}")
+        print(f"fehler: Anmeldung nicht abgeschlossen. {_fehlertext(ergebnis, konto)}")
         return 1
     _cache_sichern(konto["name"], cache)
     adresse = (ergebnis.get("id_token_claims") or {}).get("preferred_username", "")
@@ -150,14 +226,16 @@ def anmelden(konto: dict) -> int:
     return 0
 
 
-def _fehlertext(ergebnis: dict) -> str:
+def _fehlertext(ergebnis: dict, konto: dict | None = None) -> str:
     """Übersetzt die häufigsten Entra-Fehler in einen nächsten Schritt."""
     text = str(ergebnis.get("error_description", ""))
     if "AADSTS90094" in text or "AADSTS65001" in text or "admin" in text.lower():
+        name = (konto or {}).get("name", "<konto>")
         return (
             "Deine Firma erlaubt diese Zustimmung nur einem Admin. Ein Admin meldet sich "
             "einmal selbst an und setzt den Haken „Im Namen Ihrer Organisation zustimmen“, "
-            "danach klappt es für alle."
+            "danach klappt es für alle. Einen fertigen Link mit Text für den Admin gibt "
+            f"uv run belege anmelden --microsoft {name} --admin-link"
         )
     if "AADSTS50194" in text:
         return "Die eigene App gilt nur für deine Firma. Trag beim Postfach tenant_id (Verzeichnis-ID) ein."
@@ -419,8 +497,25 @@ class MicrosoftPostfach(Postfach):
                 rest -= len(daten)
         return ergebnis
 
+    def _schreiben_erlaubt(self) -> None:
+        if nur_lesen(getattr(self, "konto", None)):
+            raise RuntimeError(NUR_LESEN_TEXT.format(name=self.name))
+
+    def kurzbefund(self) -> dict:
+        """Wer ist angemeldet, und wann kam die letzte Mail mit Anhang (90 Tage)?"""
+        from datetime import timedelta
+
+        ich = self._anfrage("GET", "/me", params={"$select": "mail,userPrincipalName"}).json()
+        neueste = self.suchen(max=1, seit=date.today() - timedelta(days=90), nur_anhang=True)
+        return {
+            "adresse": ich.get("mail") or ich.get("userPrincipalName") or "",
+            "neueste_mit_anhang": neueste[0]["datum"] if neueste else "",
+        }
+
     def aufraeumen(self, ident, aktion, name=""):
         """Verschiebt in Graph-Ordner oder ergänzt Kategorien ohne doppelte Werte."""
+        if nur_lesen(getattr(self, "konto", None)):
+            return "nicht geändert: " + NUR_LESEN_TEXT.format(name=self.name)
         try:
             if aktion == "archivieren":
                 neu = self._anfrage("POST", f"/me/messages/{ident}/move", json={"destinationId": "archive"}).json().get("id", "")
@@ -497,6 +592,8 @@ class MicrosoftPostfach(Postfach):
     def nach_ablage(self, ident: str, art: str, ordner: str) -> str:
         """Verschiebt nur mit Graph-Schreibrecht; Graph kennt keine Keywords."""
         # Ein Ordner ist bei Graph das sichtbare Gegenstück zum erledigt-Label.
+        if nur_lesen(getattr(self, "konto", None)):
+            return "nicht markiert: nur zum Lesen verbunden"
         if ziel_gesperrt(ordner):
             return "nicht verschoben (Papierkorb/Spam ist gesperrt)"
         ziel = self._ordnerpfad(ordner)
@@ -508,6 +605,7 @@ class MicrosoftPostfach(Postfach):
 
     def entwurf(self, an, betreff, text, anhaenge, antwort_auf=None):
         """Legt einen Entwurf im Entwürfe-Ordner von Outlook an."""
+        self._schreiben_erlaubt()
         if antwort_auf and antwort_auf.get("id"):
             antwort = self._anfrage("POST", f"/me/messages/{antwort_auf['id']}/createReply", json={"comment": text})
             return antwort.json().get("id", betreff)
@@ -519,6 +617,7 @@ class MicrosoftPostfach(Postfach):
 
     def _senden(self, an, betreff, text, anhaenge):
         """Sendet über Graph; nur senden.py ruft diese Methode auf."""
+        self._schreiben_erlaubt()
         nachricht = _nachricht(an, betreff, text, anhaenge, self.adresse)
         self._anfrage(
             "POST",

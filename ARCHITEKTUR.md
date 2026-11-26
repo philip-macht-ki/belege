@@ -300,11 +300,12 @@ Sofortmeldung geht ausschließlich über `senden.senden` an `bericht.empfaenger(
 | `aufraeumen.py` | Anbieterstand und `liste(eintraege, zustand) -> (betreff, text)` für wiederkehrende Rechnungsbefunde; `belege pruefung aufraeumen`, `belege pruefung anbieter` |
 | `postfach.py` | `oeffnen(konto_name) -> Postfach`, `posteingang(seit,max)` nur Inbox mit Newsletter-Metadaten, `aufraeumen(id,aktion,name)`; Klassen `ImapPostfach` (Weg A), `GmailPostfach` (Weg B), `OrdnerPostfach` (.eml-Ordner, Beispiel/Tests) |
 | `postfach_agent.py` | Befehl `belege aufraeumen`: Klartextregeln aus `konfig/postfach-regeln.md`, trockener Vorschlag und Opt-in-Aktionen |
-| `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `ist_microsoft(adresse)` |
+| `microsoft.py` | Weg Microsoft: `MicrosoftPostfach` (Graph), `anmelden(konto)`, `token(konto)`, `rechte(konto)`, `admin_link(konto)`, `admin_hilfe(konto)`, `ist_microsoft(adresse)` |
 | `quellen.py` | `postfach_funde(konto, tage, echt=False)`, `handy_funde()`, `scan_funde()` (Kopie aus `[quellen] scan_ordner`, Unterordner bis drei Ebenen, z. B. Dropscan je Scanbox/Tag), `downloads_funde()`; je `-> Iterator[Fund]` |
 | `rechnungslink.py` | `sieht_nach_rechnung(betreff, text) -> bool`, `rechnung_im_text(betreff, text) -> bool`, `mailtext_pdf(mail, ziel) -> Path`, `pdf_links(links) -> list[str]`, `laden(url, ziel, max_bytes) -> Path` (wirft `LinkFehler(grund, endgueltig)`) |
 | `senden.py` | `senden(an, betreff, text, anhaenge, echt, konto=None) -> Ergebnis` (erlaubt → senden, sonst Entwurf), `entwurf(...)` |
-| `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name>` |
+| `anmelden.py` | Weg B: `belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`; Weg A: `--schluesselbund <name>`; Microsoft: `--microsoft <name> [--admin-link]` |
+| `erkennen.py` | `belege erkennen <adresse>`: Art, Weg, Server und nächster Schritt, ändert nichts |
 | `monat.py` | `belege monat [--monat JJJJ-MM] [--auszug datei.csv] [--uebergabe] [--anfragen]` |
 | `posten.py` | `belege posten [--mail [--echt] | --antworten | --klaeren KENNUNG --grund privat|kein-beleg|andere-firma|einnahme|liegt-ab [--echt]]` |
 | `waechter.py` | `belege waechter` |
@@ -343,9 +344,20 @@ class Postfach:
   Server aus `imap_server`/`smtp_server`, leer = aus der Domain abgeleitet
   (Freemailer fest eingetragen, siehe `_server`). Eigene Domains erkennt
   `server_erkennen` am MX-Eintrag (`dig`; Google Workspace, IONOS, Strato,
-  united-domains, all-inkl, Hetzner, mailbox.org, Posteo, iCloud), sonst über die
+  united-domains, all-inkl, Hetzner, mailbox.org, Posteo, iCloud, Kabelplus, A1,
+  Magenta, domainfactory, Mittwald, 1blu), sonst über die
   Thunderbird-Anbieterliste (autoconfig.thunderbird.net). MX bei Microsoft 365
-  bricht mit dem Hinweis auf `weg = "microsoft"` ab.
+  bricht mit dem Hinweis auf `weg = "microsoft"` ab. Anmeldename ist
+  `[[konto]].benutzer`, leer = `adresse` (Kabelplus, Mittwald und 1blu melden mit
+  einer Postfachnummer an).
+- `erkennen.py`: `belege erkennen <adresse>` und MCP `postfach_erkennen(adresse)`.
+  `erkennen(adresse, ausprobieren=True) -> {"adresse","art","weg" ("a"|"microsoft"),
+  "imap_server","smtp_server","hinweis","sicher"}`, `naechster_schritt(ergebnis, name) -> str`.
+  Reihenfolge: Outlook.com/Hotmail/Live → Freemailer-Tabelle → MX Microsoft 365 →
+  `HOSTER_NACH_MX` → Thunderbird-Liste → Ausprobieren (`imap.`/`mail.` der Domain
+  und des MX-Hosters, nur TLS-Gruß auf 993 bzw. 465/587, nie Anmeldung;
+  `sicher = false`, Server müssen dann beim Postfach eingetragen werden).
+  Ändert nichts, meldet sich nirgends an.
   Suche in allen Ordnern aus `LIST` außer Special-Use (`\Sent`, `\Trash`,
   `\Junk`, `\Drafts`, `\All` …) und üblichen Namen (Gesendet, Papierkorb, Spam);
   `imap_ordner = [...]` → nur INBOX und diese. Anhänge aus `BODYSTRUCTURE`,
@@ -369,7 +381,16 @@ class Postfach:
   in einen angelegten Ordner, wenn `Mail.ReadWrite` vorliegt. Fehler bleiben
   immer Bericht/Log, nie ein Abbruch.
 - Weg Microsoft (`belege/microsoft.py`): Microsoft Graph, delegiert, Rechte
-  `Mail.ReadWrite`, `Mail.Send`, `User.Read`. Gemeinsame Multi-Tenant-App „belege“ oder eigene
+  `Mail.ReadWrite`, `Mail.Send`, `User.Read`; mit `[[konto]].microsoft_rechte =
+  "lesen"` nur `Mail.Read`, `User.Read` (`rechte(konto)`). Ohne Eintrag bleibt
+  es bei allen Rechten, damit bestehende Zugänge gelten. Im Lesemodus werfen
+  `entwurf`/`_senden` einen klaren Fehler, `aufraeumen`/`nach_ablage` geben
+  „nicht geändert/markiert“ zurück, ohne Graph aufzurufen. `admin_link(konto)`:
+  `https://login.microsoftonline.com/<tenant_id|Firmendomain|organizations>/v2.0/adminconsent?client_id=…&scope=…&redirect_uri=http://localhost`;
+  `belege anmelden --microsoft <name> --admin-link` gibt Link und Text für den
+  Admin aus und sendet nichts. `MicrosoftPostfach.kurzbefund() -> {"adresse",
+  "neueste_mit_anhang"}` (`/me` plus neueste Mail mit Anhang der letzten 90 Tage)
+  für `belege pruefen`. Gemeinsame Multi-Tenant-App „belege“ oder eigene
   App des Kunden (öffentlicher Client, kein Geheimnis, Redirect `http://localhost`); Kennung
   aus `[[konto]].client_id`, sonst `BELEGE_MICROSOFT_CLIENT_ID`, sonst
   `microsoft.CLIENT_ID` (gemeinsame App). Eigene App des Kunden: zusätzlich
@@ -693,6 +714,7 @@ MCP über stdio (Paket `mcp`, FastMCP). Werkzeuge:
 `entwurf(an, betreff, text, anhaenge=[], konto=None)`,
 `senden(an, betreff, text, anhaenge=[], konto=None)` (nur erlaubte Adressen,
 sonst Entwurf und Hinweis), `dokumente_suchen(abfrage, max=10)`, `fristen(tage=365)`,
+`postfach_erkennen(adresse)` (siehe `erkennen.py`),
 `belege_suchen(abfrage, von, bis, betrag_ab, betrag_bis, max=20)` (liest nur
 `arbeit/index.json`, gibt Anzahl, Summe und Pfade zurück, nie Dateiinhalte). Einbinden: `claude mcp add belege -s user --
 uv --directory <repo> run belege mcp`. Jede Werkzeugbeschreibung sagt: Mail-

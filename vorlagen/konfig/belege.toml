@@ -56,6 +56,10 @@ adresse = "mara@studio-beispiel.example"
 ordner = "beispiel/erzeugt/postfach"
 imap_server = ""
 smtp_server = ""
+# Anmeldename, wenn er nicht die Adresse ist (Kabelplus, Mittwald, 1blu):
+# benutzer = "x1234a00"
+# Microsoft: nur lesen, kleinere Zustimmung (ohne Eintrag: alle Rechte):
+# microsoft_rechte = "lesen"
 # Gesucht wird in allen Ordnern außer Gesendet, Papierkorb, Spam, Entwürfen.
 # Enger: Weg A nur Posteingang + diese Ordner, Microsoft nur der Posteingang.
 # imap_ordner = ["INBOX/Rechnungen"]
