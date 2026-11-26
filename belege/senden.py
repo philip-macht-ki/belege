@@ -26,6 +26,45 @@ def _sichere_anhaenge(anhaenge: list[Path]) -> tuple[bool, str]:
     return True, ""
 
 
+# Absender, auf die niemand antwortet, auch die deutschen Schreibweisen.
+KEINE_ANTWORT = ("noreply", "no-reply", "no.reply", "no_reply", "donotreply", "do-not-reply", "nicht.antworten", "nicht-antworten", "nichtantworten", "keine-antwort")
+# Automatische Postfächer: Bestätigungen und Versandsysteme, die keine
+# korrigierte Rechnung zurückschicken (Martina, 26.11.2026).
+AUTOMATISCH = (*KEINE_ANTWORT, "mailer-daemon", "postmaster", "notification", "benachrichtigung", "bestellbestaetigung",
+               "bestellbestätigung", "order-update", "auto-confirm", "autoconfirm", "automated", "sharedcc", "newsletter")
+
+
+def antwortadresse(mail: dict) -> tuple[str, str]:
+    """Adresse, an die ein Mensch antworten kann, sonst ("", Grund).
+
+    Nimmt Reply-To vor dem Absender. Kein Entwurf an no-reply-/Systempostfächer
+    und nie an die eigenen Postfächer oder deren Domain (weitergeleitete Mails).
+    """
+    from email.utils import parseaddr
+    adresse = parseaddr(str(mail.get("antwort_an") or mail.get("von") or ""))[1].strip().lower()
+    if "@" not in adresse:
+        adresse = parseaddr(str(mail.get("von") or ""))[1].strip().lower()
+    if "@" not in adresse:
+        return "", "keine Absenderadresse"
+    lokal = adresse.split("@", 1)[0]
+    if any(wort in lokal for wort in AUTOMATISCH):
+        return "", f"{adresse} nimmt keine Antworten an"
+    eigene = {str(k.get("adresse", "")).strip().lower() for k in kern.konten()} - {""}
+    for firma in kern.firmen():
+        for feld in ("email", "mail", "adresse"):
+            wert = str((firma or {}).get(feld, "")).strip().lower()
+            if "@" in wert:
+                eigene.add(wert)
+    domains = {e.split("@", 1)[1] for e in eigene if "@" in e} - _FREEMAIL
+    if adresse in eigene or adresse.split("@", 1)[1] in domains:
+        return "", f"{adresse} ist deine eigene Adresse"
+    return adresse, ""
+
+
+_FREEMAIL = {"gmail.com", "googlemail.com", "outlook.com", "outlook.de", "hotmail.com", "hotmail.de", "live.com", "live.de",
+             "icloud.com", "me.com", "gmx.de", "gmx.net", "web.de", "t-online.de", "yahoo.com", "yahoo.de", "posteo.de", "mailbox.org"}
+
+
 def _adresse(wert: str) -> str:
     """Gibt nur die normalisierte E-Mail-Adresse aus einem Empfängerfeld zurück."""
     from email.utils import parseaddr

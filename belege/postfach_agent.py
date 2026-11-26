@@ -15,8 +15,7 @@ from .quellen import ausgeschlossen
 from .waechter import _eigene_mail, _mitteilung
 
 AKTIONEN = {"archivieren", "liegen lassen", "melden", "melden, sofort"}
-# Absender, auf die niemand antwortet, auch die deutschen Schreibweisen.
-KEINE_ANTWORT = ("noreply", "no-reply", "no.reply", "no_reply", "donotreply", "do-not-reply", "nicht.antworten", "nicht-antworten", "nichtantworten", "keine-antwort")
+from .senden import KEINE_ANTWORT  # noqa: E402  (gemeinsame Liste)
 ZUSTAENDE = {"beantwortet", "erledigt", "gelesen", "markiert"}
 # So beginnen Klartext-Ergebnisse der Postfachwege, wenn nichts passiert ist.
 NICHT_GESCHAFFT = ("nicht ", "Microsoft erlaubt noch kein")

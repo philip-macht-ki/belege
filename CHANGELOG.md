@@ -1,5 +1,19 @@
 # Änderungen für dich
 
+## [1.21.1] – 26.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Die Mail-Suche findet bei Microsoft 365 und Outlook wieder alles: auch Mails im Posteingang und im Archiv. Seit 1.14.0 ließ sie beide Ordner aus, und weil der Postfach-Agent Erledigtes ins Archiv legt, waren ältere Rechnungen über die Suche nicht mehr zu finden. Der tägliche Lauf liest damit auch Rechnungen im Posteingang wieder mit.
+- Die Suche liefert jetzt bis zu 100 Treffer statt höchstens 20, und `bis:JJJJ-MM-TT` grenzt den Zeitraum nach hinten ein, zum Beispiel `Miles seit:2026-01-01 bis:2026-08-31`.
+- Die Rechnungsprüfung legt keinen Entwurf „Bitte um korrigierte Rechnung“ mehr an no-reply- und Systempostfächer (etwa Bestellbestätigungen) und nie an deine eigene Adresse oder Kollegen aus deiner Firma. Sie nimmt die Antwortadresse der Mail, wenn es eine gibt. Kann belege niemanden anschreiben, steht der Befund weiter im Bericht mit „Entwurf: nein“; dann forderst du die Rechnung selbst beim Anbieter an.
+
+### Musst du etwas tun?
+
+Nein. Schon angelegte Entwürfe an solche Adressen kannst du einfach löschen.
+
 ## [1.21.0] – 26.11.2026
 
 aktion: keine

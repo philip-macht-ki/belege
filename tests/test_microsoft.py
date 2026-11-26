@@ -242,3 +242,28 @@ def test_kurzbefund_adresse_und_neueste_mail(box):
         Antwort(json={"value": [_mail("m1")]}),
     ])
     assert box.kurzbefund() == {"adresse": "info@firma.example", "neueste_mit_anhang": "2026-10-26"}
+
+
+def test_suche_schliesst_posteingang_und_archiv_ein(box):
+    """Der Postfach-Agent archiviert Erledigtes; alte Rechnungen liegen im Archiv (Martina, 26.11.2026)."""
+    archiv = dict(_mail("archiv", eingang="2026-03-02T10:00:00Z"), parentFolderId="ARCHIVE")
+    eingang = dict(_mail("eingang"), parentFolderId="INBOX")
+    box.sitzung = Sitzung([
+        _ordner_antwort("sentitems", "deleteditems", "junkemail", "drafts"),
+        Antwort(json={"value": [eingang, archiv]}),
+    ])
+    assert [t["id"] for t in box.suchen("Miles seit:2026-01-01")] == ["eingang", "archiv"]
+    angefragt = [a["url"] for a in box.sitzung.aufrufe[0][2]["json"]["requests"]]
+    assert not any(u.endswith(("/inbox?$select=id", "/archive?$select=id")) for u in angefragt)
+
+
+def test_suchen_mit_bis_filtert_beide_seiten(box):
+    box.sitzung = Sitzung([_ordner_antwort(), Antwort(json={"value": [
+        _mail("zu-neu", eingang="2026-10-01T10:00:00Z"), _mail("passt", eingang="2026-05-31T10:00:00Z"),
+        _mail("zu-alt", eingang="2025-12-31T10:00:00Z")]})])
+    treffer = box.suchen("Miles seit:2026-01-01 bis:2026-05-31")
+    assert [t["id"] for t in treffer] == ["passt"]
+    assert box.sitzung.aufrufe[1][2]["params"]["$search"] == '"Miles"'
+    box.sitzung = Sitzung([Antwort(json={"value": []})])
+    box.suchen("bis:2026-05-31")
+    assert box.sitzung.aufrufe[0][2]["params"]["$filter"] == "receivedDateTime lt 2026-06-01T00:00:00Z"
