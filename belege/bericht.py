@@ -13,7 +13,7 @@ from .kern import echt, ereignisse, jetzt, konfig, konten, lesen, pfad, schreibe
 from .plattform import ist_windows
 
 ARTEN = ("abgelegt", "unsortiert", "zweifel", "doppelt", "waechter", "waechter_sofort",
-         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen", "aussortiert", "langsam")
+         "gesendet", "entwurf", "monat", "jahr", "update", "fehler", "vertraulich", "offline", "dokument", "aufraeumen", "aussortiert", "langsam", "verzeichnis")
 
 
 def _gesehen() -> dict:
@@ -146,6 +146,10 @@ def text_und_betreff(liste: list[dict]) -> tuple[str, str]:
         zeilen = ["- " + e.get("text", "") for e in gruppen["aussortiert"]]
         absaetze.append("Aussortiert nach Unsortiert/Zu löschen, sieh kurz drüber und leere den Ordner, wenn es passt\n"
                         + "\n".join(zeilen))
+
+    if gruppen["verzeichnis"]:
+        zeilen = ["- " + str(z) for e in gruppen["verzeichnis"] for z in (e.get("daten", {}).get("eintraege") or [e.get("text", "")])]
+        absaetze.append("Belegverzeichnis nachgezogen (Dateien fehlten, Duplikate waren da, keine Datei gelöscht)\n" + "\n".join(zeilen))
 
     waechter = gruppen["waechter_sofort"] + gruppen["waechter"]
     if waechter:

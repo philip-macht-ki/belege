@@ -1,5 +1,18 @@
 # Änderungen für dich
 
+## [1.20.1] – 26.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- Belegverzeichnis räumt sich selbst auf: Hast du nach dem Hinweis „Möglicherweise doppelt“ eine der beiden Dateien gelöscht, einen Beleg umbenannt oder deinen Firmenordner umbenannt, stand der alte Eintrag bisher weiter in `arbeit/index.json` und zählte in Monat, Jahr und Suche mit. Jetzt zieht der Tageslauf das nach: Liegt dieselbe Datei unter neuem Namen, zeigt der Eintrag auf sie. Gibt es den Beleg schon unter einem anderen Eintrag mit Datei, fliegt der verwaiste Eintrag raus. Fehlt eine Datei ohne Doppel, bleibt alles stehen und du liest es einmal im Tagesbericht. Dateien fasst belege dabei nie an; entfernte Einträge stehen zur Sicherheit in `arbeit/verzeichnis_entfernt.jsonl`.
+- Sofort statt erst am Abend: `uv run belege verzeichnis` zeigt, was passieren würde, mit `--echt` wird es gemacht.
+
+### Musst du etwas tun?
+
+Nein.
+
 ## [1.20.0] – 20.11.2026
 
 aktion: keine

@@ -166,6 +166,9 @@ def _schritt(name: str, args) -> tuple[str, list[Ergebnis]]:
         if name == "nachsortieren":
             ergebnisse = importlib.import_module("belege.nachsortieren").lauf(echt(args))
             return _zusammenfassung(ergebnisse), ergebnisse
+        if name == "verzeichnis":
+            ergebnisse = importlib.import_module("belege.verzeichnis").lauf(echt(args))
+            return _zusammenfassung(ergebnisse), ergebnisse
         if name == "bericht":
             code = importlib.import_module("belege.bericht").befehl(_weiterreichen(args))
             return ("ok" if not code else f"Exit {code}"), []
@@ -491,7 +494,7 @@ def _nachholen(args) -> None:
             return 1
         return posten_modul.befehl(Namespace(echt=True, mail=True, antworten=False))
 
-    laeufe = (("tag", _faelliger_tag, _tag_termin, lambda: _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")),
+    laeufe = (("tag", _faelliger_tag, _tag_termin, lambda: _lauf(args, ("downloads", "nachsortieren", "verzeichnis", "bericht"), "tag")),
               ("monat", _faelliger_monat, _monat_termin, lambda: begrenzt("monat", lambda: importlib.import_module("belege.monat").befehl(Namespace(echt=True, monat=None, uebergabe=True, anfragen=False, auszug=None, ziel=[], nachholen=True)))),
               ("posten", _faellige_posten, _posten_termin, lambda: begrenzt("posten", posten_lauf)))
     for name, faellig, termin, ausfuehren in laeufe:
@@ -539,14 +542,14 @@ def befehl(args) -> int:
 
 
 def befehl_tag(args) -> int:
-    """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, dann Tagesbericht."""
+    """`belege tag`: Downloads-Ordner, Unsortiert nachsortieren, Belegverzeichnis pflegen, dann Tagesbericht."""
     termin = _tag_termin()
     if echt(args) and jetzt() >= termin:
         # Auch ein Kalenderlauf mit fehlerhaftem Schritt ist ein Versuch.  Der
         # Takt darf daraus keine Viertelstunden-Serie machen.  Hand- und
         # Kalenderläufe selbst werden dadurch nie übersprungen.
         _termin_merken("tag", termin)
-    ok = _lauf(args, ("downloads", "nachsortieren", "bericht"), "tag")
+    ok = _lauf(args, ("downloads", "nachsortieren", "verzeichnis", "bericht"), "tag")
     if ok and echt(args):
         # Ein Handlauf vor dem Termin erledigt keinen zukünftigen Kalenderlauf.
         if jetzt() >= termin:

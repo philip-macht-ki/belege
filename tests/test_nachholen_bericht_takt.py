@@ -98,7 +98,7 @@ def test_4_takt_holt_den_verpassten_tageslauf_nur_einmal(repo, monkeypatch):
     zeit[0] = datetime(2026, 11, 4, 10, 45, tzinfo=kern.zone())
     takt._nachholen(_args())
 
-    assert aufrufe == [("downloads", "nachsortieren", "bericht")]
+    assert aufrufe == [("downloads", "nachsortieren", "verzeichnis", "bericht")]
 
 
 def test_4b_tageslauf_nach_nachholen_vor_kalendertermin_sendet_nur_einmal(repo, monkeypatch):
