@@ -156,3 +156,43 @@ def test_tageslauf_pflegt_verzeichnis_vor_dem_bericht():
 
     quelle = inspect.getsource(takt.befehl_tag)
     assert '("downloads", "nachsortieren", "verzeichnis", "bericht")' in quelle
+
+
+def test_pfade_ausserhalb_der_ablage_bleiben_unangetastet(repo, monkeypatch, tmp_path):
+    """Absolute oder mit .. aus der Ablage führende Pfade zählen weder als fehlend noch als Duplikat."""
+    tag = date(2026, 10, 1)
+    innen = _ablegen(repo, monkeypatch, "a.pdf", b"%PDF a", _einordnung(tag))
+    index = _index(repo)
+    fremd = tmp_path / "anderswo.pdf"
+    fremd.write_bytes(b"x")
+    vorlage = next(iter(index.values()))
+    index["absolut"] = {**vorlage, "pfad": str(fremd)}
+    index["hinaus"] = {**vorlage, "pfad": "../weg/b.pdf"}
+    (repo / "arbeit" / "index.json").write_text(json.dumps(index), encoding="utf-8")
+    (repo / "ablage" / innen).unlink()
+    verzeichnis.lauf(True)
+    nachher = _index(repo)
+    assert {"absolut", "hinaus"} <= set(nachher)
+    assert innen in [e["pfad"] for e in nachher.values()]  # Duplikat nur außerhalb: bleibt
+
+
+def test_vertraulich_nennt_keinen_pfad(repo, monkeypatch):
+    tag = date(2026, 10, 1)
+    erster = _ablegen(repo, monkeypatch, "a.pdf", b"%PDF a", _einordnung(tag))
+    _ablegen(repo, monkeypatch, "b.pdf", b"%PDF b", _einordnung(tag))
+    index = _index(repo)
+    for e in index.values():
+        e["vertraulich"] = True
+    (repo / "arbeit" / "index.json").write_text(json.dumps(index), encoding="utf-8")
+    (repo / "ablage" / erster).unlink()
+    ergebnisse = verzeichnis.lauf(True)
+    eigene = [e for e in kern.ereignisse() if e["art"] == "verzeichnis" or e.get("daten", {}).get("grund") == "verzeichnis"]
+    assert eigene
+    texte = " ".join(e.meldung for e in ergebnisse) + json.dumps(eigene, ensure_ascii=False)
+    assert "MILES" not in texte and "vertraulicher Beleg" in texte
+
+
+def test_laeuft_unter_der_gesamtsperre():
+    from belege import cli
+
+    assert "verzeichnis" in cli.SCHREIBEND and "tag" in cli.SCHREIBEND and "takt" in cli.SCHREIBEND

@@ -39,8 +39,16 @@ ZUSATZ = re.compile(r"^(?P<stamm>.+?)(?:_(?P<nummer>\d+))?$")
 
 
 def _datei(eintrag: dict) -> Path | None:
+    """Datei eines Eintrags, nur wenn der Pfad relativ ist und in der Ablage bleibt."""
     pfad = str(eintrag.get("pfad") or "")
-    return ablage_ordner() / pfad if pfad else None
+    if not pfad or Path(pfad).is_absolute() or ".." in Path(pfad).parts:
+        return None
+    return ablage_ordner() / pfad
+
+
+def _pruefbar(eintrag: dict) -> bool:
+    """Absolute oder aus der Ablage führende Pfade bleiben unangetastet und zählen nie als Duplikat."""
+    return _datei(eintrag) is not None
 
 
 def _vorhanden(eintrag: dict) -> bool:
@@ -118,7 +126,7 @@ def pruefen(index: dict) -> dict:
             fingerabdruecke[relativ] = _sha(ablage_ordner() / relativ)
         return fingerabdruecke[relativ]
 
-    fehlend = [k for k, e in index.items() if e.get("pfad") and not _vorhanden(e)]
+    fehlend = [k for k, e in index.items() if _pruefbar(e) and not _vorhanden(e)]
     umbiegen: dict[str, str] = {}
     for schluessel in fehlend:
         for kandidat in _kandidaten(str(index[schluessel]["pfad"])):
@@ -136,7 +144,7 @@ def pruefen(index: dict) -> dict:
     # Zwei Einträge auf derselben Datei: der, dessen Fingerabdruck nicht passt, ist verwaist.
     belegt: dict[str, list[str]] = {}
     for k, e in index.items():
-        if k in verwaist or not e.get("pfad"):
+        if k in verwaist or not _pruefbar(e):
             continue
         belegt.setdefault(pfad_von(k), []).append(k)
     for relativ, schluessel in belegt.items():
@@ -149,7 +157,8 @@ def pruefen(index: dict) -> dict:
         if inhalt in schluessel:
             verwaist += [k for k in schluessel if k != inhalt]
 
-    echte = {k for k in index if k not in verwaist and index[k].get("pfad")}
+    echte = {k for k in index if k not in verwaist and _pruefbar(index[k])
+             and (k in umbiegen or _vorhanden(index[k]))}
     entfernen: dict[str, str] = {}
     melden: list[str] = []
     for schluessel in verwaist:
@@ -209,7 +218,7 @@ def lauf(echt: bool) -> list[Ergebnis]:
         for k, neu in plan["umbiegen"].items():
             print(f"würde umbiegen: {_beschreiben(index[k])} → {neu}")
         for k, anderer in plan["entfernen"].items():
-            print(f"würde entfernen (Duplikat von {index[anderer]['pfad']}): {_beschreiben(index[k])}")
+            print(f"würde entfernen (Duplikat von {_beschreiben(index[anderer])}): {_beschreiben(index[k])}")
         for k in plan["melden"]:
             print(f"fehlt, kein Duplikat, bleibt stehen: {_beschreiben(index[k])}")
         if not (plan["umbiegen"] or plan["entfernen"] or plan["melden"]):
@@ -217,11 +226,10 @@ def lauf(echt: bool) -> list[Ergebnis]:
         return [Ergebnis("nichts", "trocken", plan)]
 
     if plan["umbiegen"] or plan["entfernen"]:
-        # Frisch lesen und nur diese Schlüssel ändern: ein Takt kann inzwischen abgelegt haben.
-        index = _index()
+        # Plan und Schreiben auf demselben Stand: `belege tag` und `belege verzeichnis`
+        # laufen wie der Takt unter der Gesamtsperre (cli.py, SCHREIBEND), also schreibt
+        # niemand dazwischen in den Index.
         for k, neu in plan["umbiegen"].items():
-            if k not in index:
-                continue
             alt = str(index[k]["pfad"])
             index[k]["pfad"] = neu
             for feld, endung in (("xml", ".xml"), ("befund", ".befund.txt")):
@@ -234,11 +242,9 @@ def lauf(echt: bool) -> list[Ergebnis]:
                 index[k].pop("moegliche_dublette")
             ergebnisse.append(Ergebnis("ok", f"{_beschreiben(index[k])} liegt jetzt unter {neu}."))
         for k, anderer in plan["entfernen"].items():
-            if k not in index or anderer not in index:
-                continue
             eintrag = index.pop(k)
             _sichern(k, eintrag, anderer, "Datei fehlt, Duplikat vorhanden")
-            ergebnisse.append(Ergebnis("ok", f"{_beschreiben(eintrag)} fehlte und ist doppelt zu {index[anderer]['pfad']}."))
+            ergebnisse.append(Ergebnis("ok", f"{_beschreiben(eintrag)} fehlte und ist doppelt zu {_beschreiben(index[anderer])}."))
         verbliebene = {str(e.get("pfad")) for e in index.values()}
         for e in index.values():
             if e.get("moegliche_dublette") and str(e["moegliche_dublette"]) not in verbliebene:
