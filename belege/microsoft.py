@@ -13,7 +13,7 @@ import base64
 import email
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 from email import policy
 from email.message import EmailMessage
 from pathlib import Path
@@ -255,8 +255,13 @@ def _fehlertext(ergebnis: dict, konto: dict | None = None) -> str:
     return text or str(ergebnis.get("error", "unbekannter Fehler"))
 
 
-# Well-known names in Microsoft Graph; dort liegen keine eingehenden Rechnungen.
+# Well-known names in Microsoft Graph: Systemordner, die der Postfach-Agent nicht
+# als eigene Ordner anbietet (ordnung, zuordnung).
 AUSGELASSENE_ORDNER = ("inbox", "sentitems", "drafts", "deleteditems", "junkemail", "outbox", "archive", "conversationhistory", "scheduled", "searchfolders", "syncissues", "recoverableitemsdeletions", "clutter")
+# Davon lässt die Suche nur diese aus; dort liegen keine eingehenden Rechnungen.
+# Posteingang und Archiv gehören in die Suche: der Postfach-Agent archiviert
+# Erledigtes, und ältere Rechnungen liegen deshalb oft im Archiv.
+SUCHE_OHNE_ORDNER = ("sentitems", "drafts", "deleteditems", "junkemail", "outbox", "conversationhistory", "scheduled", "searchfolders", "syncissues", "recoverableitemsdeletions")
 
 
 def _graph_suche(abfrage: str) -> str:
@@ -267,19 +272,23 @@ def _graph_suche(abfrage: str) -> str:
             teile.append(f"from:{wort[4:]}")
         elif wort.startswith("betreff:"):
             teile.append(f"subject:{wort[8:]}")
-        elif not wort.startswith("seit:"):
+        elif not wort.startswith(("seit:", "bis:")):
             teile.append(wort)
     return " ".join(teile).replace('"', "")
 
 
-def _seit_aus(abfrage: str, seit: date | None) -> date | None:
+def _datum_aus(abfrage: str, vorsatz: str, vorgabe: date | None) -> date | None:
     for wort in abfrage.split():
-        if wort.startswith("seit:"):
+        if wort.startswith(vorsatz):
             try:
-                return date.fromisoformat(wort[5:])
+                return date.fromisoformat(wort[len(vorsatz):])
             except ValueError:
                 continue
-    return seit
+    return vorgabe
+
+
+def _seit_aus(abfrage: str, seit: date | None) -> date | None:
+    return _datum_aus(abfrage, "seit:", seit)
 
 
 class MicrosoftPostfach(Postfach):
@@ -309,7 +318,7 @@ class MicrosoftPostfach(Postfach):
         return antwort
 
     def _ausgelassene_ordner(self) -> set[str]:
-        """IDs von Gesendet, Gelöscht, Junk, Entwürfe und Postausgang, in einem Aufruf.
+        """IDs von Gesendet, Gelöscht, Junk, Entwürfe, Postausgang und Co., in einem Aufruf.
 
         Rechnungen liegen oft nicht im Posteingang: Outlook-Regeln verschieben sie
         in eigene Ordner. Gesucht wird deshalb überall außer in diesen Ordnern.
@@ -317,7 +326,7 @@ class MicrosoftPostfach(Postfach):
         if getattr(self, "_ausgelassen", None) is None:
             anfragen = [
                 {"id": name, "method": "GET", "url": f"/me/mailFolders/{name}?$select=id"}
-                for name in AUSGELASSENE_ORDNER
+                for name in SUCHE_OHNE_ORDNER
             ]
             try:
                 antwort = self._anfrage("POST", "/$batch", json={"requests": anfragen}).json()
@@ -338,6 +347,7 @@ class MicrosoftPostfach(Postfach):
         beim Postfach beschränkt die Suche auf den Posteingang.
         """
         seit = _seit_aus(abfrage, seit)
+        bis = _datum_aus(abfrage, "bis:", None)
         suche = _graph_suche(abfrage)
         felder = "id,subject,from,toRecipients,receivedDateTime,hasAttachments,bodyPreview,internetMessageId,parentFolderId"
         nur_eingang = bool(self.konto.get("nur_posteingang"))
@@ -350,12 +360,14 @@ class MicrosoftPostfach(Postfach):
             bedingungen = []
             if seit:
                 bedingungen.append(f"receivedDateTime ge {seit.isoformat()}T00:00:00Z")
+            if bis:
+                bedingungen.append(f"receivedDateTime lt {(bis + timedelta(days=1)).isoformat()}T00:00:00Z")
             if nur_anhang:
                 bedingungen.append("hasAttachments eq true")
             params = {"$select": felder, "$top": 50}
             if bedingungen:
                 params["$filter"] = " and ".join(bedingungen)
-            if seit:
+            if seit or bis:
                 params["$orderby"] = "receivedDateTime desc"
             kopf = {}
         treffer: list[dict] = []
@@ -372,6 +384,8 @@ class MicrosoftPostfach(Postfach):
                 if nur_anhang and not mail.get("hasAttachments"):
                     continue
                 if seit and eintrag["datum"] < seit.isoformat():
+                    continue
+                if bis and eintrag["datum"] > bis.isoformat():
                     continue
                 treffer.append(eintrag)
                 if len(treffer) >= max:

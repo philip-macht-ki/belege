@@ -501,6 +501,12 @@ def _passt(
                     return False
             except ValueError:
                 continue
+        elif wort.startswith("bis:"):
+            try:
+                if date.fromisoformat(kopf["datum"]) > date.fromisoformat(wort[4:]):
+                    return False
+            except ValueError:
+                continue
         elif wort.lower() not in suchraum:
             return False
     if seit and date.fromisoformat(kopf["datum"]) < seit:
@@ -1206,6 +1212,21 @@ def _imap_anhaenge(antwort) -> list[str]:
     return namen
 
 
+def _gmail_datum(abfrage: str) -> str:
+    """seit:/bis: der einfachen Suche in Gmails after:/before: übersetzen."""
+    teile = []
+    for wort in abfrage.split():
+        try:
+            if wort.startswith("seit:"):
+                wort = f"after:{date.fromisoformat(wort[5:]).strftime('%Y/%m/%d')}"
+            elif wort.startswith("bis:"):
+                wort = f"before:{(date.fromisoformat(wort[4:]) + timedelta(days=1)).strftime('%Y/%m/%d')}"
+        except ValueError:
+            pass
+        teile.append(wort)
+    return " ".join(teile)
+
+
 def _imap_kriterien(abfrage: str, seit: date | None) -> list[str]:
     """Übersetzt die einfache Weg-A-Suche in IMAP-Kriterien."""
     teile = []
@@ -1218,6 +1239,13 @@ def _imap_kriterien(abfrage: str, seit: date | None) -> list[str]:
             try:
                 teile.extend(
                     ["SINCE", date.fromisoformat(wort[5:]).strftime("%d-%b-%Y")]
+                )
+            except ValueError:
+                continue
+        elif wort.startswith("bis:"):
+            try:
+                teile.extend(
+                    ["BEFORE", (date.fromisoformat(wort[4:]) + timedelta(days=1)).strftime("%d-%b-%Y")]
                 )
             except ValueError:
                 continue
@@ -1413,7 +1441,7 @@ class GmailPostfach(Postfach):
 
     def suchen(self, abfrage="", max=20, seit=None, nur_anhang=False):
         """Durchsucht Gmail und lädt je Treffer nur Metadaten statt der Mail zweimal."""
-        query = abfrage.strip()
+        query = _gmail_datum(abfrage).strip()
         if seit:
             query = f"{query} after:{seit.isoformat()}".strip()
         if nur_anhang:

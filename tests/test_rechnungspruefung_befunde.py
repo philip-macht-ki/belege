@@ -77,3 +77,40 @@ def test_befehl_ueberspringt_unklare_firma(repo, monkeypatch, capsys):
     monkeypatch.setattr(pruefung, "pruefe", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("Prüfung")))
     assert pruefung.befehl(type("Args", (), {"ziel": [str(datei)]})()) == 0
     assert capsys.readouterr().out.strip() == "Firma unklar – wird nicht geprüft, landet in Unsortiert"
+
+
+@pytest.mark.parametrize("mail,grund", [
+    ({"von": "no-reply@mvg.de"}, "keine Antworten"),
+    ({"von": "bestellbestaetigung@amazon.de"}, "keine Antworten"),
+    ({"von": "sharedcc@qatarairways.com.qa"}, "keine Antworten"),
+    ({"von": "lieferant@example.test", "antwort_an": "no-reply.de@support.flightnetwork.com"}, "keine Antworten"),
+    ({"von": "info@firma.example"}, "eigene Adresse"),
+    ({"von": "kollegin@firma.example"}, "eigene Adresse"),
+])
+def test_keine_korrekturbitte_an_automatische_oder_eigene_adressen(repo, monkeypatch, mail, grund):
+    from belege.senden import antwortadresse
+    monkeypatch.setattr("belege.kern.konten", lambda: [{"name": "firma", "adresse": "info@firma.example"}])
+    ziel, warum = antwortadresse(mail)
+    assert ziel == "" and grund in warum
+
+
+def test_korrekturbitte_geht_an_reply_to_des_lieferanten(repo, monkeypatch):
+    from belege.senden import antwortadresse
+    monkeypatch.setattr("belege.kern.konten", lambda: [{"name": "firma", "adresse": "chefin@gmail.com"}])
+    assert antwortadresse({"von": "Lieferant <rechnung@lieferant.example>", "antwort_an": "buchhaltung@lieferant.example"}) == ("buchhaltung@lieferant.example", "")
+    # Freemail-Domain des eigenen Postfachs sperrt nicht alle anderen Gmail-Absender.
+    assert antwortadresse({"von": "handwerker@gmail.com"}) == ("handwerker@gmail.com", "")
+
+
+def test_kein_entwurf_an_no_reply_absender(repo, monkeypatch):
+    datei = repo / "noreply.pdf"
+    datei.write_bytes(b"%PDF")
+    fund = Fund(datei, "postfach", datei.name, date(2026, 10, 1), {"von": "no-reply@mvg.de"})
+    cfg = repo / "konfig" / "belege.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("an = false", "an = true"), encoding="utf-8")
+    monkeypatch.setattr("belege.einordnen.einordnen", lambda *_, **__: _einordnung())
+    monkeypatch.setattr("belege.text.auslesen", lambda *_a, **_k: Text("Rechnung", "klartext", 1))
+    monkeypatch.setattr("belege.pruefung.pruefe", lambda *_a, **_k: ["Rechnungsnummer fehlt"])
+    monkeypatch.setattr("belege.kern.firma", lambda *_a, **_k: {"name": "Studio Beispiel", "ust_id": "DE123456789"})
+    monkeypatch.setattr("belege.senden.entwurf", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("Entwurf")))
+    assert verarbeiten.verarbeite(fund, True).status == "befund"

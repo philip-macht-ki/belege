@@ -22,15 +22,22 @@ def konten() -> list[dict]:
     ]
 
 
+def _grenze(wert, hoechstens: int) -> int:
+    try:
+        return max(1, min(int(wert), hoechstens))
+    except (TypeError, ValueError):
+        return 20
+
+
 def suchen(abfrage: str = "", konto: str | None = None, max: int = 20) -> list[dict]:
-    """Durchsucht ein Postfach mit höchstens 20 Treffern und kurzen Auszügen."""
+    """Durchsucht ein Postfach mit höchstens 100 Treffern und kurzen Auszügen."""
     from .postfach import oeffnen
     from .vertraulich import pruefen
 
     index = kern.lesen(kern.pfad("arbeit", "index.json"), {}) or {}
     schon_vertraulich = {str((e.get("mail") or {}).get("id")) for e in index.values() if e.get("vertraulich")}
     treffer = []
-    for kopf in oeffnen(konto).suchen(abfrage, max=min(max, 20)):
+    for kopf in oeffnen(konto).suchen(abfrage, max=_grenze(max, 100)):
         # Vertrauliche Mails: nur Absender, Datum und ID, damit der Mensch sie findet
         # (ARCHITEKTUR.md, Grenze). lesen() auf ausdrücklichen Wunsch bleibt möglich.
         # Geprüft werden Auszug, Betreff, Absender (Name, Adresse, Absenderliste) und
@@ -257,7 +264,8 @@ def befehl(args) -> int:
         ),
         (
             suchen,
-            "Sucht Mails. Weg A: Wörter sowie von:, betreff:, seit:JJJJ-MM-TT. "
+            "Sucht Mails in allen Ordnern samt Archiv, neueste zuerst, max bis 100. "
+            "Weg A und Microsoft: Wörter sowie von:, betreff:, seit:JJJJ-MM-TT, bis:JJJJ-MM-TT. "
             "Weg B: Gmail-Syntax, etwa from:mara@studio-beispiel.example "
             "has:attachment.",
         ),

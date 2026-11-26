@@ -442,7 +442,11 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
                     and pruefung.get("entwurf_an_absender", True)
                     and fund.mail and fund.mail.get("von")
                     and not any("unklar" in punkt.casefold() for punkt in befund)):
-                from .senden import entwurf
+                from .senden import antwortadresse, entwurf
+                ziel, ohne_grund = antwortadresse(fund.mail)
+            else:
+                ziel, ohne_grund = "", ""
+            if ziel:
                 betreff = "Bitte um korrigierte Rechnung"
                 datum_text = einordnung.datum.strftime("%d.%m.%Y") if einordnung.datum else "nicht erkennbar"
                 mailtext = ("Guten Tag,\n\nbitte sende uns eine korrigierte Rechnung. "
@@ -450,12 +454,14 @@ def verarbeite(fund: Fund, echt: bool, nachsortieren: bool = False) -> kern.Erge
                             + f"\n\nZur Zuordnung: Rechnungsnummer: nicht erkennbar, Datum: {datum_text}, Betrag: {einordnung.betrag or 'nicht erkennbar'} EUR."
                             + f"\n\nKorrekte Empfängerdaten: {firma_eintrag.get('name', '')}, USt-IdNr.: {firma_eintrag.get('ust_id', '')}.\n\nVielen Dank.")
                 try:
-                    entwurf(str(fund.mail["von"]), betreff, mailtext, [], True, fund.mail.get("konto"))
+                    entwurf(ziel, betreff, mailtext, [], True, fund.mail.get("konto"))
                     entwurf_angelegt = True
                     anbieter["entwurf"] = True
                     speichern(stand)
                 except Exception as fehler:  # Der Beleg bleibt trotz Postfachfehler sicher abgelegt.
                     kern.ereignis("fehler", f"Entwurf zur Rechnungsprüfung nicht angelegt: {fehler}")
+            elif ohne_grund:
+                kern.log(f"Kein Entwurf zur Rechnungsprüfung für {fund.name}: {ohne_grund}. Bitte selbst beim Anbieter anfordern.")
             # Ohne eingeschaltete Rechnungsprüfung bleibt die bisherige
             # Ereignisart unverändert; nur ein tatsächlicher Prüfungsbefund
             # ist ein Zweifel.
