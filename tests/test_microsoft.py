@@ -267,3 +267,11 @@ def test_suchen_mit_bis_filtert_beide_seiten(box):
     box.sitzung = Sitzung([Antwort(json={"value": []})])
     box.suchen("bis:2026-05-31")
     assert box.sitzung.aufrufe[0][2]["params"]["$filter"] == "receivedDateTime lt 2026-06-01T00:00:00Z"
+
+
+def test_suche_laedt_reply_to_fuer_korrekturbitten(box):
+    mail = dict(_mail("1"), replyTo=[{"emailAddress": {"address": "buchhaltung@stadtwerke.example"}}])
+    box.sitzung = Sitzung([_ordner_antwort(), Antwort(json={"value": [mail]})])
+    treffer = box.suchen(nur_anhang=True)
+    assert "replyTo" in box.sitzung.aufrufe[1][2]["params"]["$select"]
+    assert treffer[0]["antwort_an"] == "buchhaltung@stadtwerke.example"
