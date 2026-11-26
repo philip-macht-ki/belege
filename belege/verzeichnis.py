@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from . import kern
 from .kern import Ergebnis, ablage_ordner
@@ -43,7 +43,9 @@ def _datei(eintrag: dict) -> Path | None:
     pfad = str(eintrag.get("pfad") or "")
     teil = Path(pfad)
     # anchor fängt auch Windows-Pfade wie "\\x.pdf" oder "C:x.pdf" ab, die nicht absolut heißen.
-    if not pfad or teil.is_absolute() or teil.anchor or teil.drive or ".." in teil.parts:
+    fenster = PureWindowsPath(pfad)
+    if (not pfad or teil.is_absolute() or teil.anchor or fenster.anchor or fenster.drive
+            or ".." in teil.parts or ".." in fenster.parts):
         return None
     datei = ablage_ordner() / teil
     try:
@@ -223,7 +225,7 @@ def lauf(echt: bool) -> list[Ergebnis]:
     ergebnisse: list[Ergebnis] = []
     if not echt:
         for k, neu in plan["umbiegen"].items():
-            print(f"würde umbiegen: {_beschreiben(index[k])} → {neu}")
+            print(f"würde umbiegen: {_beschreiben(index[k])}" + ("" if index[k].get("vertraulich") else f" → {neu}"))
         for k, anderer in plan["entfernen"].items():
             print(f"würde entfernen (Duplikat von {_beschreiben(index[anderer])}): {_beschreiben(index[k])}")
         for k in plan["melden"]:
@@ -247,7 +249,8 @@ def lauf(echt: bool) -> list[Ergebnis]:
                         index[k][feld] = str(passend)
             if index[k].get("moegliche_dublette") == alt:
                 index[k].pop("moegliche_dublette")
-            ergebnisse.append(Ergebnis("ok", f"{_beschreiben(index[k])} liegt jetzt unter {neu}."))
+            ziel = "" if index[k].get("vertraulich") else f" unter {neu}"
+            ergebnisse.append(Ergebnis("ok", f"{_beschreiben(index[k])} liegt jetzt{ziel}, der Eintrag ist nachgezogen."))
         for k, anderer in plan["entfernen"].items():
             eintrag = index.pop(k)
             _sichern(k, eintrag, anderer, "Datei fehlt, Duplikat vorhanden")

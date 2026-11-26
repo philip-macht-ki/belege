@@ -172,11 +172,13 @@ def test_pfade_ausserhalb_der_ablage_bleiben_unangetastet(repo, monkeypatch, tmp
     index["wurzel"] = {**vorlage, "pfad": "\\anderswo.pdf" if os.name == "nt" else "/anderswo.pdf"}
     (repo / "ablage" / "link").symlink_to(tmp_path, target_is_directory=True) if os.name != "nt" else None
     index["verlinkt"] = {**vorlage, "pfad": "link/anderswo.pdf"}
+    index["laufwerk"] = {**vorlage, "pfad": "C:anderswo.pdf"}
+    index["rueckstrich"] = {**vorlage, "pfad": "\\\\server\\x.pdf"}
     (repo / "arbeit" / "index.json").write_text(json.dumps(index), encoding="utf-8")
     (repo / "ablage" / innen).unlink()
     verzeichnis.lauf(True)
     nachher = _index(repo)
-    assert {"absolut", "hinaus", "wurzel", "verlinkt"} <= set(nachher)
+    assert {"absolut", "hinaus", "wurzel", "verlinkt", "laufwerk", "rueckstrich"} <= set(nachher)
     assert innen in [e["pfad"] for e in nachher.values()]  # Duplikat nur außerhalb: bleibt
 
 
@@ -200,3 +202,16 @@ def test_laeuft_unter_der_gesamtsperre():
     from belege import cli
 
     assert "verzeichnis" in cli.SCHREIBEND and "tag" in cli.SCHREIBEND and "takt" in cli.SCHREIBEND
+
+
+def test_vertraulich_umgebogen_ohne_pfad(repo, monkeypatch):
+    pfad = _ablegen(repo, monkeypatch, "a.pdf", b"%PDF geheim", _einordnung(date(2026, 10, 1)))
+    index = _index(repo)
+    for e in index.values():
+        e["vertraulich"] = True
+    (repo / "arbeit" / "index.json").write_text(json.dumps(index), encoding="utf-8")
+    datei = repo / "ablage" / pfad
+    datei.rename(datei.with_name(datei.stem + "_2.pdf"))
+    ergebnisse = verzeichnis.lauf(True)
+    assert ergebnisse and all("MILES" not in e.meldung for e in ergebnisse)
+    assert next(iter(_index(repo).values()))["pfad"].endswith("_2.pdf")
