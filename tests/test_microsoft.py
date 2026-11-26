@@ -193,3 +193,51 @@ def test_nur_posteingang_auf_wunsch(monkeypatch):
 def test_ordnerabfrage_scheitert_sucht_trotzdem(box):
     box.sitzung = Sitzung([Antwort(status=500, json={"error": "x"}), Antwort(json={"value": [_mail("1")]})])
     assert [t["id"] for t in box.suchen()] == ["1"]
+
+
+def test_rechte_lesen_nur_auf_wunsch():
+    assert microsoft.rechte({}) == ["Mail.ReadWrite", "Mail.Send", "User.Read"]
+    assert microsoft.rechte({"microsoft_rechte": "lesen"}) == ["Mail.Read", "User.Read"]
+
+
+def test_nur_lesen_schuetzt_entwurf_senden_und_aufraeumen(monkeypatch):
+    monkeypatch.setattr(microsoft, "token", lambda konto: "t")
+    box = MicrosoftPostfach({"name": "firma", "weg": "microsoft", "adresse": "info@firma.example", "microsoft_rechte": "lesen"})
+    box.sitzung = Sitzung([])
+    with pytest.raises(RuntimeError, match="nur zum Lesen"):
+        box.entwurf("a@b.example", "Betreff", "Text", [])
+    with pytest.raises(RuntimeError, match="nur zum Lesen"):
+        box._senden("a@b.example", "Betreff", "Text", [])
+    assert "nur zum Lesen" in box.aufraeumen("1", "ordner", "Rechnungen")
+    assert "nur zum Lesen" in box.nach_ablage("1", "markieren", "Belege erledigt")
+    assert box.sitzung.aufrufe == []
+
+
+def test_admin_link_nimmt_firmendomain_und_rechte():
+    link = microsoft.admin_link({"name": "firma", "adresse": "Info@Firma.example"})
+    assert link.startswith("https://login.microsoftonline.com/firma.example/v2.0/adminconsent?")
+    assert "client_id=" + microsoft.CLIENT_ID in link
+    assert "Mail.ReadWrite" in link and "redirect_uri=http%3A%2F%2Flocalhost" in link
+    eigene = microsoft.admin_link({"adresse": "info@firma.example", "tenant_id": "abc", "client_id": "xyz", "microsoft_rechte": "lesen"})
+    assert "/abc/v2.0/adminconsent" in eigene and "client_id=xyz" in eigene
+    assert "Mail.Read" in eigene and "Mail.ReadWrite" not in eigene
+
+
+def test_admin_hilfe_privat_ohne_link(capsys):
+    microsoft.admin_hilfe({"name": "privat", "adresse": "anna@hotmail.de"})
+    ausgabe = capsys.readouterr().out
+    assert "keinen Admin" in ausgabe and "adminconsent" not in ausgabe
+
+
+def test_fehlertext_nennt_admin_link():
+    text = microsoft._fehlertext({"error_description": "AADSTS65001: consent"}, {"name": "firma"})
+    assert "--microsoft firma --admin-link" in text
+
+
+def test_kurzbefund_adresse_und_neueste_mail(box):
+    box.sitzung = Sitzung([
+        Antwort(json={"mail": "info@firma.example"}),
+        Antwort(json={"responses": []}),
+        Antwort(json={"value": [_mail("m1")]}),
+    ])
+    assert box.kurzbefund() == {"adresse": "info@firma.example", "neueste_mit_anhang": "2026-10-26"}

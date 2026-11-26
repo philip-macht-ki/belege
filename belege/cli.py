@@ -24,6 +24,7 @@ BEFEHLE = {
     "moneymoney": ("moneymoney", "befehl", "Optional: Kontoumsätze aus MoneyMoney als CSV holen"),
     "hibiscus": ("hibiscus", "befehl", "Optional: Kontoumsätze aus Hibiscus/Jameica als CSV holen"),
     "anmelden": ("anmelden", "befehl", "Postfach-Zugang einrichten (App-Passwort, Google, Microsoft)"),
+    "erkennen": ("erkennen", "befehl", "Zu einer Mailadresse sagen, wo das Postfach liegt und welcher Weg passt"),
     "einrichten-claude": ("einrichten", "befehl", "Claude-Starter für den Zeitplan einrichten"),
     "einrichten-urteil": ("einrichten", "befehl_urteil", "Starter für das eingestellte Urteil einrichten"),
     "mcp": ("mcp_server", "befehl", "Lokalen Postfach-Server starten"),
@@ -86,6 +87,7 @@ def parser() -> argparse.ArgumentParser:
     argumente.add_argument("--rechte", choices=("lesen", "schreiben", "beides"))
     argumente.add_argument("--schluesselbund", metavar="NAME", help="App-Passwort verdeckt speichern (macOS-Schlüsselbund / Windows-Benutzerschutz)")
     argumente.add_argument("--microsoft", metavar="NAME", help="Microsoft-Postfach im Browser anmelden")
+    argumente.add_argument("--admin-link", action="store_true", help="Mit --microsoft: Zustimmungslink und Text für den Admin ausgeben (sendet nichts)")
     argumente.add_argument("--jahr")
     argumente.add_argument("--paket", action="store_true")
     argumente.add_argument("--automatisch", action="store_true", help="Nur Updates ohne eigenen Schritt einspielen")

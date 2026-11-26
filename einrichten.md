@@ -135,11 +135,21 @@ bleiben gegebenenfalls in `konfig/belege.toml`; danach läuft `uv run belege pru
 Claude fragt nur: Welche Mailadresse soll nach Rechnungen schauen? Wie heißt
 dein Betrieb, falls das noch nicht eingetragen ist?
 
-Bei Outlook, Hotmail, Live oder Microsoft 365 erklärt Claude sofort: Microsoft
-nimmt seit 2026 kein App-Passwort mehr an, dieses Postfach wird stattdessen mit
-einer Anmeldung im Browser verbunden. Eine eigene Domain erkennt Claude daran,
-dass `dig +short MX <domain>` auf `mail.protection.outlook.com` zeigt. Dann gilt
-der Abschnitt „Microsoft-Postfach“ unten.
+Mit der Adresse führt Claude als Erstes aus:
+
+```
+uv run belege erkennen <adresse> --konto <name>
+```
+
+Das sagt, wo das Postfach liegt, welcher Weg passt und was als Nächstes kommt.
+Claude gibt das in einem Satz weiter. Sagt die Person „ich habe Outlook“, fragt
+Claude trotzdem nach der Adresse: Outlook ist oft nur das Programm, das
+Postfach liegt dann bei einem Hoster und geht ganz normal mit Passwort (Weg A).
+Nur wenn `erkennen` „Microsoft“ meldet, gilt der Abschnitt „Microsoft-Postfach“
+unten. Dann erklärt Claude: Microsoft nimmt seit 2026 kein App-Passwort mehr
+an, dieses Postfach wird stattdessen mit einer Anmeldung im Browser verbunden.
+Nennt `erkennen` einen Anmeldenamen, der nicht die Adresse ist (Kabelplus,
+Mittwald, 1blu), trägt Claude ihn beim Postfach als `benutzer = "…"` ein.
 
 Bei einer eigenen Domain (etwa `info@meinbetrieb.de`) findet belege die
 Server selbst: Google Workspace, IONOS, Strato, united-domains, all-inkl und
@@ -193,7 +203,16 @@ klickt immer die Person selbst.
 
 **Philips App (der einfache Weg).** Claude trägt nur `weg = "microsoft"` beim
 Postfach ein, ohne `client_id` und `tenant_id`, und es geht weiter mit
-„Anmelden“ unten. Für private Outlook.com-, Hotmail- und Live-Postfächer ist das
+„Anmelden“ unten.
+
+**Nur lesen oder auch schreiben?** Vor der Anmeldung fragt Claude in einem
+Satz: „Soll belege dein Postfach nur lesen, oder auch Entwürfe anlegen, Mails
+als erledigt markieren und dir den Tagesbericht von dieser Adresse schicken?“
+Nur lesen: Claude trägt `microsoft_rechte = "lesen"` beim Postfach ein, Microsoft
+fragt dann nur nach dem Lesen. Soll später mehr gehen, ändert Claude den Wert auf
+`"voll"` und die Person meldet sich einmal neu an. Ohne Eintrag fragt belege
+alle Rechte an (so laufen alle bestehenden Postfächer weiter). Bei der eigenen
+App muss für „lesen“ in Schritt 5 zusätzlich `Mail.Read` angehakt sein. Für private Outlook.com-, Hotmail- und Live-Postfächer ist das
 der einzige direkte Weg.
 
 **Eigene App (etwa 15 Minuten, einmalig).** Nur für Firmenpostfächer bei
@@ -248,10 +267,15 @@ die Microsoft-Anmeldung im Browser:
    ist erwartet (Deern & Jung Investment GmbH ist kein Microsoft-Partner), Claude
    sagt das vorher in einem Satz.
 3. Steht dort „Administratorgenehmigung erforderlich“, ist die angemeldete
-   Person kein Admin. Dann meldet sich der Admin einmal selbst an und stimmt
-   zu; danach klappt es für alle Postfächer der Firma.
+   Person kein Admin. Claude führt dann aus:
+   `uv run belege anmelden --microsoft <name> --admin-link`. Das gibt einen
+   Link und einen kurzen Text aus, den die Person selbst an ihren Admin
+   schickt (belege sendet nichts). Der Admin öffnet den Link, meldet sich an,
+   klickt „Akzeptieren“; danach klappt die Anmeldung für alle Postfächer der
+   Firma.
 
-`uv run belege pruefen` zeigt danach „Microsoft-Zugang erneuert“. Der Zugang
+`uv run belege pruefen` zeigt danach „Microsoft-Zugang erneuert“ und, mit
+welcher Adresse belege liest und von wann die neueste Mail mit Anhang ist. Der Zugang
 erneuert sich bei jedem Lauf selbst. Nach einem Passwortwechsel oder wenn ein
 Admin die Zugänge zurücksetzt, meldet `belege pruefen` und der nächste Lauf
 einen Fehler mit dem Befehl zur Neuanmeldung; dann einmal neu anmelden. Die
@@ -265,10 +289,13 @@ dass Google Drive, iCloud, Dropbox oder OneDrive die Datei gerade abgleicht.
 Du musst nichts tun: Die Datei bleibt erhalten und belege versucht sie beim
 nächsten Lauf erneut abzulegen.
 
-Klappt keiner der beiden Wege (etwa weil niemand Admin-Rechte hat), nimm den
-Rückfall:
+Klappt keiner der beiden Wege, sagt Claude ehrlich: Bei Microsoft 365 geht es
+ohne einmalige Zustimmung eines Admins nicht, auch nicht über eine Umleitung
+(die braucht ebenfalls den Admin). Bis der Admin zugestimmt hat, legt die
+Person Rechnungen als PDF in den Eingang. Nur wenn die Person das ausdrücklich
+will, gibt es als letzten Rückfall die Umleitung:
 
-**Rückfall: Umleitung an ein Gmail-Konto.** Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
+**Letzter Rückfall: Umleitung an ein Gmail-Konto.** Rechnungen werden aus dem Microsoft-Postfach an ein eigenes, kostenloses
 Gmail-Konto umgeleitet, und belege liest dieses Konto. Claude geht die Schritte
 einzeln durch und wartet nach jedem auf ein Weiter:
 

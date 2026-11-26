@@ -96,9 +96,12 @@ def befehl(args) -> int:
     """`belege anmelden --konto <name> [--rechte lesen|schreiben|beides]`."""
     name = getattr(args, "konto", None) or kern.konto()["name"]
     if getattr(args, "microsoft", None):
-        from .microsoft import anmelden
+        from .microsoft import admin_hilfe, anmelden
 
-        return anmelden(kern.konto(args.microsoft))
+        konto = kern.konto(args.microsoft)
+        if getattr(args, "admin_link", False):
+            return admin_hilfe(konto)
+        return anmelden(konto)
     if getattr(args, "schluesselbund", None):
         return _schluesselbund(getattr(args, "schluesselbund"))
     rechte = getattr(args, "rechte", None) or "beides"

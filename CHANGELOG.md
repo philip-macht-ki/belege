@@ -1,5 +1,22 @@
 # Änderungen für dich
 
+## [1.21.0] – 26.11.2026
+
+aktion: keine
+
+### Was ist neu für dich
+
+- „Ich habe Outlook“ führt nicht mehr in die Irre: `uv run belege erkennen <deine Adresse>` sagt in wenigen Zeilen, wo dein Postfach wirklich liegt (Microsoft 365, privates Outlook.com oder ein Hoster wie Strato, IONOS oder Kabelplus), welcher Weg passt und was als Nächstes kommt. Outlook ist oft nur das Programm; liegt das Postfach bei einem Hoster, geht es ganz normal mit Passwort. Dein Claude ruft das bei der Einrichtung selbst auf.
+- Mehr Hoster erkennt belege selbst: Kabelplus, A1, Magenta, domainfactory, Mittwald und 1blu. Kennt belege einen Hoster nicht, probiert es die üblichen Servernamen aus, ohne sich anzumelden, und sagt dir, was es gefunden hat.
+- Manche Hoster wollen beim Anmelden eine Postfachnummer statt der Adresse. Die trägt dein Claude jetzt beim Postfach als `benutzer` ein.
+- Microsoft 365 ohne eigene Admin-Rechte: `uv run belege anmelden --microsoft <name> --admin-link` gibt dir einen fertigen Link und einen kurzen Text für deinen Admin. Er klickt einmal, danach klappt die Anmeldung. belege schickt dabei nichts.
+- Microsoft nur zum Lesen: Mit `microsoft_rechte = "lesen"` beim Postfach fragt Microsoft nur nach dem Lesen deiner Mails, nicht nach Entwürfen und Senden.
+- `uv run belege pruefen` zeigt bei Microsoft jetzt, mit welcher Adresse belege liest und von wann die neueste Mail mit Anhang ist. So siehst du sofort, ob wirklich gelesen wird.
+
+### Musst du etwas tun?
+
+Nein. Bestehende Microsoft-Postfächer laufen unverändert weiter.
+
 ## [1.20.1] – 26.11.2026
 
 aktion: keine
