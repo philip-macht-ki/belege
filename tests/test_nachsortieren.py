@@ -130,7 +130,7 @@ def test_tag_lauf_sortiert_vor_dem_bericht_nach(monkeypatch):
     gesehen = {}
     monkeypatch.setattr(takt, "_lauf", lambda args, schritte, sperre: gesehen.setdefault("schritte", schritte))
     takt.befehl_tag(None)
-    assert gesehen["schritte"] == ("downloads", "nachsortieren", "bericht")
+    assert gesehen["schritte"] == ("downloads", "nachsortieren", "verzeichnis", "bericht")
 
 
 def test_bericht_nennt_aussortiertes():

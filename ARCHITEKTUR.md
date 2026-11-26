@@ -59,6 +59,7 @@ konfig/waechter.md        Wächter-Regeln in Klartext, eine je Zeile ("- ...")
 beispiel/                 Musterbetrieb (erzeugt von `belege beispiel`)
 arbeit/                   Laufzeit, nie im Git
   index.json              Belegverzeichnis, siehe unten
+  verzeichnis_entfernt.jsonl  vollständige Sicherung jedes Index-Eintrags, den `belege verzeichnis` entfernt hat
   kurse.json              EZB-Referenzkurse nach Tag und ISO-Währung, Cache für Fremdwährungen
   termine.json            bereits verschickte Kalender-UIDs des Postfach-Agenten
   termine/                erzeugte iCalendar-Anhänge des Postfach-Agenten
@@ -208,6 +209,20 @@ Bei `[ablage].dublettenhinweis = true` (Standard, auch bei fehlendem Schlüssel)
 bleiben verschiedene Dateien immer abgelegt; bei gleichem Betrieb, Art, Datum,
 Währung, Betrag und vorsichtigem Lieferantenbezug erhält nur der neue Eintrag einen
 `moegliche_dublette`-Pfad und der Tagesbericht einen Zweifel-Hinweis.
+Fehlt die Datei eines Eintrags (von Hand gelöscht, umbenannt, Firmenordner
+umbenannt), zieht `belege verzeichnis` (belege/verzeichnis.py, ab 1.20.1, Schritt
+im Tageslauf vor dem Bericht) den Index nach und fasst nie eine Datei an:
+liegt eine Datei mit genau diesem SHA-256 im selben Ordner mit anderem oder
+ohne `_<n>`-Zusatz oder unter einem anderen Bereichsordner mit gleichem Rest,
+zeigt `pfad` (und `xml`/`befund`, falls dort) auf sie. Sonst wird der Eintrag nur
+entfernt, wenn ein anderer Eintrag mit vorhandener Datei gleiche Firma, Art,
+Datum, Währung, Betrag (±0,01) und Lieferanten (`sauber()`) hat; der alte Eintrag
+steht danach in `arbeit/verzeichnis_entfernt.jsonl`, Ereignis `verzeichnis`.
+Ohne solches Duplikat bleibt er stehen; `abgelegt`/`befund` erscheinen einmal je
+Fingerabdruck als `zweifel` (`gesehen.json` `verzeichnis_gemeldet`). Zeigen zwei
+Einträge auf dieselbe Datei, ist der mit unpassendem SHA verwaist (gleiche Regeln).
+Fehlen mehr als 20 Dateien und mehr als die Hälfte, ändert der Lauf nichts
+(Ablage vermutlich nicht erreichbar) und meldet das einmal am Tag.
 Alte Betriebs-Einträge ohne `firma` zählen bei aktivem `[[firma]]` zur
 Hauptfirma (zuerst `[betrieb]`, wenn sie als Firma übernommen wurde, sonst die
 erste `[[firma]]`).
@@ -215,7 +230,8 @@ erste `[[firma]]`).
 ## Ereignisse arbeit/ereignisse/<datum>.jsonl
 
 Eine Zeile JSON: `{"zeit","art","text","daten"}` mit `art` aus
-`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline | dokument | aufraeumen | aussortiert | langsam`.
+`abgelegt | unsortiert | doppelt | zweifel | fehler | gesendet | entwurf | waechter | waechter_sofort | monat | jahr | vertraulich | offline | dokument | aufraeumen | aussortiert | langsam | verzeichnis`.
+`verzeichnis`: `belege verzeichnis` hat Index-Einträge nachgezogen oder entfernt (`daten.eintraege`).
 `vertraulich`: ein Fund wurde nur lokal gelesen und steht im Bericht unter „Bitte ansehen“.
 `offline`: kein Netz; höchstens einmal am Tag (`kern.einmal_taeglich`), kein Fehler.
 `langsam`: ein Takt- oder Tageslauf dauerte über 60 Minuten (`daten.minuten`, `daten.lauf`); der Bericht nennt Anzahl und längsten Lauf.
@@ -633,7 +649,7 @@ Konsole plus Zähler aus dem Index.
   Dauerrechner, Modell, Chip, RAM, freien Platz, Netzteil; `--echt` schreibt
   `arbeit/rechner.json`. Die Rechner-Sperre vergleicht mit `hostname -s` und
   `scutil --get LocalHostName` (der Hostname wechselt je nach WLAN).
-- `belege tag --echt`: Downloads, Nachsortieren, Bericht.
+- `belege tag --echt`: Downloads, Nachsortieren, Belegverzeichnis (`belege verzeichnis`), Bericht.
 - **Nachsortieren** (`belege nachsortieren [--echt]`, belege/nachsortieren.py, ab 1.19.0,
   Schalter `[nachsortieren].an`, Standard `true`): je Datei direkt in
   `<ablage>/Unsortiert/` und `<ablage>/<Dokumente>/Unsortiert/` (Unterordner bleiben draußen):

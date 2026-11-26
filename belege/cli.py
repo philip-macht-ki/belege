@@ -40,6 +40,7 @@ BEFEHLE = {
     "vergleich": ("text", "befehl_vergleich", "Datei als PDF gegen Text: was kostet mehr?"),
     "jahr": ("jahr", "befehl", "Jahresabgleich, Lücken und Paket für den Steuerberater"),
     "nachsortieren": ("nachsortieren", "befehl", "Unsortiert ein zweites Mal ansehen und ablegen"),
+    "verzeichnis": ("verzeichnis", "befehl", "Belegverzeichnis: fehlende Dateien nachziehen, verwaiste Duplikate entfernen"),
     "dokumente": ("dokumente", "befehl", "Verträge, Versicherungen und Briefe einordnen und ablegen"),
     "fristen": ("dokumente", "befehl_fristen", "Fristen aus Verträgen zeigen und für den Kalender ausgeben"),
     "notfall": ("notfall", "befehl", "Notfallordner erstellen"),
@@ -54,7 +55,7 @@ BEFEHLE = {
 # Befehle, die mit --echt ablegen, verschieben oder senden. Sie laufen nur auf dem
 # Rechner aus [rechner] erlaubt.
 OHNE_WARTEN = {"takt", "postfach", "handy", "downloads"}
-SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "hibiscus", "ablegen", "nachsortieren", "dokumente", "jahr", "posten", "pruefung", "aufraeumen", "anfrage", "regel", "verfahrensdoku"}
+SCHREIBEND = {"takt", "tag", "postfach", "handy", "downloads", "monat", "moneymoney", "hibiscus", "ablegen", "nachsortieren", "verzeichnis", "dokumente", "jahr", "posten", "pruefung", "aufraeumen", "anfrage", "regel", "verfahrensdoku"}
 
 
 def parser() -> argparse.ArgumentParser:

@@ -60,7 +60,8 @@ der Takt innerhalb des Nachholfensters höchstens einmal am Tag erneut.
 | Befehl | Was passiert |
 |---|---|
 | `belege takt` | Postfach abarbeiten, Wächter über neue Mails |
-| `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Unsortiert nachsortieren, Tagesbericht an dich |
+| `belege tag` | Downloads-Ordner aufräumen (nur erkannte Belege), Unsortiert nachsortieren, Belegverzeichnis nachziehen, Tagesbericht an dich |
+| `belege verzeichnis` | Belegverzeichnis prüfen: Einträge, deren Datei fehlt, auf die umbenannte Datei umbiegen oder als Duplikat entfernen; fasst nie eine Datei an |
 | `belege nachsortieren` | Unsortiert ein zweites Mal ansehen: Logos und Werbung nach `Unsortiert/Zu löschen`, Sicheres ablegen |
 | `belege monat` | Kontoauszug gegen Belege: findet fehlende Belege auch in Eingängen und gleicht Mahnungen ab |
 | `belege moneymoney` | optional: Kontoumsätze aus MoneyMoney als CSV holen (`einrichten_moneymoney.md`) |
